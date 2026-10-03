@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "rootDir": "../..",
+    "outDir": "D:/work/scratch-2026-10-03/ezagent-yolanda-tests",
+    "types": ["node"]
+  },
+  "include": [
+    "engine.test.ts",
+    "../../lib/yolanda-review/**/*.ts"
+  ]
+}
