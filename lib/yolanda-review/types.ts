@@ -1,6 +1,7 @@
 export type Role = 'reviewer' | 'manager'
 export type IdentityMode = 'demo' | 'trusted'
 export type ReviewStatus = 'draft' | 'calculating' | 'review' | 'approved' | 'error'
+export type EditorScope = 'assumptions' | 'document' | 'match' | 'exception' | 'draft'
 
 export interface MoneyValue {
   amount: string
@@ -39,9 +40,12 @@ export interface ReviewDocument {
   original: ExtractedFields
   corrections: Partial<ExtractedFields>
   selectedLedgerRowId?: string
+  matchDisposition?: 'manual' | 'pending'
   matchReason?: string
   ambiguity?: string
   excluded?: { reason: string }
+  warningAcknowledgement?: { reason: string }
+  reviewNote?: { reason: string; followUp: string }
 }
 
 export interface LedgerRow extends MoneyValue {
@@ -59,6 +63,8 @@ export interface Draft {
   basisRevision: number
   manuallyEdited: boolean
   stale: boolean
+  suggestedSubject?: string
+  suggestedBody?: string
 }
 
 export interface ReviewBatch {
@@ -136,7 +142,7 @@ export interface ReviewState {
   calculation?: CalculationResult
   pendingCalculation?: PendingCalculation
   calculationError?: string
-  dirtyEditor: boolean
+  dirtyEditors: EditorScope[]
   resultsReviewed: boolean
   draftsReviewed: boolean
   changes: ChangeEvent[]

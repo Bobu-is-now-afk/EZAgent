@@ -7,12 +7,14 @@ function csvText(value: string): string {
 }
 
 export function buildResultsCsv(snapshot: ApprovalSnapshot): string {
-  const header = ['recordId', 'status', 'merchant', 'receiptNumber', 'date', 'amountCents', 'currency', 'ledgerRowId', 'differenceCents', 'exclusionReason']
+  const header = ['approvalId', 'approvalRevision', 'recordId', 'status', 'originalMerchant', 'reviewedMerchant', 'originalReceiptNumber', 'reviewedReceiptNumber', 'originalDate', 'reviewedDate', 'originalAmountCents', 'reviewedAmountCents', 'originalCurrency', 'reviewedCurrency', 'ledgerRowId', 'differenceCents', 'exclusionReason']
   const rows = snapshot.calculation.matches.map((match) => {
-    const document = snapshot.batch.documents.find((item) => item.recordId === match.recordId)!
+    const document = snapshot.batch.documents.find((item) => item.recordId === match.recordId)
+    if (!document) throw new Error(`Approved result references missing document ${match.recordId}.`)
     const fields = effectiveFields(document)
-    const amount = parseMoneyToCents(fields.amount)
-    return [document.recordId, match.status, fields.merchant, fields.receiptNumber, fields.date, amount === undefined ? '' : String(amount), fields.currency, match.selectedLedgerRowId ?? '', match.differenceCents === undefined ? '' : String(match.differenceCents), match.exclusionReason ?? ''].map(csvText).join(',')
+    const originalAmount = parseMoneyToCents(document.original.amount)
+    const reviewedAmount = parseMoneyToCents(fields.amount)
+    return [snapshot.approvalId, String(snapshot.revision), document.recordId, match.status, document.original.merchant, fields.merchant, document.original.receiptNumber, fields.receiptNumber, document.original.date, fields.date, originalAmount === undefined ? '' : String(originalAmount), reviewedAmount === undefined ? '' : String(reviewedAmount), document.original.currency, fields.currency, match.selectedLedgerRowId ?? '', match.differenceCents === undefined ? '' : String(match.differenceCents), match.exclusionReason ?? ''].map(csvText).join(',')
   })
   return `\uFEFF${header.map(csvText).join(',')}\r\n${rows.join('\r\n')}\r\n`
 }

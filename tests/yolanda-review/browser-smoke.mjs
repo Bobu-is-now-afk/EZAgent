@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
 
 const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-const scratch = 'D:\\work\\scratch-2026-10-03\\ezagent-yolanda-browser'
+const scratch = 'D:\\work\\scratch-2026-10-05\\ezagent-yolanda-browser'
 const runId = Date.now()
 const downloads = `${scratch}\\downloads-${runId}`
 const debugPort = 9300 + Math.floor(Math.random() * 500)
@@ -111,12 +111,20 @@ try {
   await until(`!document.body.innerText.includes('Calculating v')`, 'manual match recalculation')
   assert.equal(await evaluate(bodyIncludes('0 blockers')), true)
 
+  await chooseDocument('rec-008')
+  await setControl('Warning acknowledgement reason', 'Instruction-like evidence was treated as plain text and ignored')
+  await click('Save review notes')
+
   await click('Review numeric results')
   await click('Review draft')
   await setControl('Demo role', 'manager')
   await until(bodyIncludes('All current-version checks passed.'), 'approval gate')
   await click('Approve v')
   await until(bodyIncludes('Approved v'), 'approval')
+  await setControl('Demo role', 'reviewer')
+  await until(bodyIncludes('Manager role is required to export or revoke'), 'post-approval role guard')
+  assert.equal(await evaluate(`[...document.querySelectorAll('button')].find((item) => item.textContent.trim() === 'JSON')?.disabled`), true)
+  await setControl('Demo role', 'manager')
   assert.equal(await click('JSON'), true)
   for (let attempt = 0; attempt < 30 && !(await readdir(downloads)).some((name) => name.endsWith('-review.json')); attempt++) await wait(200)
   assert.ok((await readdir(downloads)).some((name) => name.endsWith('-review.json')), 'approved JSON download exists')
@@ -129,6 +137,20 @@ try {
   await until(`!document.body.innerText.includes('Calculating v9')`, 'post-approval edit recalculation')
   assert.equal(await evaluate(`document.body.innerText.includes('invalidated by v')`), true)
   assert.equal(await evaluate(`[...document.querySelectorAll('button')].some((item) => item.textContent.trim() === 'JSON')`), false)
+
+  assert.equal(await click('Save UNAPPROVED copy'), true)
+  let workingCopy
+  for (let attempt = 0; attempt < 30 && !workingCopy; attempt++) {
+    workingCopy = (await readdir(downloads)).find((name) => name.includes('UNAPPROVED-working-copy'))
+    if (!workingCopy) await wait(200)
+  }
+  assert.ok(workingCopy, 'unapproved working copy download exists')
+  await evaluate(`window.confirm = () => true`)
+  const documentNode = await command('DOM.getDocument')
+  const fileInput = await command('DOM.querySelector', { nodeId: documentNode.result.root.nodeId, selector: 'input[type=file]' })
+  await command('DOM.setFileInputFiles', { nodeId: fileInput.result.nodeId, files: [`${downloads}\\${workingCopy}`] })
+  await until(bodyIncludes('Working copy restored as unapproved'), 'working copy restore')
+  assert.equal(await evaluate(bodyIncludes('Approved v')), false)
 
   const screenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
   await writeFile(`${scratch}\\yolanda-review-smoke.png`, Buffer.from(screenshot.result.data, 'base64'))

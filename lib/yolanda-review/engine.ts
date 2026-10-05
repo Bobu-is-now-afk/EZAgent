@@ -18,20 +18,27 @@ export function normalizeReceipt(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
-function dayNumber(value: string): number | undefined {
+export function parseIsoDay(value: string): number | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
-  const timestamp = Date.parse(`${value}T00:00:00Z`)
-  return Number.isNaN(timestamp) ? undefined : timestamp / 86_400_000
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return undefined
+  return date.getTime() / 86_400_000
 }
 
 export function validateAssumptions(batch: ReviewBatch): string[] {
   const { assumptions } = batch
   const errors: string[] = []
-  if (!dayNumber(assumptions.dateFrom) || !dayNumber(assumptions.dateTo) || assumptions.dateFrom > assumptions.dateTo) errors.push('Date range is invalid.')
+  if (parseIsoDay(assumptions.dateFrom) === undefined || parseIsoDay(assumptions.dateTo) === undefined || assumptions.dateFrom > assumptions.dateTo) errors.push('Date range is invalid.')
   if (!Number.isInteger(assumptions.amountToleranceCents) || assumptions.amountToleranceCents < 0 || assumptions.amountToleranceCents > MAX_TOLERANCE_CENTS) errors.push('Amount tolerance must be 0–100 cents.')
   if (!Number.isInteger(assumptions.dateWindowDays) || assumptions.dateWindowDays < 0 || assumptions.dateWindowDays > MAX_DATE_WINDOW_DAYS) errors.push('Date window must be 0–7 days.')
   if (!assumptions.currency.trim()) errors.push('Currency is required.')
   if (new Set(Object.values(assumptions.fieldMapping)).size !== Object.values(assumptions.fieldMapping).length) errors.push('Each field mapping must use a different source column.')
+  if (batch.mode === 'synthetic') {
+    const supported = { date: 'transaction_date', amount: 'gross_amount', currency: 'currency', receiptNumber: 'receipt_no' }
+    if (assumptions.dateInterpretation !== 'DD/MM/YYYY') errors.push('Synthetic adapter cannot recalculate another date interpretation.')
+    if (Object.entries(supported).some(([field, column]) => assumptions.fieldMapping[field as keyof typeof supported] !== column)) errors.push('Synthetic adapter cannot recalculate this field mapping.')
+  }
   return errors
 }
 
@@ -50,18 +57,23 @@ export function calculateBatch(batch: ReviewBatch, requestId: string): Calculati
 
     const fields = effectiveFields(document)
     const amountCents = parseMoneyToCents(fields.amount)
-    const documentDay = dayNumber(fields.date)
+    const documentDay = parseIsoDay(fields.date)
     const blockers: string[] = []
     const warnings: string[] = []
     if (amountCents === undefined) blockers.push('Amount is invalid.')
     if (documentDay === undefined) blockers.push('Date is missing or invalid.')
+    if (documentDay !== undefined) {
+      const from = parseIsoDay(batch.assumptions.dateFrom)
+      const to = parseIsoDay(batch.assumptions.dateTo)
+      if (from !== undefined && to !== undefined && (documentDay < from || documentDay > to)) blockers.push('Date is outside the confirmed task range.')
+    }
     if (fields.currency !== batch.assumptions.currency) blockers.push(`Currency ${fields.currency || '(missing)'} is unsupported; expected ${batch.assumptions.currency}.`)
     const duplicateKey = `${normalizeReceipt(fields.receiptNumber)}|${fields.amount}|${fields.currency}`
     if ((duplicateKeys.get(duplicateKey) ?? 0) > 1) blockers.push('Possible duplicate receipt requires correction or exclusion.')
 
     const candidates = amountCents === undefined || documentDay === undefined ? [] : batch.ledgerRows.filter((row) => {
       const rowAmount = parseMoneyToCents(row.amount)
-      const rowDay = dayNumber(row.date)
+      const rowDay = parseIsoDay(row.date)
       return row.currency === fields.currency && rowAmount !== undefined && rowDay !== undefined
         && Math.abs(rowAmount - amountCents) <= batch.assumptions.amountToleranceCents
         && Math.abs(rowDay - documentDay) <= batch.assumptions.dateWindowDays
@@ -70,13 +82,14 @@ export function calculateBatch(batch: ReviewBatch, requestId: string): Calculati
     const candidateIds = candidates.map((row) => row.ledgerRowId)
 
     let selected = document.selectedLedgerRowId
-    if (!selected && fields.receiptNumber && candidates.length === 1) selected = candidates[0].ledgerRowId
+    if (!selected && document.matchDisposition !== 'pending' && fields.receiptNumber && candidates.length === 1) selected = candidates[0].ledgerRowId
     if (selected && !candidateIds.includes(selected)) {
       blockers.push('Selected ledger row no longer meets currency, amount, date, and receipt constraints.')
       selected = undefined
     }
     if (!selected) {
-      if (!fields.receiptNumber && candidates.length) blockers.push('Missing receipt number requires a manual match and reason.')
+      if (document.matchDisposition === 'pending') blockers.push('Match is marked pending review.')
+      else if (!fields.receiptNumber && candidates.length) blockers.push('Missing receipt number requires a manual match and reason.')
       else if (candidates.length === 0) blockers.push('No eligible ledger match.')
       else if (candidates.length > 1) blockers.push('Multiple eligible matches require a manual selection.')
     }
@@ -88,7 +101,8 @@ export function calculateBatch(batch: ReviewBatch, requestId: string): Calculati
         selected = undefined
       } else if (!blockers.length) occupied.set(selected, document.recordId)
     }
-    if (document.evidenceId === 'ev-008') warnings.push('Evidence contains instruction-like text; rendered as plain text and ignored.')
+    const evidenceText = batch.evidence.find((item) => item.evidenceId === document.evidenceId)?.rawText ?? ''
+    if (/<script\b|ignore\s+(?:all\s+)?(?:limits|instructions)|send\s+all\s+records/i.test(evidenceText)) warnings.push('Evidence contains instruction-like text; rendered as plain text and ignored.')
     const selectedRow = batch.ledgerRows.find((row) => row.ledgerRowId === selected)
     const differenceCents = selectedRow && amountCents !== undefined ? amountCents - (parseMoneyToCents(selectedRow.amount) ?? amountCents) : undefined
     return { recordId: document.recordId, status: blockers.length ? 'blocked' as const : 'matched' as const, candidateLedgerRowIds: candidateIds, selectedLedgerRowId: selected, differenceCents, blockers, warnings }

@@ -23,6 +23,8 @@ interface ReviewAdapter {
 
 当前 `demoAdapter` 明确只处理合成数据。真实 adapter 未连接时，不得静默回退合成结果。工作副本导入检查版本、集合、唯一记录 ID、证据引用、100 条记录上限、2 MB 文件上限和 10,000 字草稿上限；生产接入仍应采用正式 schema validator 并补齐全部字段级限制。
 
+模块边界、状态机不变量和有意保留的最小抽象见 `ARCHITECTURE.md`。接入真实 adapter 时应保持现有接口和三元响应校验，不应把网络、认证或持久化逻辑塞入页面组件。
+
 ## 身份和策略入口
 
 当前页面可显式切换 `demo-reviewer` / `demo-manager`，仅用于比赛演示。它不是身份认证。真实接入由 SAYA 或宿主传入可信角色并隐藏演示切换。未来任何服务端批准或导出操作必须重新核验身份、版本和权限，不能信任前端 state 或导入 JSON。
@@ -37,7 +39,7 @@ interface ReviewAdapter {
 
 ## 输出
 
-有效经理批准冻结当前批次快照。页面从冻结快照生成：
+有效经理批准冻结由 reducer 根据当前批次构造的快照；页面不能注入任意批准内容。页面从冻结快照生成：
 
 - `ezagent-<batchId>-v<revision>-review.json`
 - `ezagent-<batchId>-v<revision>-results.csv`
