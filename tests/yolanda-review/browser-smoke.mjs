@@ -54,6 +54,13 @@ async function until(expression, description) {
 }
 
 const click = (text) => evaluate(`(() => { const element = [...document.querySelectorAll('button')].find((item) => item.textContent.includes(${JSON.stringify(text)})); if (!element) return false; element.click(); return true })()`)
+async function clickSelector(selector) {
+  const point = await evaluate(`(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) return null; element.scrollIntoView({ block: 'center' }); const rect = element.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } })()`)
+  if (!point) return false
+  await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 })
+  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 })
+  return true
+}
 const chooseDocument = (recordId) => click(recordId)
 const setControl = (label, value) => evaluate(`(() => { const element = document.querySelector('[aria-label=${JSON.stringify(label)}]'); if (!element) return false; const prototype = element.tagName === 'SELECT' ? HTMLSelectElement.prototype : element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event(element.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); return true })()`)
 const bodyIncludes = (text) => `document.body.innerText.includes(${JSON.stringify(text)})`
@@ -78,6 +85,21 @@ try {
   assert.equal(await evaluate(bodyIncludes('Confirm task assumptions.')), true)
   assert.equal(await evaluate(bodyIncludes('Logic Pills & prompt templates')), true)
   assert.equal(await evaluate(bodyIncludes('Local rules, not AI generation')), true)
+
+  assert.equal(await clickSelector('[data-pill-id="finance-scope"] input[type="checkbox"]'), true)
+  await until(`document.querySelector('[data-pill-id="finance-scope"]')?.dataset.pillSource === 'manual' && document.querySelector('[data-pill-id="finance-scope"] input[type="checkbox"]')?.checked === false`, 'preset pill disabled before locale change')
+  assert.equal(await click('繁中'), true)
+  await until(bodyIncludes('審核與批准'), 'Traditional Chinese page heading')
+  assert.equal(await evaluate(`document.querySelector('main')?.getAttribute('lang')`), 'zh-Hant')
+  assert.equal(await evaluate(`document.querySelector('[data-pill-id="finance-scope"] input[type="checkbox"]')?.checked`), false)
+  assert.equal(await evaluate(bodyIncludes('財務 Preset 設定')), true)
+  assert.equal(await evaluate(`[...document.querySelectorAll('textarea')].some((item) => item.value.includes('# 角色'))`), true)
+  const traditionalChineseScreenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
+  await writeFile(`${scratch}\\yolanda-review-zh-Hant.png`, Buffer.from(traditionalChineseScreenshot.result.data, 'base64'))
+  assert.equal(await click('EN'), true)
+  await until(bodyIncludes('Review & Approval'), 'English page heading restored')
+  assert.equal(await evaluate(`document.querySelector('[data-pill-id="finance-scope"] input[type="checkbox"]')?.checked`), false)
+  assert.equal(await clickSelector('[data-pill-id="finance-scope"] input[type="checkbox"]'), true)
 
   await setControl('Template category', 'Product')
   assert.equal(await click('User registration'), true)
@@ -170,14 +192,16 @@ try {
 
   const screenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
   await writeFile(`${scratch}\\yolanda-review-smoke.png`, Buffer.from(screenshot.result.data, 'base64'))
+  assert.equal(await click('繁中'), true)
+  await until(bodyIncludes('審核與批准'), 'Traditional Chinese restored for mobile check')
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true)
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
   assert.notEqual(await evaluate(`document.activeElement === document.body`), true)
   const mobileScreenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-  await writeFile(`${scratch}\\yolanda-review-mobile.png`, Buffer.from(mobileScreenshot.result.data, 'base64'))
-  console.log(JSON.stringify({ result: 'passed', revision: await evaluate(`document.body.innerText.match(/Revision v(\\d+)/)?.[1]`), downloaded: await readdir(downloads), screenshots: [`${scratch}\\yolanda-review-smoke.png`, `${scratch}\\yolanda-review-mobile.png`] }))
+  await writeFile(`${scratch}\\yolanda-review-mobile-zh-Hant.png`, Buffer.from(mobileScreenshot.result.data, 'base64'))
+  console.log(JSON.stringify({ result: 'passed', revision: await evaluate(`document.body.innerText.match(/(?:Revision|版本) v(\\d+)/)?.[1]`), downloaded: await readdir(downloads), screenshots: [`${scratch}\\yolanda-review-zh-Hant.png`, `${scratch}\\yolanda-review-smoke.png`, `${scratch}\\yolanda-review-mobile-zh-Hant.png`] }))
 } finally {
   socket?.close()
   browser.kill()

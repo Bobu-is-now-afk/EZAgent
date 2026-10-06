@@ -32,7 +32,8 @@
 - UNAPPROVED 工作副本及批准 JSON/CSV/TXT 导出；
 - TypeScript、规则、build、Edge 实际交互和 390px 布局验证。
 - 三轮自审完成：规则/权限、模块边界、竞态与端到端回归。
-- 新增 Logic Studio：6 个广泛模板、4 种用户画像、白话拆分、Logic Pill CRUD、提示词预览与复制；规则测试扩展至 22 项。
+- 新增 Logic Studio：6 个广泛模板、4 种用户画像、白话拆分、Logic Pill CRUD、提示词预览与复制。
+- 新增英文／繁體中文页面级切换及繁中 Prompt；规则测试扩展至 23 项。
 
 ## 运行与演示
 
@@ -40,7 +41,7 @@
 pnpm dev --port 3107
 ```
 
-打开 `http://localhost:3107/yolanda-review`。先切换模板和用户画像，用白话生成并编辑 Logic Pills，检查提示词预览；同步 Finance preset 后确认 assumptions；更正 `rec-002` 金额和 `rec-003` 日期；排除重复、无匹配和 USD 记录；为 `rec-005` 选择候选并填写理由；复核结果和草稿；切换 Demo Manager；批准并下载；再编辑 `rec-008`，观察批准失效。
+打开 `http://localhost:3107/yolanda-review`。先在 `EN / 繁中` 间双向切换并检查繁中 Prompt；切换模板和用户画像，用白话生成并编辑 Logic Pills；同步 Finance preset 后确认 assumptions；更正 `rec-002` 金额和 `rec-003` 日期；排除重复、无匹配和 USD 记录；为 `rec-005` 选择候选并填写理由；复核结果和草稿；切换 Demo Manager；批准并下载；再编辑 `rec-008`，观察批准失效。
 
 ## 下一步
 

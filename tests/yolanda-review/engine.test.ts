@@ -232,3 +232,14 @@ test('prompt templates include persona guidance and active pills only', () => {
   assert.doesNotMatch(prompt, /Validation and consent/)
   assert.match(prompt, /Do not invent missing facts/)
 })
+
+test('Traditional Chinese prompt and finance preset use localized system copy', () => {
+  const pills = pillsForTemplate('user-registration', 'zh-Hant')
+  const prompt = buildAgentPrompt({ personaId: 'product-team', templateId: 'user-registration', objective: '', pills, locale: 'zh-Hant' })
+  assert.match(prompt, /# 角色/)
+  assert.match(prompt, /使用者登記流程/)
+  assert.match(prompt, /不得虛構缺漏事實/)
+  const finance = financePresetPills(demoBatch.assumptions, 'zh-Hant')
+  assert.equal(finance[0].title, '日期範圍')
+  assert.match(finance[1].instruction, /欄位映射/)
+})

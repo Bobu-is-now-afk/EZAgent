@@ -22,6 +22,8 @@ Logic Pill 包含类型、标题、指令、启用状态和来源。支持新增
 
 内置用户画像：First-time builder、Operations owner、Domain specialist、Product team。画像只改变提示词写法和关注点，不模拟真实身份或权限。
 
+页面支持英文与繁體中文。切换语言会重新生成系统提供的模板、画像、Preset Pills 和提示词结构；已经由使用者新增或编辑的 Pill 会保留原文，避免未经确认的自动翻译改变含义。
+
 ## 白话生成边界
 
 当前生成器在浏览器本地按换行和标点拆句，并通过公开、确定性的关键词规则分类。它没有调用模型，不理解隐藏意图，也不会执行生成的提示词。页面会明确显示 `Local rules, not AI generation`。

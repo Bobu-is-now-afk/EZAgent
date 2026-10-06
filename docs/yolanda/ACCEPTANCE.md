@@ -54,7 +54,7 @@ node tests/yolanda-review/browser-smoke.mjs
 | A17 | 通过 | Edge 在 390px 视口无横向溢出；Tab 产生可聚焦元素；表单有 label，状态有文字。未跑 Lighthouse。 |
 | A18 | 通过 | 自动化测试确认事实改变后保留手写草稿并标 stale；页面显示新建议，可采用或继续手写，未解决前阻止批准。 |
 
-自动化结果：规则测试 22/22；TypeScript 检查通过；production build 通过；Edge 完整交互脚本通过。截图、批准下载和工作副本下载保存在 `D:/work/scratch-2026-10-05/ezagent-yolanda-browser/`，属于 disposable 验证产物，不进入 Git。
+自动化结果：规则测试 23/23；TypeScript 检查通过；production build 通过；Edge 完整交互脚本通过。截图、批准下载和工作副本下载保存在 `D:/work/scratch-2026-10-05/ezagent-yolanda-browser/`，属于 disposable 验证产物，不进入 Git。
 
 三轮自审：第一轮修正审批/导出权限、分区脏状态和真实交互语义；第二轮收敛 adapter、状态机、导入边界和导出边界；第三轮补齐真实模式拒绝、导入净化、草稿竞态和浏览器回归。
 
@@ -67,6 +67,15 @@ node tests/yolanda-review/browser-smoke.mjs
 - 通过：浏览器实际完成模板切换、白话生成、新增、编辑、删除及财务 Preset 同步。
 - 通过：Logic Studio 操作不推进财务 revision，不影响既有 A01–A18 审批流程。
 - 边界：没有调用真实模型；Pills 不进入工作副本或批准快照，也不驱动当前计算。
+
+## 中英切换验收
+
+- 通过：页首 `EN / 繁中` 按钮双向切换，页面根节点同步设置 `lang="en"` 或 `lang="zh-Hant"`。
+- 通过：繁中覆盖导航、模板分类、用户画像、Preset Pills、提示词结构、财务设定、文件复核和批准区。
+- 通过：繁中 Prompt 使用繁体字的角色、目标、执行契约与输出结构。
+- 通过：切换语言会翻译系统提供的 Preset 内容；使用者自行修改或生成的 Pill 内容保留原文，避免静默改写。
+- 通过：Edge 实际完成英转繁中、繁中转英文、完整审批流程，并在 390px 繁中界面确认无横向溢出。
+- 边界：来源证据、技术 ID、币种、使用者输入及既有审计内容不会自动翻译。
 
 ## 已知限制
 
