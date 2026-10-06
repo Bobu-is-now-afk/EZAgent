@@ -3,6 +3,7 @@ import test from 'node:test'
 import { demoBatch } from '../../lib/yolanda-review/demo-data'
 import { buildResultsCsv, buildWorkingCopy } from '../../lib/yolanda-review/export'
 import { calculateBatch, parseIsoDay, parseMoneyToCents, validateAssumptions } from '../../lib/yolanda-review/engine'
+import { buildAgentPrompt, financePresetPills, generateLogicPills, pillsForTemplate } from '../../lib/yolanda-review/logic-pills'
 import { approvalBlockers, canExport, createInitialState, reviewReducer } from '../../lib/yolanda-review/state'
 import type { ApprovalSnapshot, ChangeEvent, ReviewBatch } from '../../lib/yolanda-review/types'
 import { parseWorkingCopy } from '../../lib/yolanda-review/working-copy'
@@ -204,4 +205,30 @@ test('results and drafts cannot be reviewed before current calculation', () => {
   state = reviewReducer(state, { type: 'MARK_DRAFTS_REVIEWED' })
   assert.equal(state.resultsReviewed, false)
   assert.equal(state.draftsReviewed, false)
+})
+
+test('finance preset decomposes current execution settings into editable Logic Pills', () => {
+  const pills = financePresetPills(demoBatch.assumptions)
+  assert.deepEqual(pills.map((pill) => pill.kind), ['input', 'input', 'rule', 'decision', 'output'])
+  assert.match(pills.find((pill) => pill.id === 'finance-scope')?.instruction ?? '', /2026-09-01 through 2026-09-30/)
+  assert.match(pills.find((pill) => pill.id === 'finance-fields')?.instruction ?? '', /amount from gross_amount/)
+  assert.match(pills.find((pill) => pill.id === 'finance-match')?.instruction ?? '', /HKD/)
+})
+
+test('plain-language Logic Pill generation is deterministic, bounded, and collision-safe', () => {
+  const pills = generateLogicPills('读取登记表字段；重复邮箱交给人工审核；输出缺失字段清单。', ['generated-1', 'generated-3'])
+  assert.deepEqual(pills.map((pill) => pill.id), ['generated-2', 'generated-4', 'generated-5'])
+  assert.deepEqual(pills.map((pill) => pill.kind), ['input', 'decision', 'output'])
+  assert.equal(generateLogicPills(Array.from({ length: 20 }, (_, index) => `rule ${index}`).join(';')).length, 12)
+})
+
+test('prompt templates include persona guidance and active pills only', () => {
+  const pills = pillsForTemplate('user-registration')
+  pills[1].enabled = false
+  const prompt = buildAgentPrompt({ personaId: 'product-team', templateId: 'user-registration', objective: 'Design a member registration flow.', pills })
+  assert.match(prompt, /implementation-ready contract/)
+  assert.match(prompt, /Design a member registration flow/)
+  assert.match(prompt, /Registration fields/)
+  assert.doesNotMatch(prompt, /Validation and consent/)
+  assert.match(prompt, /Do not invent missing facts/)
 })
