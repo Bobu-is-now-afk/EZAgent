@@ -1,0 +1,6 @@
+invoice_id,customer,amount,currency,description
+INV-101,Peak Works,7800.00,HKD,Parts
+INV-102,West Bay,11500.00,HKD,Maintenance
+INV-103,Peak Works,34000.00,HKD,Equipment
+INV-104,,12500.00,HKD,Support
+INV-105,City Print,9900.00,HKD,Printing
