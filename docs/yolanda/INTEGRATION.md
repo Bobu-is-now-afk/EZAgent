@@ -6,9 +6,9 @@
 - 工作流配置器：`/yolanda-builder`
 - 页面组件：`components/yolanda-review/review-workbench.tsx`
 - 类型与规则：`lib/yolanda-review/`
-- 当前入口不修改首页、根布局、全局样式或现有组件。
+- 本轮 Builder 页面减重不再修改首页、根布局、全局样式或依赖；主舞台入口由先前获授权的 `81405a0` 提供。
 
-`/yolanda-builder` 是未来主舞台可挂载的独立配置组件。当前不修改主舞台首页，也不把财务复核 UI 嵌入配置流程。详见 `WORKFLOW-BUILDER.md`。
+`/yolanda-builder` 已由主舞台入口挂载为独立配置组件，但不把财务复核 UI 嵌入配置流程。详见 `WORKFLOW-BUILDER.md`。
 
 ## 工作流配置接口
 
@@ -17,6 +17,10 @@
 `workflow-config.ts` 的 `WorkflowConfig` 是配置、摘要、Prompt、备份和保存数据的唯一来源。宿主不要把派生 Prompt 当成配置或权限载体。
 
 本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；读取时会通过 `migrateStoredWorkflow` 兼容旧 schema，工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter，并须保持相同迁移边界。
+
+首页“自订工具库”目前仍是宿主固定空状态。宿主负责人应读取同一 `listSavedWorkflows` 接口，或注入保持同一 `WorkflowSummary` 契约的 adapter；不要在首页另建一份 localStorage 列表。首页只负责发现和导航，配置详情、预演与治理仍由 Builder 展示。跨浏览器、跨站点来源或组织共享需要服务端存储，不能把 IndexedDB 描述成企业共享库。
+
+首页的引擎状态必须来自真实 capability 检测。没有检测结果时显示“未检查”或“执行能力尚未接入”，不得固定显示 `100% Offline Engine Active`。在 JASON 提供可完成的运行入口前，Builder 不显示“沿用规则”之类会停在提示文字的主操作。
 
 `workflow-preview.ts` 提供普通用户的规则预演。`runWorkflowPreview(config, requestId)` 只读取 schema `1.1` 的结构化预演参数，返回绑定 `workflowId + revision + requestId + caseVersion` 的三个内置案例结果。配置 revision 或案例版本不一致时，调用方必须丢弃旧结果。它不读业务文件、不持久化结果，也不改变 `execution.status`。
 
@@ -84,7 +88,7 @@ CSV 对公式前缀及前导空白/控制字符变体加保护。数值列由严
 
 以下事项需要修改白名单外文件，本分支未实施：
 
-1. 首页或导航入口挂载；
+1. 首页“自订工具库”读取 `listSavedWorkflows` 或等价 adapter，并显示同一工作流；
 2. JASON 真实结果 adapter 与错误约定；
 3. SAYA 本地模型连接、可信身份和固定策略注入；
 4. 服务端重新核验身份、版本和操作权限；
@@ -92,7 +96,7 @@ CSV 对公式前缀及前导空白/控制字符变体加保护。数值列由严
 6. 整机断网、真实文件权限和整应用外联审计；
 7. 生产级不可篡改审计、签名与数据保留政策。
 8. Logic Pill 持久化、Preset 编译器、模型 adapter、组织模板治理及会员服务。
-9. 将 `/yolanda-builder` 挂入主舞台，并让自编辑工具库使用工作流保存接口。
+9. 用真实 capability 检测替换首页固定引擎激活文案；无结果时显示未检查。
 10. 为 `receipt.read`、`table.create` 等能力建立正式参数 schema 和试跑协议。
 11. 若要保存或共享执行记录，建立与配置版本分离的 run store；不要把运行结果塞回 `WorkflowConfig`。
 12. 提供真实 Organization / Department / Membership / Role 数据和服务端资源授权，不复用演示身份。
