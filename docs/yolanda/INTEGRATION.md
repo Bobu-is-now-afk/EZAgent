@@ -18,6 +18,10 @@
 
 `workflow-runner.ts` 提供本机结构化试跑。`runReceiptJsonPreview(config, raw)` 只接受已确认的票据模板与 JSON 数组，并回传绑定 `workflowId + revision` 的逐笔结果。页面另要求当前 revision 已储存。它不会读取 PDF/图片、调用网络、持久化结果或改变 `execution.status`。未来 JASON adapter 应另行实现正式 capability 检查和真实执行，不能把这个预览 adapter 包装成 OCR。
 
+`workflow-governance.ts` 保存公司、部门、创建者、修改者、时间及最低试跑/编辑角色，并通过 `canWorkflowAction` 判断查看、试跑、创建、编辑、删除和权限管理。当前 `DEMO_WORKFLOW_IDENTITIES` 仅供界面演示。生产宿主必须用可信组织成员、服务端授权和资源级策略替换，且不能相信导入 JSON、IndexedDB 或前端传来的角色。
+
+`workflow-storage.ts` 新增 `deleteSavedWorkflow`，会删除当前浏览器内的最新配置与全部本机版本。生产删除应改为可审计、可恢复的服务端归档/保留流程。
+
 JASON 应根据 `requiredCapabilities` 明确返回“未检查、能力未接入、可试跑”之一，并验证结构化参数。SAYA 可把需求文本转换为候选配置，但响应必须带 requestId 与来源 revision；页面不会接受过期候选。任何模型建议都不能自行开启发送、覆写或额外文件访问。
 
 ## 数据入口
@@ -79,5 +83,7 @@ CSV 对公式前缀及前导空白/控制字符变体加保护。数值列由严
 9. 将 `/yolanda-builder` 挂入主舞台，并让自编辑工具库使用工作流保存接口。
 10. 为 `receipt.read`、`table.create` 等能力建立正式参数 schema 和试跑协议。
 11. 若要保存或共享执行记录，建立与配置版本分离的 run store；不要把运行结果塞回 `WorkflowConfig`。
+12. 提供真实 Organization / Department / Membership / Role 数据和服务端资源授权，不复用演示身份。
+13. 明确工作流删除、归档、恢复、离职转交和跨部门移交政策。
 
 模块自身没有新增外部请求、CDN、远程字体、遥测、后端或数据库。此事实不能扩展为“整个应用完全离线”的声明。

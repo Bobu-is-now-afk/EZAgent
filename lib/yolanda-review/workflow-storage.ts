@@ -1,11 +1,13 @@
 import type { WorkflowConfig, WorkflowSummary } from './workflow-config'
 import { summarizeWorkflow } from './workflow-config'
+import { normalizeWorkflowGovernance } from './workflow-governance'
 
 export interface WorkflowStore {
   save(config: WorkflowConfig): Promise<void>
   list(): Promise<WorkflowSummary[]>
   get(workflowId: string): Promise<WorkflowConfig | undefined>
   saveVersion(config: WorkflowConfig): Promise<void>
+  delete(workflowId: string): Promise<void>
 }
 
 const DATABASE_NAME = 'ezagent-yolanda-workflows'
@@ -28,7 +30,8 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 function cloneConfig(config: WorkflowConfig) {
-  return JSON.parse(JSON.stringify(config)) as WorkflowConfig
+  const cloned = JSON.parse(JSON.stringify(config)) as WorkflowConfig
+  return { ...cloned, governance: normalizeWorkflowGovernance(cloned.governance) }
 }
 
 async function saveVersion(config: WorkflowConfig) {
@@ -66,14 +69,35 @@ async function list() {
   })
 }
 
+async function deleteWorkflow(workflowId: string) {
+  const database = await openDatabase()
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction([LATEST_STORE, VERSION_STORE], 'readwrite')
+    transaction.objectStore(LATEST_STORE).delete(workflowId)
+    const cursor = transaction.objectStore(VERSION_STORE).openCursor()
+    cursor.onsuccess = () => {
+      const current = cursor.result
+      if (!current) return
+      if ((current.value as { workflowId?: string }).workflowId === workflowId) current.delete()
+      current.continue()
+    }
+    cursor.onerror = () => transaction.abort()
+    transaction.oncomplete = () => { database.close(); resolve() }
+    transaction.onerror = () => { database.close(); reject(transaction.error ?? new Error('Could not delete workflow.')) }
+    transaction.onabort = () => { database.close(); reject(transaction.error ?? new Error('Workflow deletion was aborted.')) }
+  })
+}
+
 export const indexedDbWorkflowStore: WorkflowStore = {
   save: saveVersion,
   saveVersion,
   get,
   list,
+  delete: deleteWorkflow,
 }
 
 export const saveWorkflow = (config: WorkflowConfig) => indexedDbWorkflowStore.save(config)
 export const listSavedWorkflows = () => indexedDbWorkflowStore.list()
 export const getSavedWorkflow = (workflowId: string) => indexedDbWorkflowStore.get(workflowId)
 export const saveWorkflowVersion = (config: WorkflowConfig) => indexedDbWorkflowStore.saveVersion(config)
+export const deleteSavedWorkflow = (workflowId: string) => indexedDbWorkflowStore.delete(workflowId)

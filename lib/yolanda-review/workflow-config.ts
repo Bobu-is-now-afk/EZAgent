@@ -1,3 +1,5 @@
+import { normalizeWorkflowGovernance, unassignedWorkflowGovernance, type WorkflowGovernance } from './workflow-governance'
+
 export type WorkflowLocale = 'en' | 'zh-Hant'
 export type WorkflowSection = 'input' | 'extract' | 'process' | 'exception' | 'output'
 export type WorkflowItemSource = 'user-request' | 'system-inference' | 'user-edit'
@@ -33,6 +35,7 @@ export interface WorkflowConfig {
   confirmation: { revision?: number; confirmedAt?: string }
   requiredCapabilities: string[]
   execution: { status: ExecutionCapabilityStatus; note: string }
+  governance: WorkflowGovernance
 }
 
 export interface WorkflowSummary {
@@ -44,6 +47,7 @@ export interface WorkflowSummary {
   unresolvedCount: number
   confirmed: boolean
   executionStatus: ExecutionCapabilityStatus
+  governance: WorkflowGovernance
 }
 
 const sectionOrder: WorkflowSection[] = ['input', 'extract', 'process', 'exception', 'output']
@@ -90,6 +94,7 @@ function receiptWorkflow(requirement: string, workflowId: string, locale: Workfl
     confirmation: {},
     requiredCapabilities: ['receipt.read', 'table.create'],
     execution: { status: 'not-connected', note: local(locale, '此原型尚未接入收據執行模組。', 'Receipt execution adapter is not connected in this prototype.') },
+    governance: unassignedWorkflowGovernance(),
   }
 }
 
@@ -111,6 +116,7 @@ function generalWorkflow(requirement: string, workflowId: string, locale: Workfl
     confirmation: {},
     requiredCapabilities: ['workflow.custom'],
     execution: { status: 'not-connected', note: local(locale, '此自訂工作流程尚未定義執行模組。', 'No execution adapter is defined for this custom workflow.') },
+    governance: unassignedWorkflowGovernance(),
   }
 }
 
@@ -232,6 +238,7 @@ export function summarizeWorkflow(config: WorkflowConfig): WorkflowSummary {
     unresolvedCount: config.unresolvedQuestions.length,
     confirmed: isWorkflowConfirmed(config),
     executionStatus: config.execution.status,
+    governance: normalizeWorkflowGovernance(config.governance),
   }
 }
 
@@ -339,5 +346,6 @@ export function parseWorkflowBackup(raw: string): WorkflowConfig {
     confirmation: {},
     requiredCapabilities: value.requiredCapabilities,
     execution: { status: 'not-connected', note: 'Imported configuration requires a new execution capability check.' },
+    governance: unassignedWorkflowGovernance(),
   }
 }

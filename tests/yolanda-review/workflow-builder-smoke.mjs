@@ -73,6 +73,9 @@ async function replaceText(label, value) {
   await command('Input.insertText', { text: value })
   return true
 }
+async function selectOption(label, value) {
+  return evaluate(`(() => { const element = document.querySelector('select[aria-label=${JSON.stringify(label)}]'); if (!element) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event('change', { bubbles: true })); return true })()`)
+}
 
 try {
   const page = await getPage()
@@ -120,9 +123,21 @@ try {
   assert.equal(await clickExact('本機工作流庫'), true)
   await until(bodyIncludes('測試每月收據整理'), 'saved workflow listed')
   assert.equal(await clickIncludes('測試每月收據整理'), true)
+  await until(`document.querySelector('[data-managed-workflow]') !== null`, 'workflow management detail')
+  assert.equal(await evaluate(bodyIncludes('EZAgent Demo Co.')), true)
+  assert.equal(await evaluate(bodyIncludes('Finance Operations')), true)
+  assert.equal(await evaluate(bodyIncludes('Yolanda')), true)
+  assert.equal(await evaluate(`[...document.querySelectorAll('button')].find((value) => value.textContent.includes('刪除工作流'))?.disabled`), true)
+  const library = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
+  await writeFile(`${scratch}\\workflow-library-desktop.png`, Buffer.from(library.result.data, 'base64'))
+  assert.equal(await selectOption('演示身分', 'demo-manager'), true)
+  await until(`[...document.querySelectorAll('button')].some((value) => value.textContent.includes('刪除工作流') && !value.disabled)`, 'manager delete permission')
+  assert.equal(await selectOption('演示身分', 'demo-yolanda'), true)
+  assert.equal(await clickExact('開啟'), true)
   await until(`document.querySelector('[data-builder-step="save"]') !== null`, 'saved workflow restored')
   assert.equal(await evaluate(`document.querySelector('[aria-label="工作流程名稱"]')?.value`), '測試每月收據整理')
   assert.equal(await evaluate(`(() => { const details = document.querySelector('details'); details.open = true; return [...details.querySelectorAll('textarea')].every((value) => value.value.includes('從每張收據提取日期、商戶、金額和稅額')) })()`), true)
+  const workflowId = await evaluate(`JSON.parse(document.querySelectorAll('details textarea')[1].value).workflowId`)
   assert.equal(await clickExact('開始本機試跑'), true)
   await until(`document.querySelector('[data-trial-run] table') !== null`, 'trial result table')
   assert.equal(await evaluate(bodyIncludes('可輸出 1 · 需人工檢查 1')), true)
@@ -139,7 +154,19 @@ try {
   const mobile = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
   await writeFile(`${scratch}\\workflow-builder-mobile.png`, Buffer.from(mobile.result.data, 'base64'))
 
-  console.log(JSON.stringify({ result: 'passed', revision, screenshots: [`${scratch}\\workflow-builder-desktop.png`, `${scratch}\\workflow-builder-mobile.png`] }))
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false })
+  assert.equal(await clickExact('本機工作流庫'), true)
+  await until(bodyIncludes('測試每月收據整理'), 'saved workflow before deletion')
+  assert.equal(await clickIncludes('測試每月收據整理'), true)
+  await until(`document.querySelector('[data-managed-workflow]') !== null`, 'workflow selected before deletion')
+  assert.equal(await selectOption('演示身分', 'demo-manager'), true)
+  await until(`[...document.querySelectorAll('button')].some((value) => value.textContent.includes('刪除工作流') && !value.disabled)`, 'delete enabled before deletion')
+  await evaluate(`window.confirm = () => true`)
+  assert.equal(await clickIncludes('刪除工作流'), true)
+  await until(`!document.body.innerText.includes('測試每月收據整理')`, 'workflow deleted from local library')
+  assert.equal(await evaluate(`new Promise((resolve) => { const open = indexedDB.open('ezagent-yolanda-workflows'); open.onerror = () => resolve(false); open.onsuccess = () => { const database = open.result; const transaction = database.transaction(['workflows', 'workflowVersions'], 'readonly'); const latest = transaction.objectStore('workflows').getAll(); const versions = transaction.objectStore('workflowVersions').getAll(); transaction.oncomplete = () => { const remains = [...latest.result, ...versions.result].some((value) => value.workflowId === ${JSON.stringify(workflowId)}); database.close(); resolve(!remains) }; transaction.onerror = () => resolve(false) } })`), true)
+
+  console.log(JSON.stringify({ result: 'passed', revision, screenshots: [`${scratch}\\workflow-library-desktop.png`, `${scratch}\\workflow-builder-desktop.png`, `${scratch}\\workflow-builder-mobile.png`] }))
 } finally {
   if (socket?.readyState === WebSocket.OPEN) socket.close()
   browser.kill()
