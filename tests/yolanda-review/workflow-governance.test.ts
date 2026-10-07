@@ -1,12 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { allWorkflowItems, answerWorkflowQuestion, confirmWorkflow, confirmWorkflowItem, organizeRequirement } from '../../lib/yolanda-review/workflow-config'
+import { confirmWorkflow, confirmWorkflowPreviewParameter, organizeRequirement } from '../../lib/yolanda-review/workflow-config'
 import { canWorkflowAction, DEMO_WORKFLOW_IDENTITIES, normalizeWorkflowGovernance, stampWorkflowSave, updateWorkflowAccess } from '../../lib/yolanda-review/workflow-governance'
 
 function confirmedWorkflow() {
   let config = organizeRequirement('Organize receipts and create a table. Ask when data is missing.', 'governed-workflow', 'en')
-  for (const item of allWorkflowItems(config)) if (item.confirmation === 'pending') config = confirmWorkflowItem(config, item.id)
-  config = answerWorkflowQuestion(config, 'receipt-date-order', 'Use DD/MM/YYYY.')
+  config = confirmWorkflowPreviewParameter(config, 'dateInterpretation')
+  config = confirmWorkflowPreviewParameter(config, 'acceptedCurrencies')
+  config = confirmWorkflowPreviewParameter(config, 'missingMerchantHandling')
   return confirmWorkflow(config, '2026-10-07T00:00:00.000Z')
 }
 

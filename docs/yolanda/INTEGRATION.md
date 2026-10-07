@@ -16,13 +16,23 @@
 
 本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter。
 
-`workflow-runner.ts` 提供本机结构化试跑。`runReceiptJsonPreview(config, raw)` 只接受已确认的票据模板与 JSON 数组，并回传绑定 `workflowId + revision` 的逐笔结果。页面另要求当前 revision 已储存。它不会读取 PDF/图片、调用网络、持久化结果或改变 `execution.status`。未来 JASON adapter 应另行实现正式 capability 检查和真实执行，不能把这个预览 adapter 包装成 OCR。
+`workflow-preview.ts` 提供普通用户的规则预演。`runWorkflowPreview(config, requestId)` 只读取 schema `1.1` 的结构化预演参数，返回绑定 `workflowId + revision + requestId + caseVersion` 的三个内置案例结果。配置 revision 或案例版本不一致时，调用方必须丢弃旧结果。它不读业务文件、不持久化结果，也不改变 `execution.status`。
+
+`workflow-runner.ts` 保留为开发用结构化资料校验。`runReceiptJsonPreview(config, raw)` 只接受已确认的票据模板与 JSON 数组，并回传绑定 `workflowId + revision` 的逐笔结果。页面另要求当前 revision 已储存。它不会读取 PDF/图片、调用网络、执行用户规则、持久化结果或改变 `execution.status`。缺少币种进入待处理，不会默认 HKD。未来 JASON adapter 应另行实现正式 capability 检查和真实执行，不能把这个校验器包装成 OCR 或工作流运行器。
 
 `workflow-governance.ts` 保存公司、部门、创建者、修改者、时间及最低试跑/编辑角色，并通过 `canWorkflowAction` 判断查看、试跑、创建、编辑、删除和权限管理。当前 `DEMO_WORKFLOW_IDENTITIES` 仅供界面演示。生产宿主必须用可信组织成员、服务端授权和资源级策略替换，且不能相信导入 JSON、IndexedDB 或前端传来的角色。
 
 `workflow-storage.ts` 新增 `deleteSavedWorkflow`，会删除当前浏览器内的最新配置与全部本机版本。生产删除应改为可审计、可恢复的服务端归档/保留流程。
 
 JASON 应根据 `requiredCapabilities` 明确返回“未检查、能力未接入、可试跑”之一，并验证结构化参数。SAYA 可把需求文本转换为候选配置，但响应必须带 requestId 与来源 revision；页面不会接受过期候选。任何模型建议都不能自行开启发送、覆写或额外文件访问。
+
+### JASON 运行接口约定（待宿主实现）
+
+- 输入至少包含 `workflowId`、配置 `revision`、配置 schema 版本和独立的本次运行参数。
+- 日期范围、文件选择等会随每次运行改变的值属于运行参数，不写回模板配置，也不要求用户按月复制工作流。
+- JASON 按结构化参数字段消费配置，不解析派生 Prompt 反推行为；遇到 `recorded-only` 规则必须返回“不支持／需人工处理”，不能静默忽略。
+- 响应必须绑定请求 ID 与输入 revision；旧响应不得覆盖新配置。实际执行记录与业务审批记录由执行模块保存，规则预演结果不得写入其中。
+- capability 已接入与用户获授权是两项独立检查；服务端必须同时核验可信身份、资源权限和当前配置版本。
 
 ## 数据入口
 

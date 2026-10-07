@@ -2,11 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   allWorkflowItems,
-  answerWorkflowQuestion,
+  buildWorkflowExplanationCard,
   buildWorkflowPrompt,
   canApplyCandidate,
   confirmWorkflow,
-  confirmWorkflowItem,
+  confirmWorkflowPreviewParameter,
   isWorkflowConfirmed,
   mergeOrganizedRequirement,
   organizeRequirement,
@@ -15,6 +15,7 @@ import {
   removeWorkflowItem,
   summarizeWorkflow,
   updateWorkflowItem,
+  updateWorkflowPreviewParameter,
   workflowValidationErrors,
   type WorkflowConfig,
 } from '../../lib/yolanda-review/workflow-config'
@@ -23,19 +24,24 @@ const receiptRequirement = 'Organize monthly receipts, extract date, merchant, a
 
 function confirmReceipt(config = organizeRequirement(receiptRequirement, 'workflow-test', 'en')) {
   let current = config
-  for (const value of allWorkflowItems(current)) {
-    if (value.confirmation === 'pending') current = confirmWorkflowItem(current, value.id)
-  }
-  current = answerWorkflowQuestion(current, 'receipt-date-order', 'Use DD/MM/YYYY.')
+  current = confirmWorkflowPreviewParameter(current, 'dateInterpretation')
+  current = confirmWorkflowPreviewParameter(current, 'acceptedCurrencies')
+  current = confirmWorkflowPreviewParameter(current, 'missingMerchantHandling')
   return confirmWorkflow(current, '2026-10-07T00:00:00.000Z')
 }
 
-test('workflow confirmation requires every critical question and inferred rule', () => {
+test('workflow confirmation requires every structured preview decision', () => {
   const config = organizeRequirement(receiptRequirement, 'workflow-test', 'en')
   assert.equal(isWorkflowConfirmed(config), false)
-  assert.match(workflowValidationErrors(config).join(' '), /Resolve every required question/)
-  assert.throws(() => confirmWorkflow(config), /Resolve every required question/)
+  assert.match(workflowValidationErrors(config).join(' '), /Confirm every key setting/)
+  assert.throws(() => confirmWorkflow(config), /Confirm every key setting/)
   assert.equal(isWorkflowConfirmed(confirmReceipt(config)), true)
+})
+
+test('receipt template defaults remain suggestions rather than explicit user requirements', () => {
+  const config = organizeRequirement('Organize receipts into a table.', 'workflow-source', 'en')
+  assert.equal(allWorkflowItems(config).find((value) => value.id === 'receipt-fields')?.source, 'template-default')
+  assert.equal(config.previewParameters?.acceptedCurrencies.source, 'template-default')
 })
 
 test('editing a rule advances one revision and invalidates confirmation', () => {
@@ -45,6 +51,7 @@ test('editing a rule advances one revision and invalidates confirmation', () => 
   assert.equal(edited.confirmation.revision, undefined)
   assert.equal(isWorkflowConfirmed(edited), false)
   assert.equal(allWorkflowItems(edited).find((value) => value.id === 'receipt-records')?.source, 'user-edit')
+  assert.equal(allWorkflowItems(edited).find((value) => value.id === 'receipt-records')?.mapping.status, 'recorded-only')
 })
 
 test('no-op rule edits and missing deletes do not advance revision', () => {
@@ -63,12 +70,14 @@ test('renaming creates a version without invalidating confirmed behavior', () =>
   assert.equal(renameWorkflow(renamed, 'Monthly receipt review'), renamed)
 })
 
-test('summary, prompt, and serialized configuration share the edited value', () => {
-  const config = updateWorkflowItem(organizeRequirement(receiptRequirement, 'workflow-test', 'en'), 'receipt-fields', 'Extract date, merchant, total, and tax.')
+test('summary card, prompt, and serialized configuration share structured parameters', () => {
+  const config = updateWorkflowPreviewParameter(organizeRequirement(receiptRequirement, 'workflow-test', 'en'), 'acceptedCurrencies', ['HKD', 'USD'])
   const prompt = buildWorkflowPrompt(config)
+  const card = buildWorkflowExplanationCard(config)
   const saved = JSON.stringify(config)
-  assert.match(prompt, /Extract date, merchant, total, and tax/)
-  assert.match(saved, /Extract date, merchant, total, and tax/)
+  assert.match(prompt, /HKD, USD/)
+  assert.match(card.result, /HKD, USD/)
+  assert.match(saved, /"USD"/)
   assert.equal(summarizeWorkflow(config).ruleCount, allWorkflowItems(config).length)
 })
 
@@ -84,12 +93,12 @@ test('Traditional Chinese builder prompt localizes system headings and limits', 
 test('reorganizing preserves manually edited and manually answered rules', () => {
   let current = organizeRequirement(receiptRequirement, 'workflow-test', 'en')
   current = updateWorkflowItem(current, 'receipt-records', 'Keep the original receipt order.')
-  current = answerWorkflowQuestion(current, 'receipt-date-order', 'Use DD/MM/YYYY.')
+  current = updateWorkflowPreviewParameter(current, 'dateInterpretation', 'MM/DD/YYYY')
   const candidate = organizeRequirement('Organize receipts and create a table.', 'candidate', 'en')
   const merged = mergeOrganizedRequirement(current, candidate)
   assert.equal(allWorkflowItems(merged).find((value) => value.id === 'receipt-records')?.text, 'Keep the original receipt order.')
-  assert.equal(merged.unresolvedQuestions.some((value) => value.id === 'receipt-date-order'), false)
-  assert.equal(allWorkflowItems(merged).some((value) => value.id === 'answer-receipt-date-order'), true)
+  assert.equal(merged.previewParameters?.dateInterpretation.value, 'MM/DD/YYYY')
+  assert.equal(merged.previewParameters?.dateInterpretation.source, 'user-edit')
 })
 
 test('stale candidate responses are rejected by request and revision', () => {
@@ -105,7 +114,18 @@ test('import validates content and clears confirmation and execution trust', () 
   assert.equal(imported.revision, original.revision + 1)
   assert.deepEqual(imported.confirmation, {})
   assert.equal(imported.execution.status, 'not-connected')
+  assert.equal(imported.previewParameters?.dateInterpretation.confirmation, 'pending')
   assert.equal(isWorkflowConfirmed(imported), false)
+})
+
+test('legacy 1.0 import retains rules and creates pending preview parameters', () => {
+  const current = confirmReceipt()
+  const legacy = JSON.stringify({ ...current, schemaVersion: '1.0', previewParameters: undefined })
+  const imported = parseWorkflowBackup(legacy)
+  assert.equal(imported.schemaVersion, '1.1')
+  assert.equal(imported.rules.length, current.rules.length)
+  assert.equal(imported.previewParameters?.acceptedCurrencies.confirmation, 'pending')
+  assert.deepEqual(imported.confirmation, {})
 })
 
 test('non-receipt drafts do not invent finance settings or trial-run support', () => {

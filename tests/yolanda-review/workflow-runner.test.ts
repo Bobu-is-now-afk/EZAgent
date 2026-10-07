@@ -1,14 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { allWorkflowItems, answerWorkflowQuestion, confirmWorkflow, confirmWorkflowItem, organizeRequirement } from '../../lib/yolanda-review/workflow-config'
+import { confirmWorkflow, confirmWorkflowPreviewParameter, organizeRequirement } from '../../lib/yolanda-review/workflow-config'
 import { buildTrialRunCsv, canTrialRun, runReceiptJsonPreview } from '../../lib/yolanda-review/workflow-runner'
 
 function confirmedReceiptWorkflow() {
   let config = organizeRequirement('Organize receipts and create a table. Ask when data is missing.', 'trial-workflow', 'en')
-  for (const item of allWorkflowItems(config)) {
-    if (item.confirmation === 'pending') config = confirmWorkflowItem(config, item.id)
-  }
-  config = answerWorkflowQuestion(config, 'receipt-date-order', 'Use DD/MM/YYYY.')
+  config = confirmWorkflowPreviewParameter(config, 'dateInterpretation')
+  config = confirmWorkflowPreviewParameter(config, 'acceptedCurrencies')
+  config = confirmWorkflowPreviewParameter(config, 'missingMerchantHandling')
   return confirmWorkflow(config, '2026-10-07T00:00:00.000Z')
 }
 
@@ -28,7 +27,7 @@ test('receipt preview validates structured rows and reports partial failures', (
   assert.equal(result.reviewCount, 1)
   assert.equal(result.rows[0].currency, 'HKD')
   assert.equal(result.rows[1].status, 'needs-review')
-  assert.deepEqual(result.rows[1].issues, ['invalid-date', 'missing-merchant', 'invalid-amount'])
+  assert.deepEqual(result.rows[1].issues, ['invalid-date', 'missing-merchant', 'invalid-amount', 'missing-currency'])
 })
 
 test('receipt preview rejects invalid containers, duplicate ids, and oversize batches', () => {

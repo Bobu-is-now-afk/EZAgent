@@ -12,7 +12,7 @@ export interface TrialRunRow {
   issues: TrialRunIssue[]
 }
 
-export type TrialRunIssue = 'invalid-date' | 'missing-merchant' | 'invalid-amount' | 'invalid-currency'
+export type TrialRunIssue = 'invalid-date' | 'missing-merchant' | 'invalid-amount' | 'missing-currency' | 'invalid-currency'
 
 export interface TrialRunResult {
   mode: 'local-structured-preview'
@@ -67,16 +67,15 @@ export function runReceiptJsonPreview(config: WorkflowConfig, raw: string, proce
     const amount = typeof candidate.amount === 'number' && Number.isFinite(candidate.amount)
       ? String(candidate.amount)
       : requiredText(candidate.amount, 'amount', rowNumber, 40)
-    const currency = candidate.currency === undefined || candidate.currency === ''
-      ? 'HKD'
-      : typeof candidate.currency === 'string'
+    const currency = typeof candidate.currency === 'string'
         ? requiredText(candidate.currency, 'currency', rowNumber, 10).toUpperCase()
         : ''
     const issues: TrialRunIssue[] = []
     if (parseIsoDay(date) === undefined) issues.push('invalid-date')
     if (!merchant) issues.push('missing-merchant')
     if (parseMoneyToCents(amount) === undefined) issues.push('invalid-amount')
-    if (!/^[A-Z]{3}$/.test(currency)) issues.push('invalid-currency')
+    if (!currency) issues.push('missing-currency')
+    else if (!/^[A-Z]{3}$/.test(currency)) issues.push('invalid-currency')
 
     return { rowId, date, merchant, amount, currency, status: issues.length ? 'needs-review' : 'ready', issues }
   })

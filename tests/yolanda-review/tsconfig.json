@@ -15,6 +15,7 @@
     "workflow-config.test.ts",
     "workflow-governance.test.ts",
     "workflow-runner.test.ts",
+    "workflow-preview.test.ts",
     "../../lib/yolanda-review/**/*.ts"
   ]
 }
