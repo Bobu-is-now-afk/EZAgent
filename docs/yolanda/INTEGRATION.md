@@ -16,6 +16,8 @@
 
 本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter。
 
+`workflow-runner.ts` 提供本机结构化试跑。`runReceiptJsonPreview(config, raw)` 只接受已确认的票据模板与 JSON 数组，并回传绑定 `workflowId + revision` 的逐笔结果。页面另要求当前 revision 已储存。它不会读取 PDF/图片、调用网络、持久化结果或改变 `execution.status`。未来 JASON adapter 应另行实现正式 capability 检查和真实执行，不能把这个预览 adapter 包装成 OCR。
+
 JASON 应根据 `requiredCapabilities` 明确返回“未检查、能力未接入、可试跑”之一，并验证结构化参数。SAYA 可把需求文本转换为候选配置，但响应必须带 requestId 与来源 revision；页面不会接受过期候选。任何模型建议都不能自行开启发送、覆写或额外文件访问。
 
 ## 数据入口
@@ -76,5 +78,6 @@ CSV 对公式前缀及前导空白/控制字符变体加保护。数值列由严
 8. Logic Pill 持久化、Preset 编译器、模型 adapter、组织模板治理及会员服务。
 9. 将 `/yolanda-builder` 挂入主舞台，并让自编辑工具库使用工作流保存接口。
 10. 为 `receipt.read`、`table.create` 等能力建立正式参数 schema 和试跑协议。
+11. 若要保存或共享执行记录，建立与配置版本分离的 run store；不要把运行结果塞回 `WorkflowConfig`。
 
 模块自身没有新增外部请求、CDN、远程字体、遥测、后端或数据库。此事实不能扩展为“整个应用完全离线”的声明。

@@ -98,14 +98,16 @@ node tests/yolanda-review/workflow-builder-smoke.mjs
 | 单一配置源 | 通过 | 自动化测试确认规则编辑同时进入 Prompt 与序列化配置；页面摘要读取同一对象。 |
 | 关键问题阻止确认 | 通过 | 规则测试拒绝必答问题或待确认推测仍存在的配置。 |
 | 重整不覆盖人工修改 | 通过 | 稳定 ID 与 `user-edit` 合并测试保留手写规则和已回答问题。 |
-| 保存后刷新恢复 | 通过 | Edge 保存至 IndexedDB，刷新后从“打开本机草稿”恢复名称、revision 和规则。 |
+| 保存后刷新恢复 | 通过 | Edge 保存至 IndexedDB，刷新后从“本机工作流库”恢复名称、revision 和规则。 |
 | 未保存状态明确 | 通过 | 名称或规则变化后显示未保存；保存成功才显示本机保存提示。 |
-| 模型/执行边界诚实 | 通过 | 页面标记本机规则整理、能力未接入；没有运行或批准按钮。 |
+| 模型/执行边界诚实 | 通过 | 页面标记完整能力未接入；票据 JSON 试跑明确不是 OCR、完整 Agent 执行或任意 Prompt 执行。 |
 | 非票据场景无财务字段 | 通过 | 自动化测试确认通用场景不包含 currency 或 tolerance。 |
 | 主流程无业务审批 | 通过 | `/yolanda-builder` 没有经理切换、票据核对、金额修正或批准导出。 |
 | 导入不继承信任 | 通过 | 导入校验后 revision 增加，confirmation 清空，execution 重置为 not-connected。 |
 | 文件边界 | 通过 | 新文件仅位于 YOLANDA 白名单；首页、根布局、依赖和配置未修改。 |
 
-新增规则测试 11 项；与原测试合计 34 项。Edge 实际完成规则编辑、关键问题确认、命名保存、刷新恢复、Prompt/JSON 一致性、EN/繁中切换和 390px 布局。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-browser/`，不进入 Git。
+新增配置规则测试 11 项、试跑规则测试 4 项；与原测试合计 38 项。Edge 实际完成规则编辑、关键问题确认、命名保存、刷新恢复、票据 JSON 试跑、结果表、Prompt/JSON 一致性、EN/繁中切换和 390px 布局。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-browser/`，不进入 Git。
 
-工作流配置器已验证 IndexedDB 保存与当前浏览器恢复；未验证跨浏览器同步、工具库挂载、真实本地模型、JASON 试跑 adapter、屏幕阅读器或 Lighthouse。
+本轮三次自审：第一轮核对白名单、配置/执行边界和构建生成物；第二轮通过真实 390px 截图发现并修复 Grid 子项造成的页面横向溢出，随后加入自动断言；第三轮收紧 JSON 输入类型、币种默认规则、繁中表头及 CSV 注入保护回归。
+
+工作流配置器已验证 IndexedDB 保存与当前浏览器恢复，以及固定票据 JSON contract 的本机试跑。未验证跨浏览器同步、宿主工具库挂载、真实 PDF/图片 OCR、真实本地模型、JASON 正式 adapter、屏幕阅读器或 Lighthouse。

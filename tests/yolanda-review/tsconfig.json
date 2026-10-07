@@ -13,6 +13,7 @@
   "include": [
     "engine.test.ts",
     "workflow-config.test.ts",
+    "workflow-runner.test.ts",
     "../../lib/yolanda-review/**/*.ts"
   ]
 }

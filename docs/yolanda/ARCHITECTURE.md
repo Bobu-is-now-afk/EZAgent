@@ -13,7 +13,8 @@
 - `review-workbench.tsx`：页面编排与本地表单缓冲；不拥有最终权限判断和批准快照构造权。
 - `workflow-config.ts`：工作流配置器的单一配置源。集中处理稳定 ID、revision、确认失效、候选合并、摘要、Prompt 和导入净化。
 - `workflow-storage.ts`：工作流本机持久化 seam。IndexedDB adapter 同时保存最新配置与版本记录。
-- `workflow-builder.tsx`：三步配置页面编排。只通过配置模块修改规则，不维护第二套 Prompt 或执行设置。
+- `workflow-runner.ts`：本机结构化资料试跑 seam。首个 adapter 只处理票据 JSON，统一限制大小、笔数、字段校验和 CSV 防注入；不读取图片/PDF，也不解释任意自然语言规则。
+- `workflow-builder.tsx`：三步配置页面编排与本机工作流库入口。只通过配置、储存和试跑模块操作，不维护第二套 Prompt 或执行设置。
 
 ## 必须保持的约束
 
@@ -29,7 +30,9 @@
 10. Builder 的摘要、Prompt、高级 JSON、备份和 IndexedDB 数据必须由同一个 `WorkflowConfig` 派生。
 11. 配置确认与执行能力是独立状态；保存不代表运行或业务批准。
 12. 重新整理需求不得覆盖 `user-edit` 规则；过期 requestId 或来源 revision 的候选不得应用。
+13. 试跑必须绑定已确认且已储存的 `workflowId + revision`；配置变化立即丢弃页面内试跑结果。
+14. 结构化资料试跑不能改变 `execution.status`，不能宣称已经接入 `receipt.read` 或完整执行用户规则。
 
 ## 有意不增加的抽象
 
-财务复核仍只有一个页面编排器和一个计算 adapter。Builder 的 IndexedDB 与未来宿主存储已经形成两个可能变化的实现方向，因此存储 seam 只暴露 save/list/get/version 四项能力。展示层不继续拆成只转发 props 的小文件；高风险版本与导入规则集中在纯配置模块。
+财务复核仍只有一个页面编排器和一个计算 adapter。Builder 的 IndexedDB 与未来宿主存储已经形成两个可能变化的实现方向，因此存储 seam 只暴露 save/list/get/version 四项能力。试跑目前只有一个真实 adapter，但其输入校验、结果和导出已集中在一个小接口，页面不复制执行规则。展示层不继续拆成只转发 props 的小文件；高风险版本、导入和试跑规则集中在纯模块。

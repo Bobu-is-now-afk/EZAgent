@@ -1,7 +1,7 @@
 import { effectiveFields, parseMoneyToCents } from './engine'
 import type { ApprovalSnapshot, ReviewState } from './types'
 
-function csvText(value: string): string {
+export function csvText(value: string): string {
   const protectedValue = /^[\s\u0000-\u001f]*[=+\-@]/.test(value) ? `'${value}` : value
   return `"${protectedValue.replace(/"/g, '""')}"`
 }
