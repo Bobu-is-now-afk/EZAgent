@@ -12,6 +12,8 @@
 
 ## 工作流配置接口
 
+主页面 `app/page.tsx` 的 “Build Something (Main Stage)” 现通过 Next.js App Router 跳转到 `/yolanda-builder`；自订工具库的 “Build Something” 复用同一路由。其余三个 session 保持原有本地视图。该宿主入口修改由 2026-10-07 用户明确授权，不代表 Builder 已获得真实执行能力。
+
 `workflow-config.ts` 的 `WorkflowConfig` 是配置、摘要、Prompt、备份和保存数据的唯一来源。宿主不要把派生 Prompt 当成配置或权限载体。
 
 本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；读取时会通过 `migrateStoredWorkflow` 兼容旧 schema，工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter，并须保持相同迁移边界。

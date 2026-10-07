@@ -5,7 +5,8 @@ import { mkdir, writeFile } from 'node:fs/promises'
 const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const scratch = 'D:\\work\\scratch-2026-10-07\\ezagent-yolanda-builder-preview'
 const debugPort = 9400 + Math.floor(Math.random() * 400)
-const pageUrl = process.env.YOLANDA_BUILDER_URL ?? 'http://localhost:3108/yolanda-builder'
+const siteUrl = (process.env.YOLANDA_BUILDER_URL ?? 'http://localhost:3108/yolanda-builder').replace(/\/yolanda-builder\/?$/, '')
+const pageUrl = `${siteUrl}/`
 await mkdir(scratch, { recursive: true })
 const browser = spawn(edge, ['--headless=new', '--disable-gpu', '--no-first-run', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${scratch}\\profile-${Date.now()}`, '--window-size=1440,1100', pageUrl], { stdio: 'ignore' })
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -17,7 +18,7 @@ async function getPage() {
   for (let attempt = 0; attempt < 50; attempt++) {
     try {
       const pages = await fetch(`http://127.0.0.1:${debugPort}/json/list`).then((response) => response.json())
-      const page = pages.find((value) => value.type === 'page' && value.url.includes('/yolanda-builder'))
+      const page = pages.find((value) => value.type === 'page' && value.url.startsWith(siteUrl))
       if (page) return page
     } catch {}
     await wait(250)
@@ -66,6 +67,10 @@ try {
   await command('Page.enable')
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false })
 
+  await until(bodyIncludes('Build Something (Main Stage)'), 'workspace main-stage card')
+  await until(`(() => { const heading = [...document.querySelectorAll('h2')].find((value) => value.textContent.trim() === 'Build Something (Main Stage)'); const button = heading?.closest('button'); return button && Object.keys(button).some((key) => key.startsWith('__reactProps')); })()`, 'workspace hydration')
+  assert.equal(await evaluate(`(() => { const heading = [...document.querySelectorAll('h2')].find((value) => value.textContent.trim() === 'Build Something (Main Stage)'); const button = heading?.closest('button'); if (!button) return false; button.click(); return true })()`), true)
+  await until(`location.pathname === '/yolanda-builder'`, 'main-stage navigation')
   await until(bodyIncludes('你想讓助手重複完成什麼？'), 'builder heading')
   await until(`(() => { const button = [...document.querySelectorAll('button')].find((value) => value.textContent.trim() === '整理需求'); return button && Object.keys(button).some((key) => key.startsWith('__reactProps')); })()`, 'builder hydration')
   assert.equal(await evaluate(bodyIncludes('輸出示例，不是已處理的業務資料。')), true)

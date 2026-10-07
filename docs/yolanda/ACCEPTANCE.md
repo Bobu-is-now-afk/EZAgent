@@ -105,6 +105,7 @@ node tests/yolanda-review/workflow-builder-smoke.mjs
 | 旧配置兼容 | 通过（单元测试） | schema `1.0` 导入保留规则、升级 `1.1`、清除信任并将新参数标为待确认。 |
 | 权限检查保留 | 通过（治理回归测试） | 管理界面收起，不改变 `canWorkflowAction` 判定。 |
 | 状态不混淆 | 通过（页面实现） | 配置、预演、执行能力分栏；页面持续标明真实执行未接入。 |
+| 主舞台入口 | 通过（Edge 烟测） | 从首页点击 “Build Something (Main Stage)” 后客户端导航到 `/yolanda-builder`，并继续完成 Builder 主流程。 |
 
 三名陌生用户任务验证尚未执行。待测任务：从示例开始、修改一条规则、解释变化、保存并重新打开；需记录求助点、误解和耗时。“无需指导完成”与“能正确解释效果”目前是目标，不是已验证结论。详见 `USABILITY-VALIDATION.md`。
 
@@ -123,7 +124,7 @@ node tests/yolanda-review/workflow-builder-smoke.mjs
 | 导入不继承信任 | 通过 | 导入校验后 revision 增加，confirmation 清空，execution 重置为 not-connected。 |
 | 文件边界 | 通过 | 新文件仅位于 YOLANDA 白名单；首页、根布局、依赖和配置未修改。 |
 
-当前 YOLANDA 单元回归合计 48 项通过，其中新增规则预演测试 3 项及旧浏览器记录迁移回归 1 项，并更新配置、治理与资料校验回归。Edge 实际完成收据示例、日期与币种规则变化、说明卡、命名保存、工作流库重开、管理详情、EN/繁中切换和 390px 无横向溢出断言。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-preview/`，不进入 Git。
+当前 YOLANDA 单元回归合计 48 项通过，其中新增规则预演测试 3 项及旧浏览器记录迁移回归 1 项，并更新配置、治理与资料校验回归。Edge 实际从首页主舞台入口进入 Builder，并完成收据示例、日期与币种规则变化、说明卡、命名保存、工作流库重开、管理详情、EN/繁中切换和 390px 无横向溢出断言。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-preview/`，不进入 Git。
 
 本轮三次自审：第一轮核对来源标签、映射边界和配置／执行状态，修正自由改写后仍显示已映射的问题；第二轮以真实输入与 Edge 流程发现币种逐字编辑问题，加入独立草稿、有效值更新及未提交阻断；第三轮核对白名单、生产构建、390px 截图、文档和 Git diff。
 
