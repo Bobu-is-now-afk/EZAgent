@@ -106,6 +106,8 @@ node tests/yolanda-review/workflow-builder-smoke.mjs
 | 权限检查保留 | 通过（治理回归测试） | 管理界面收起，不改变 `canWorkflowAction` 判定。 |
 | 状态不混淆 | 通过（页面实现） | 说明卡用一行区分规则确认与实际执行；技术能力 ID 收入高级详情。 |
 | 主舞台入口 | 通过（Edge 烟测） | 从首页点击 “Build Something (Main Stage)” 后客户端导航到 `/yolanda-builder`，并继续完成 Builder 主流程。 |
+| Home 与异步反馈 | 通过（页面实现与 Edge 烟测） | 顶部 Home 保留未储存确认；整理和储存按钮暴露 `aria-busy`、状态文案并阻止重复提交。 |
+| 本地模型帮助边界 | 通过（页面实现与 Edge 烟测） | 官方安装页和模型页使用新窗口外链；页面明确下载不等于 SAYA 已连接。 |
 
 3-5 名陌生用户任务验证尚未执行。待测任务：从首页进入、修改一条规则、解释变化、保存并重新打开、说明备份恢复；需记录求助点、误解和耗时。“无需指导完成”与“能正确解释效果”目前是目标，不是已验证结论。详见 `USABILITY-VALIDATION.md`。
 
@@ -124,7 +126,7 @@ node tests/yolanda-review/workflow-builder-smoke.mjs
 | 导入不继承信任 | 通过 | 导入校验后 revision 增加，confirmation 清空，execution 重置为 not-connected。 |
 | 文件边界 | 通过 | 本轮仅修改 YOLANDA 组件、测试与文档；首页入口沿用先前获授权的 `81405a0`，根布局、依赖和配置未修改。 |
 
-当前 YOLANDA 单元回归合计 48 项通过，其中新增规则预演测试 3 项及旧浏览器记录迁移回归 1 项，并更新配置、治理与资料校验回归。Edge 实际从首页主舞台入口进入 Builder，并完成收据示例、日期与币种规则变化、说明卡、命名保存、工作流库重开、管理详情、EN/繁中切换和 390px 无横向溢出断言。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-preview/`，不进入 Git。
+当前 YOLANDA 单元回归合计 48 项通过，其中新增规则预演测试 3 项及旧浏览器记录迁移回归 1 项，并更新配置、治理与资料校验回归。Edge 实际从首页主舞台入口进入 Builder，并验证 Home、loading 属性、Ollama/Qwen 官方链接、收据示例、日期与币种规则变化、说明卡、命名保存、工作流库重开、管理详情、EN/繁中切换和 390px 无横向溢出。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-preview/`，不进入 Git。
 
 本轮三次自审：第一轮核对产品闭环与方案边界，保留同一配置、预演、存储和权限接口，未扩建首页工具库或真实执行；第二轮核对信息密度与交互，把决定和例子就近呈现、拆分保存前后状态、隐藏默认治理矩阵并移除无后续动作；第三轮核对 48 项回归、Edge 主流程、390px 截图、生产构建、白名单和 Git diff。
 

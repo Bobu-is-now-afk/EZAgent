@@ -26,6 +26,8 @@
 
 当前“整理成步骤”使用公开、确定性的本地规则。页面明确说明它不是模型理解。SAYA 接入真实本地模型前，不得把候选配置描述成 AI 已经理解或可以执行。
 
+第一步提供默认折叠的本地模型准备入口：Ollama 官方 Windows 安装页、Qwen 3.5 4B 官方模型页，以及 `ollama run qwen3.5:4b` 命令。链接只帮助用户准备环境，不自动下载、不检查硬件，也不改变当前确定性整理器或 `execution.status`。实际模型连接仍由 SAYA adapter 完成。
+
 ## 单一配置源
 
 `lib/yolanda-review/workflow-config.ts` 定义 schema `1.1` 的 `WorkflowConfig`。除原字段外，它包含日期解释、接受币种、缺失商户处理三项结构化预演参数，以及每条规则的 `mapped`／`recorded-only` 状态。模板预设标记为 `template-default`，不会冒充 `user-request`。
