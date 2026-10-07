@@ -1,5 +1,5 @@
 import type { WorkflowConfig, WorkflowSummary } from './workflow-config'
-import { summarizeWorkflow } from './workflow-config'
+import { migrateStoredWorkflow, summarizeWorkflow } from './workflow-config'
 import { normalizeWorkflowGovernance } from './workflow-governance'
 
 export interface WorkflowStore {
@@ -31,7 +31,8 @@ function openDatabase(): Promise<IDBDatabase> {
 
 function cloneConfig(config: WorkflowConfig) {
   const cloned = JSON.parse(JSON.stringify(config)) as WorkflowConfig
-  return { ...cloned, governance: normalizeWorkflowGovernance(cloned.governance) }
+  const migrated = migrateStoredWorkflow(cloned)
+  return { ...migrated, governance: normalizeWorkflowGovernance(migrated.governance) }
 }
 
 async function saveVersion(config: WorkflowConfig) {
@@ -63,7 +64,7 @@ async function list() {
   return new Promise<WorkflowSummary[]>((resolve, reject) => {
     const transaction = database.transaction(LATEST_STORE, 'readonly')
     const request = transaction.objectStore(LATEST_STORE).getAll()
-    request.onsuccess = () => resolve((request.result as WorkflowConfig[]).map(summarizeWorkflow).sort((left, right) => left.name.localeCompare(right.name)))
+    request.onsuccess = () => resolve((request.result as WorkflowConfig[]).map(cloneConfig).map(summarizeWorkflow).sort((left, right) => left.name.localeCompare(right.name)))
     request.onerror = () => reject(request.error ?? new Error('Could not list workflows.'))
     transaction.oncomplete = () => database.close()
   })

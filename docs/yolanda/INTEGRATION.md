@@ -14,7 +14,7 @@
 
 `workflow-config.ts` 的 `WorkflowConfig` 是配置、摘要、Prompt、备份和保存数据的唯一来源。宿主不要把派生 Prompt 当成配置或权限载体。
 
-本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter。
+本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；读取时会通过 `migrateStoredWorkflow` 兼容旧 schema，工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter，并须保持相同迁移边界。
 
 `workflow-preview.ts` 提供普通用户的规则预演。`runWorkflowPreview(config, requestId)` 只读取 schema `1.1` 的结构化预演参数，返回绑定 `workflowId + revision + requestId + caseVersion` 的三个内置案例结果。配置 revision 或案例版本不一致时，调用方必须丢弃旧结果。它不读业务文件、不持久化结果，也不改变 `execution.status`。
 

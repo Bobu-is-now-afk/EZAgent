@@ -123,7 +123,7 @@ node tests/yolanda-review/workflow-builder-smoke.mjs
 | 导入不继承信任 | 通过 | 导入校验后 revision 增加，confirmation 清空，execution 重置为 not-connected。 |
 | 文件边界 | 通过 | 新文件仅位于 YOLANDA 白名单；首页、根布局、依赖和配置未修改。 |
 
-当前 YOLANDA 单元回归合计 47 项通过，其中新增规则预演测试 3 项，并更新配置、治理与资料校验回归。Edge 实际完成收据示例、日期与币种规则变化、说明卡、命名保存、工作流库重开、管理详情、EN/繁中切换和 390px 无横向溢出断言。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-preview/`，不进入 Git。
+当前 YOLANDA 单元回归合计 48 项通过，其中新增规则预演测试 3 项及旧浏览器记录迁移回归 1 项，并更新配置、治理与资料校验回归。Edge 实际完成收据示例、日期与币种规则变化、说明卡、命名保存、工作流库重开、管理详情、EN/繁中切换和 390px 无横向溢出断言。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-preview/`，不进入 Git。
 
 本轮三次自审：第一轮核对来源标签、映射边界和配置／执行状态，修正自由改写后仍显示已映射的问题；第二轮以真实输入与 Edge 流程发现币种逐字编辑问题，加入独立草稿、有效值更新及未提交阻断；第三轮核对白名单、生产构建、390px 截图、文档和 Git diff。
 

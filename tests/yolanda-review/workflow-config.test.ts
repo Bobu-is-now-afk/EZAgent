@@ -9,6 +9,7 @@ import {
   confirmWorkflowPreviewParameter,
   isWorkflowConfirmed,
   mergeOrganizedRequirement,
+  migrateStoredWorkflow,
   organizeRequirement,
   parseWorkflowBackup,
   renameWorkflow,
@@ -126,6 +127,25 @@ test('legacy 1.0 import retains rules and creates pending preview parameters', (
   assert.equal(imported.rules.length, current.rules.length)
   assert.equal(imported.previewParameters?.acceptedCurrencies.confirmation, 'pending')
   assert.deepEqual(imported.confirmation, {})
+})
+
+test('legacy browser records are migrated before prompt and rule rendering', () => {
+  const current = organizeRequirement(receiptRequirement, 'legacy-browser-record', 'en')
+  const withoutMappings = (values: typeof current.rules) => values.map(({ mapping: _mapping, ...value }) => value)
+  const legacy = {
+    ...current,
+    schemaVersion: '1.0',
+    previewParameters: undefined,
+    inputs: withoutMappings(current.inputs),
+    rules: withoutMappings(current.rules),
+    outputs: withoutMappings(current.outputs),
+  } as unknown as WorkflowConfig
+  const migrated = migrateStoredWorkflow(legacy)
+  assert.doesNotThrow(() => buildWorkflowPrompt(migrated))
+  assert.equal(migrated.schemaVersion, '1.1')
+  assert.equal(allWorkflowItems(migrated).every((value) => value.mapping.status === 'recorded-only'), true)
+  assert.equal(migrated.previewParameters?.dateInterpretation.confirmation, 'pending')
+  assert.deepEqual(migrated.confirmation, {})
 })
 
 test('non-receipt drafts do not invent finance settings or trial-run support', () => {

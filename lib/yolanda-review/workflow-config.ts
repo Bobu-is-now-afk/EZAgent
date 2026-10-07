@@ -432,6 +432,21 @@ function migratedPreviewParameters(value: Omit<Partial<WorkflowConfig>, 'schemaV
   }
 }
 
+export function migrateStoredWorkflow(config: WorkflowConfig): WorkflowConfig {
+  const candidate = config as Omit<Partial<WorkflowConfig>, 'schemaVersion'> & { schemaVersion?: string }
+  const items = [candidate.inputs, candidate.rules, candidate.outputs].flatMap((values) => Array.isArray(values) ? values : [])
+  const needsMigration = candidate.schemaVersion !== '1.1'
+    || candidate.previewParameters === undefined
+    || items.some((value) => !value.mapping)
+  if (!needsMigration) return config
+  const migrated = parseWorkflowBackup(JSON.stringify(candidate))
+  return {
+    ...migrated,
+    governance: normalizeWorkflowGovernance(candidate.governance),
+    execution: { status: 'not-connected', note: 'Stored configuration was migrated and requires a new execution capability check.' },
+  }
+}
+
 export function parseWorkflowBackup(raw: string): WorkflowConfig {
   if (raw.length > 256_000) throw new Error('Workflow backup exceeds 256 KB.')
   let parsed: unknown
