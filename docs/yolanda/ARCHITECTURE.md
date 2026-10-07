@@ -11,6 +11,9 @@
 - `i18n.ts`：英文与繁體中文的静态系统文案及有限运行时状态翻译；不翻译来源证据或使用者内容。
 - `logic-pill-studio.tsx`：Logic Pills CRUD 与提示词预览。它不拥有财务计算、批准或真实 Agent 执行权。
 - `review-workbench.tsx`：页面编排与本地表单缓冲；不拥有最终权限判断和批准快照构造权。
+- `workflow-config.ts`：工作流配置器的单一配置源。集中处理稳定 ID、revision、确认失效、候选合并、摘要、Prompt 和导入净化。
+- `workflow-storage.ts`：工作流本机持久化 seam。IndexedDB adapter 同时保存最新配置与版本记录。
+- `workflow-builder.tsx`：三步配置页面编排。只通过配置模块修改规则，不维护第二套 Prompt 或执行设置。
 
 ## 必须保持的约束
 
@@ -23,7 +26,10 @@
 7. UI 的隐藏/禁用只是体验层，不作为安全边界。
 8. Logic Pills 当前只生成提示词；只有已确认的财务 execution settings 驱动现有计算。
 9. 语言切换只能改写系统文案；使用者内容、证据、技术 ID 和审计记录必须保持原值。
+10. Builder 的摘要、Prompt、高级 JSON、备份和 IndexedDB 数据必须由同一个 `WorkflowConfig` 派生。
+11. 配置确认与执行能力是独立状态；保存不代表运行或业务批准。
+12. 重新整理需求不得覆盖 `user-edit` 规则；过期 requestId 或来源 revision 的候选不得应用。
 
 ## 有意不增加的抽象
 
-当前只有一个页面编排器和一个 adapter 实现。继续拆出只转发 props 的展示组件或 adapter factory 会增加跳转和耦合，尚无第二个实现证明其价值。因此保留一个较大的页面编排文件，把高风险规则沉到可独立测试的深模块中；真实 adapter 出现时再按已存在的 `ReviewAdapter` 接口增加实现。
+财务复核仍只有一个页面编排器和一个计算 adapter。Builder 的 IndexedDB 与未来宿主存储已经形成两个可能变化的实现方向，因此存储 seam 只暴露 save/list/get/version 四项能力。展示层不继续拆成只转发 props 的小文件；高风险版本与导入规则集中在纯配置模块。

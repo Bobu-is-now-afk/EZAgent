@@ -1,6 +1,6 @@
 # YOLANDA 模块交接
 
-日期：2026-10-06
+日期：2026-10-07
 
 ## Git
 
@@ -34,6 +34,10 @@
 - 三轮自审完成：规则/权限、模块边界、竞态与端到端回归。
 - 新增 Logic Studio：6 个广泛模板、4 种用户画像、白话拆分、Logic Pill CRUD、提示词预览与复制。
 - 新增英文／繁體中文页面级切换及繁中 Prompt；规则测试扩展至 23 项。
+- 新增 `/yolanda-builder` 三步工作流配置器；原 `/yolanda-review` 财务示例保持独立。
+- 新增统一 `WorkflowConfig`、revision/确认规则、过期候选拒绝和可信导入边界。
+- 新增 IndexedDB 保存、列表、读取、版本记录、备份和恢复；工具库入口仍待宿主接入。
+- Builder 支持英文／繁體中文系统界面；使用者内容切换语言时保持原文。
 
 ## 运行与演示
 
@@ -43,6 +47,10 @@ pnpm dev --port 3107
 
 打开 `http://localhost:3107/yolanda-review`。先在 `EN / 繁中` 间双向切换并检查繁中 Prompt；切换模板和用户画像，用白话生成并编辑 Logic Pills；同步 Finance preset 后确认 assumptions；更正 `rec-002` 金额和 `rec-003` 日期；排除重复、无匹配和 USD 记录；为 `rec-005` 选择候选并填写理由；复核结果和草稿；切换 Demo Manager；批准并下载；再编辑 `rec-008`，观察批准失效。
 
+打开 `http://localhost:3107/yolanda-builder`。选择收据示例，整理成步骤；修改提取规则；确认系统推测；回答日期解释；确认当前版本；命名并保存。刷新后从“打开本机草稿”恢复，再展开进阶设置，核对 Prompt 与 JSON 都含修改后的规则。
+
 ## 下一步
 
 宿主负责人按 `INTEGRATION.md` 接入 JASON 数据、SAYA 本地模型和可信身份。首页入口、根布局 Analytics、服务端授权和整应用断网验收均未在本分支扩展修改。
+
+Builder 的下一步是由主舞台负责人挂载组件，由工具库负责人接入保存接口，并由 JASON 定义 capability/参数 schema。当前保存完成不表示可以试跑。

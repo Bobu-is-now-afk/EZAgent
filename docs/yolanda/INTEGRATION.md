@@ -3,9 +3,20 @@
 ## 独立入口
 
 - 页面：`/yolanda-review`
+- 工作流配置器：`/yolanda-builder`
 - 页面组件：`components/yolanda-review/review-workbench.tsx`
 - 类型与规则：`lib/yolanda-review/`
 - 当前入口不修改首页、根布局、全局样式或现有组件。
+
+`/yolanda-builder` 是未来主舞台可挂载的独立配置组件。当前不修改主舞台首页，也不把财务复核 UI 嵌入配置流程。详见 `WORKFLOW-BUILDER.md`。
+
+## 工作流配置接口
+
+`workflow-config.ts` 的 `WorkflowConfig` 是配置、摘要、Prompt、备份和保存数据的唯一来源。宿主不要把派生 Prompt 当成配置或权限载体。
+
+本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter。
+
+JASON 应根据 `requiredCapabilities` 明确返回“未检查、能力未接入、可试跑”之一，并验证结构化参数。SAYA 可把需求文本转换为候选配置，但响应必须带 requestId 与来源 revision；页面不会接受过期候选。任何模型建议都不能自行开启发送、覆写或额外文件访问。
 
 ## 数据入口
 
@@ -63,5 +74,7 @@ CSV 对公式前缀及前导空白/控制字符变体加保护。数值列由严
 6. 整机断网、真实文件权限和整应用外联审计；
 7. 生产级不可篡改审计、签名与数据保留政策。
 8. Logic Pill 持久化、Preset 编译器、模型 adapter、组织模板治理及会员服务。
+9. 将 `/yolanda-builder` 挂入主舞台，并让自编辑工具库使用工作流保存接口。
+10. 为 `receipt.read`、`table.create` 等能力建立正式参数 schema 和试跑协议。
 
 模块自身没有新增外部请求、CDN、远程字体、遥测、后端或数据库。此事实不能扩展为“整个应用完全离线”的声明。

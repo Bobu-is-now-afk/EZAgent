@@ -1,6 +1,6 @@
 # YOLANDA 模块验收记录
 
-日期：2026-10-06。数据：明确标记的合成批次，不含真实客户记录。
+日期：2026-10-07。数据：明确标记的合成批次与工作流配置，不含真实客户记录。
 
 ## 环境与命令
 
@@ -8,6 +8,7 @@
 - pnpm `11.19.0`（项目声明 `pnpm@12.3.4`，本机 Corepack 实际执行版本不同）
 - Edge headless：本机已安装版本
 - 页面：`http://localhost:3107/yolanda-review`
+- 配置器：`http://localhost:3107/yolanda-builder`
 
 执行命令：
 
@@ -20,6 +21,7 @@ $env:NEXT_TELEMETRY_DISABLED='1'
 pnpm build
 pnpm dev --port 3107
 node tests/yolanda-review/browser-smoke.mjs
+node tests/yolanda-review/workflow-builder-smoke.mjs
 ```
 
 首次 `pnpm build` 因 Next.js 在 C 盘用户配置目录执行跨盘 rename 返回 `EXDEV`。将仅构建期 `APPDATA` 指向 D 盘 scratch 后成功。项目文件和配置未因此改变。
@@ -86,3 +88,24 @@ node tests/yolanda-review/browser-smoke.mjs
 - 浏览器下载只能确认已生成下载，不能证明用户已保存到预期硬盘位置。
 - 工作副本已做深层运行时校验，但仍不替代生产 schema、签名、来源认证和服务端授权。
 - 未验证 Lighthouse、屏幕阅读器实测、真实数据、大批次性能、整机断网和宿主 Analytics。
+
+## 工作流配置器验收
+
+| 标准 | 结果 | 证据 |
+| --- | --- | --- |
+| 页面目的清楚 | 通过 | 首屏只显示“建立工作流程”、一句说明、主输入和三个短示例。 |
+| 不看 Prompt 可完成 | 通过 | Prompt 和 JSON 默认位于关闭的“进阶设置”；三步核心流程不依赖它。 |
+| 单一配置源 | 通过 | 自动化测试确认规则编辑同时进入 Prompt 与序列化配置；页面摘要读取同一对象。 |
+| 关键问题阻止确认 | 通过 | 规则测试拒绝必答问题或待确认推测仍存在的配置。 |
+| 重整不覆盖人工修改 | 通过 | 稳定 ID 与 `user-edit` 合并测试保留手写规则和已回答问题。 |
+| 保存后刷新恢复 | 通过 | Edge 保存至 IndexedDB，刷新后从“打开本机草稿”恢复名称、revision 和规则。 |
+| 未保存状态明确 | 通过 | 名称或规则变化后显示未保存；保存成功才显示本机保存提示。 |
+| 模型/执行边界诚实 | 通过 | 页面标记本机规则整理、能力未接入；没有运行或批准按钮。 |
+| 非票据场景无财务字段 | 通过 | 自动化测试确认通用场景不包含 currency 或 tolerance。 |
+| 主流程无业务审批 | 通过 | `/yolanda-builder` 没有经理切换、票据核对、金额修正或批准导出。 |
+| 导入不继承信任 | 通过 | 导入校验后 revision 增加，confirmation 清空，execution 重置为 not-connected。 |
+| 文件边界 | 通过 | 新文件仅位于 YOLANDA 白名单；首页、根布局、依赖和配置未修改。 |
+
+新增规则测试 11 项；与原测试合计 34 项。Edge 实际完成规则编辑、关键问题确认、命名保存、刷新恢复、Prompt/JSON 一致性、EN/繁中切换和 390px 布局。截图位于 `D:/work/scratch-2026-10-07/ezagent-yolanda-builder-browser/`，不进入 Git。
+
+工作流配置器已验证 IndexedDB 保存与当前浏览器恢复；未验证跨浏览器同步、工具库挂载、真实本地模型、JASON 试跑 adapter、屏幕阅读器或 Lighthouse。

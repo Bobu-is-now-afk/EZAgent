@@ -12,6 +12,7 @@
   },
   "include": [
     "engine.test.ts",
+    "workflow-config.test.ts",
     "../../lib/yolanda-review/**/*.ts"
   ]
 }
