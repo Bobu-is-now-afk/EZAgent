@@ -1,0 +1,7 @@
+invoice_id,customer,amount,currency,description
+INV-001,Harbour Studio,12500.00,HKD,Design retainer
+INV-002,North Point Cafe,9800.00,HKD,Equipment
+INV-003,Metro Supplies,16800.00,HKD,Office supplies
+INV-004,,14250.00,HKD,Consulting
+INV-005,Harbour Studio,11000.00,USD,Licensing
+INV-006,City Print,21000.00,HKD,Printing

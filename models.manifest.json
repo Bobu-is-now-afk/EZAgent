@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "updated": "2026-10-09",
+  "default_model_id": "qwen3.5:9b",
+  "ollama_host_default": "http://127.0.0.1:11434",
+  "notes_zh": "此清單是產品允許清單。弱機只應自動選 recommended_default 或更小的模型；標成 high_tier / blocked 的模型不可自動選。",
+  "notes_en": "Allowlist for local free weights via Ollama. Weak machines must never auto-select high_tier or blocked models.",
+  "models": [
+    {
+      "id": "qwen3.5:4b",
+      "display_name": "Qwen 3.5 · 輕量（約 4B）",
+      "display_name_en": "Qwen 3.5 · Lightweight (~4B)",
+      "min_ram_gb": 8,
+      "min_disk_gb": 4,
+      "recommended_default": false,
+      "tier": "safe",
+      "blocked": false,
+      "notes": "較小、較安全的後備選項；記憶體緊張時優先。Yolanda 分支曾連結官方 4B 頁面作環境準備。"
+    },
+    {
+      "id": "qwen3.5:9b",
+      "display_name": "Qwen 3.5 · 預設",
+      "display_name_en": "Qwen 3.5 · Default (~9B)",
+      "min_ram_gb": 16,
+      "min_disk_gb": 8,
+      "recommended_default": true,
+      "tier": "default",
+      "blocked": false,
+      "notes": "產品預設模型。聊天與 Planner 讀取本機設定，未設定時使用此模型。免費本機權重，經 Ollama 下載。"
+    },
+    {
+      "id": "llama3.2:3b",
+      "display_name": "Llama 3.2 · 超輕量（約 3B）",
+      "display_name_en": "Llama 3.2 · Ultra-light (~3B)",
+      "min_ram_gb": 6,
+      "min_disk_gb": 3,
+      "recommended_default": false,
+      "tier": "safe",
+      "blocked": false,
+      "notes": "極弱機後備；理解力較弱，僅作可開機保底，不作預設。"
+    },
+    {
+      "id": "qwen3.5:32b",
+      "display_name": "Qwen 3.5 · 進階（約 32B）",
+      "display_name_en": "Qwen 3.5 · Advanced (~32B)",
+      "min_ram_gb": 48,
+      "min_disk_gb": 24,
+      "recommended_default": false,
+      "tier": "high_tier",
+      "blocked": false,
+      "notes": "進階／高階硬體專用。永不自動選；需使用者明確選擇且通過 RAM／磁碟閘門。"
+    },
+    {
+      "id": "qwen3.5:72b",
+      "display_name": "Qwen 3.5 · 旗艦（約 72B）",
+      "display_name_en": "Qwen 3.5 · Flagship (~72B)",
+      "min_ram_gb": 96,
+      "min_disk_gb": 48,
+      "recommended_default": false,
+      "tier": "high_tier",
+      "blocked": true,
+      "notes": "預設封鎖，避免弱機誤選導致系統卡住。僅在明確解除封鎖與硬體通過後可用。"
+    }
+  ]
+}

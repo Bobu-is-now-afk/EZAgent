@@ -13,3 +13,19 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+*.tsbuildinfo
+
+# Sensitive local inputs and credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+credentials*
+inputs/.private/
+
+# Local agent runs and imported source data
+.ezagent/
+
+# Python preparation/test bytecode
+__pycache__/

@@ -1,10 +1,9 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'EZAgent | Offline AI Workspace',
-  description: 'A clean offline workspace for local AI agents and workflows.',
+  title: 'EZAgent | 本機 AI 工作區',
+  description: '本機聊天與發票 CSV 示範；包含流程設計預覽。',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -39,10 +38,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="zh-Hant">
       <body className="antialiased">
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )
