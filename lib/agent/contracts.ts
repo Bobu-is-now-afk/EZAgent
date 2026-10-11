@@ -41,6 +41,7 @@ export type WorkflowStep = {
 }
 
 export type WorkflowDefinition = {
+  origin?: { type: 'yolanda-builder'; workflowId: string; revision: number }
   pills?: import('./logic-pills').LogicPill[]
   version: 1
   goal: string
@@ -96,6 +97,7 @@ export type Artifact = {
   type: string
   location: string
   sourceRefs: SourceReference[]
+  summary?: { rowCount: number; reviewCount: number }
   validation: ValidationOutcome
 }
 

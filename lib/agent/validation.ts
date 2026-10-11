@@ -187,8 +187,13 @@ export function validateWorkflow(input: unknown): Result<WorkflowDefinition> {
     return { ok: false, issues: [issue('$', 'invalid_workflow', 'Workflow must be an object.')] }
   }
 
-  if (!hasOnlyKeys(input, ['version', 'goal', 'steps', 'parameters', 'allowedTools', 'acceptance', 'pills'])) {
+  if (!hasOnlyKeys(input, ['version', 'goal', 'steps', 'parameters', 'allowedTools', 'acceptance', 'pills', 'origin'])) {
     issues.push(issue('$', 'unknown_workflow_field', 'Workflow contains an unsupported field.'))
+  }
+  if (input.origin !== undefined) {
+    if (!isRecord(input.origin) || !hasOnlyKeys(input.origin, ['type', 'workflowId', 'revision']) || input.origin.type !== 'yolanda-builder' || !isNonEmptyString(input.origin.workflowId) || input.origin.workflowId.length > 100 || !Number.isSafeInteger(input.origin.revision) || (input.origin.revision as number) < 1) {
+      issues.push(issue('origin', 'invalid_workflow_origin', 'Builder origin must contain a bounded workflowId and positive revision.'))
+    }
   }
   if (input.pills !== undefined && !isLogicPills(input.pills)) issues.push(issue('pills', 'invalid_pills', 'Logic pills must have unique IDs and valid typed values.'))
   if (input.version !== 1) issues.push(issue('version', 'unsupported_version', 'Only workflow version 1 is supported.'))

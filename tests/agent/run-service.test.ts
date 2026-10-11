@@ -111,6 +111,7 @@ test('runs API stores the source immutably, validates every tool step, and commi
   assert.match(csv, /"'=1\+1"/)
   assert.match(csv, /"source_file","source_row","validation_status"/)
   assert.equal(completed.artifacts[0].sourceRefs.length, 1)
+  assert.deepEqual(completed.artifacts[0].summary, { rowCount: 1, reviewCount: 0 })
   assert.ok('rowNumber' in completed.artifacts[0].sourceRefs[0])
   if ('rowNumber' in completed.artifacts[0].sourceRefs[0]) assert.equal(completed.artifacts[0].sourceRefs[0].rowNumber, 2)
 

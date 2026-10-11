@@ -294,6 +294,7 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
         type: 'text/csv',
         location: `/api/agent/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`,
         sourceRefs: execution.sourceRefs,
+        summary: execution.summary,
         validation: exportOutcome,
       }
       latest.artifacts = [...latest.artifacts, artifact]

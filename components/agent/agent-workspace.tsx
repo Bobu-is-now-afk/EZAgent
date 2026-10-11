@@ -3,6 +3,8 @@
 import { LogicPillsEditor } from '@/components/agent/logic-pills-editor'
 import { applyLogicPills, deriveLogicPills, isLogicPills, type LogicPill } from '@/lib/agent/logic-pills'
 import { validateWorkflow } from '@/lib/agent/validation'
+import { getSavedWorkflow } from '@/lib/yolanda-review/workflow-storage'
+import { createInvoiceAgentHandoff, type InvoiceAgentHandoff } from '@/lib/yolanda-review/workflow-agent-handoff'
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
@@ -321,8 +323,13 @@ function parseArtifact(value: unknown): Artifact | null {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id || typeof value.type !== 'string' || !value.type || typeof value.location !== 'string' || !Array.isArray(value.sourceRefs)) return null
   const sourceRefs = value.sourceRefs.map(parseSourceReference)
   const validation = parseValidation(value.validation)
-  if (sourceRefs.some((reference) => reference === null) || !validation) return null
-  return { id: value.id, type: value.type, location: value.location, sourceRefs: sourceRefs as SourceReference[], validation }
+  const summary = value.summary === undefined
+    ? undefined
+    : isRecord(value.summary) && Number.isSafeInteger(value.summary.rowCount) && (value.summary.rowCount as number) >= 0 && Number.isSafeInteger(value.summary.reviewCount) && (value.summary.reviewCount as number) >= 0 && (value.summary.reviewCount as number) <= (value.summary.rowCount as number)
+      ? { rowCount: value.summary.rowCount as number, reviewCount: value.summary.reviewCount as number }
+      : null
+  if (sourceRefs.some((reference) => reference === null) || !validation || summary === null) return null
+  return { id: value.id, type: value.type, location: value.location, sourceRefs: sourceRefs as SourceReference[], ...(summary ? { summary } : {}), validation }
 }
 
 function parseRunSnapshot(value: unknown): RunSnapshot | null {
@@ -463,11 +470,18 @@ function parseWorkflow(value: unknown): WorkflowDefinition | null {
     })
   }
   if (value.pills !== undefined && !isLogicPills(value.pills)) return null
+  const origin = value.origin === undefined
+    ? undefined
+    : isRecord(value.origin) && value.origin.type === 'yolanda-builder' && typeof value.origin.workflowId === 'string' && value.origin.workflowId.length > 0 && value.origin.workflowId.length <= 100 && Number.isSafeInteger(value.origin.revision) && (value.origin.revision as number) > 0
+      ? { type: 'yolanda-builder' as const, workflowId: value.origin.workflowId, revision: value.origin.revision as number }
+      : null
+  if (origin === null) return null
   const parameters = value.parameters
   if (parameters.thresholdMinor !== undefined && !Number.isSafeInteger(parameters.thresholdMinor)) return null
   if (parameters.currency !== undefined && typeof parameters.currency !== 'string') return null
   return {
     version: 1,
+    ...(origin ? { origin } : {}),
     goal: value.goal,
     ...(value.pills !== undefined ? { pills: value.pills as LogicPill[] } : {}),
     steps,
@@ -602,6 +616,8 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
   const [sourceError, setSourceError] = useState<string | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
+  const [builderHandoff, setBuilderHandoff] = useState<InvoiceAgentHandoff | null>(null)
+  const [handoffError, setHandoffError] = useState<string | null>(null)
   const [isReadingSource, setIsReadingSource] = useState(false)
   const [isPlanning, setIsPlanning] = useState(false)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
@@ -617,6 +633,34 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
   useEffect(() => () => {
     actionControllerRef.current?.abort()
     artifactControllerRef.current?.abort()
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const workflowId = params.get('workflowId')
+    const revisionText = params.get('revision')
+    if (!workflowId && !revisionText) return
+    const revision = Number(revisionText)
+    if (!workflowId || workflowId.length > 100 || !Number.isSafeInteger(revision) || revision < 1) {
+      setHandoffError('Builder 交接連結無效。請回到工作流庫重新開啟並交接。')
+      return
+    }
+    let active = true
+    void getSavedWorkflow(workflowId).then((config) => {
+      if (!active) return
+      if (!config || config.revision !== revision) {
+        setHandoffError('找不到指定的已儲存版本。請回到工作流庫確認版本；不會套用其他版本。')
+        return
+      }
+      const handoff = createInvoiceAgentHandoff(config, 'zh-Hant')
+      setBuilderHandoff(handoff)
+      setGoal(handoff.goal)
+      setTemplateName(handoff.workflowName)
+      if (handoff.status !== 'ready') setHandoffError(handoff.summary)
+    }).catch(() => {
+      if (active) setHandoffError('無法讀取此瀏覽器的工作流。請回到 Builder 重新儲存後再試。')
+    })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -989,6 +1033,8 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
     setSelectedTemplateId(template.id)
     setSelectedTemplateVersion(template.version)
     setTemplateError(null)
+    setBuilderHandoff(null)
+    setHandoffError(null)
   }
 
   function saveWorkflowTemplate() {
@@ -1043,7 +1089,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
       if (!response.ok) throw new Error('sample_unavailable')
       const sample = await response.json()
       setSource(sample)
-      setGoal('篩選港幣 10,000 元以上的發票，標記缺漏欄位並匯出 CSV')
+      setGoal((current) => builderHandoff?.status === 'ready' ? current : '篩選港幣 10,000 元以上的發票，標記缺漏欄位並匯出 CSV')
     } catch { setSourceError('示範資料暫時無法載入，請再試一次。') }
     finally { setIsReadingSource(false) }
   }
@@ -1114,7 +1160,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
       const response = await fetch('/api/agent/plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: goal.trim(), source }),
+        body: JSON.stringify({ goal: goal.trim(), source, ...(builderHandoff?.status === 'ready' && builderHandoff.parameters ? { parameters: builderHandoff.parameters } : {}) }),
       })
       const result: unknown = await response.json().catch(() => null)
       if (!response.ok) throw new Error(formatApiError(result, response.status))
@@ -1138,7 +1184,10 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
 
   async function createRun() {
     if (!editedWorkflow || !source || !isConfirmed || isEditingPlan || pillErrors.length || runBlocksNewWork) return
-    const request = { workflow: editedWorkflow, source }
+    const workflow = builderHandoff?.status === 'ready'
+      ? { ...editedWorkflow, origin: { type: 'yolanda-builder' as const, workflowId: builderHandoff.workflowId, revision: builderHandoff.revision } }
+      : editedWorkflow
+    const request = { workflow, source }
     const signature = JSON.stringify(request)
     const existingKey = idempotencyRef.current?.signature === signature ? idempotencyRef.current.key : null
     const idempotencyKey = existingKey ?? crypto.randomUUID()
@@ -1162,7 +1211,9 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
       setRunId(run.id)
       setRunEvents([])
       setRunSourceBatch(source.name)
-      setRunTemplateLabel(selectedTemplate
+      setRunTemplateLabel(builderHandoff?.status === 'ready'
+        ? `${builderHandoff.workflowName} · Builder v${builderHandoff.revision}`
+        : selectedTemplate
         ? `${selectedTemplate.name} · v${selectedTemplate.version}${selectedTemplateDirty ? ' · 含尚未儲存的參數修改' : ''}`
         : '自訂 workflow（未套用模板）')
       try {
@@ -1311,7 +1362,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
     setStreamRestartKey((key) => key + 1)
   }
 
-  const planningDisabled = !source || !goal.trim() || isPlanning || isReadingSource || isCreatingRun || runBlocksNewWork
+  const planningDisabled = !source || !goal.trim() || isPlanning || isReadingSource || isCreatingRun || runBlocksNewWork || Boolean(builderHandoff && builderHandoff.status !== 'ready')
   const canCreateRun = Boolean(editedWorkflow && source && isConfirmed && !isEditingPlan && !pillErrors.length && !isCreatingRun && !runBlocksNewWork)
   const previewText = plannerPreview === null ? '' : formatPreview(plannerPreview)
   const workflowForDisplay = editedWorkflow ?? runInfo?.workflow ?? null
@@ -1322,6 +1373,13 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
   const displayRequiredFields = editedWorkflow
     ? requiredFields
     : isStringArray(storedRequiredFields) ? storedRequiredFields : requiredFields
+  const handoffDifferences = builderHandoff?.status === 'ready' && editedWorkflow && builderHandoff.parameters
+    ? [
+        ...(editedWorkflow.goal === builderHandoff.goal ? [] : ['任務目標已在 Agent 中修改。']),
+        ...(editedWorkflow.parameters.thresholdMinor === builderHandoff.parameters.thresholdMinor ? [] : ['金額門檻與 Builder 版本不同。']),
+        ...(editedWorkflow.parameters.currency === builderHandoff.parameters.currency ? [] : ['幣種與 Builder 版本不同。']),
+      ]
+    : []
   const canCancelRun = Boolean(runId && runInfo && ['running', 'cancelling', 'awaiting_approval'].includes(runInfo.status))
   const needsInputEvent = runInfo?.status === 'needs_input'
     ? [...runEvents].reverse().find((event) => event.type.toLowerCase().includes('input') && (!event.taskId || event.taskId === runInfo.currentTask))
@@ -1336,12 +1394,20 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
   const sourceLocationColumn = artifactTable ? findCsvColumn(artifactTable.headers, ['source_row', 'source_row_number', 'row_number', 'source_line', 'line_number']) : -1
   const resultStatusColumn = artifactTable ? findCsvColumn(artifactTable.headers, ['validation_status', 'validation_flag']) : -1
   const resultReasonColumn = artifactTable ? findCsvColumn(artifactTable.headers, ['validation_reason', 'validation_reasons', 'flag_reason', 'validation_evidence']) : -1
+  const resultReviewCount = artifactTable && resultStatusColumn >= 0
+    ? artifactTable.rows.filter((row) => (row[resultStatusColumn] ?? '').trim() !== 'valid').length
+    : null
+  const completedSummary = runInfo?.status === 'completed'
+    ? runInfo.artifacts.find(isCsvArtifact)?.summary
+    : undefined
 
   return <section className="mx-auto flex min-h-[calc(100vh-76px)] w-full max-w-[1840px] flex-col px-4 py-5 sm:px-7 sm:py-6 xl:px-10">
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Invoice demo</p><h1 className="mt-1 text-2xl font-semibold tracking-[-0.04em] sm:text-[28px]">發票整理示範</h1></div>
       <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${apiStatus === 'responded' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : apiStatus === 'failed' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-zinc-200 bg-zinc-50 text-zinc-600'}`}><CircleDashed aria-hidden="true" className="size-3.5" />{API_RESPONSE_LABELS[apiStatus]}</div>
     </div>
+
+    {(builderHandoff || handoffError) && <section aria-label="Builder 交接" className={`mb-4 rounded-xl border p-4 text-sm ${builderHandoff?.status === 'ready' ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-amber-200 bg-amber-50 text-amber-950'}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{builderHandoff ? `${builderHandoff.workflowName} · Builder v${builderHandoff.revision}` : 'Builder 交接未載入'}</p><p className="mt-1 leading-6">{builderHandoff?.summary ?? handoffError}</p></div><span className="rounded-full border border-current/20 px-2.5 py-1 text-[10px] font-semibold">{builderHandoff?.status === 'ready' ? '可建立候選計畫' : '不可完整執行'}</span></div>{builderHandoff?.blockers.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{builderHandoff.blockers.map((item) => <li key={item}>{item}</li>)}</ul> : null}<p className="mt-2 text-xs">此交接只載入工作流 ID、版本與已儲存設定；尚未選擇本次資料，也未開始執行。</p></section>}
 
     <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(245px,0.82fr)_minmax(440px,1.55fr)_minmax(260px,0.9fr)]">
       <section aria-labelledby="mission-goal-title" className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_-24px_rgba(24,24,27,0.3)] sm:p-6">
@@ -1384,6 +1450,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
 
         {workflowForDisplay ? <>
           <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-xs font-semibold text-zinc-800">處理目標</h3><span className="text-[10px] font-medium text-zinc-500">{selectedTemplate ? `模板 ${selectedTemplate.name} · v${selectedTemplate.version}${selectedTemplateDirty ? ' · 有未儲存修改' : ''}` : '未套用已儲存模板'}</span></div><p className="mt-1 text-xs leading-5 text-zinc-600">{workflowForDisplay.goal}</p><p className="mt-2 break-all text-[10px] text-zinc-500">來源批次：{source?.name ?? '尚未選取；載入模板後請選取新來源檔案。'}</p></div>
+          {builderHandoff?.status === 'ready' && editedWorkflow && <div className={`mt-3 rounded-xl border p-4 text-xs ${handoffDifferences.length ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950'}`}><p className="font-semibold">與 Builder v{builderHandoff.revision} 比較</p>{handoffDifferences.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{handoffDifferences.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-1">金額門檻、幣種與任務目標一致。</p>}<p className="mt-2">實際計畫：嚴格大於 {displayCurrency} {(displayThresholdMinor / 100).toFixed(2)}；缺失必要欄位保留空白、來源與檢核標記；輸出 CSV。</p></div>}
           <ol className="mt-3 flex flex-col gap-2">
             {workflowForDisplay.steps.map((step, index) => {
               const taskState = runWorkflowMatches ? runInfo?.taskStates[step.id] : undefined
@@ -1394,8 +1461,8 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
           </ol>
           {editedWorkflow && previewText && <details className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3"><summary className="cursor-pointer text-xs font-semibold text-zinc-700">進階詳情：計畫資料</summary><pre className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-zinc-600">{previewText}</pre></details>}
           {editedWorkflow && source ? <>
-            <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 text-xs leading-5 ${isConfirmed ? 'border-emerald-300 bg-emerald-50' : 'border-zinc-200 bg-zinc-50'}`}><input type="checkbox" checked={isConfirmed} disabled={!source || isEditingPlan || Boolean(pillErrors.length) || isCreatingRun || runBlocksNewWork} onChange={(event) => setConfirmedSignature(event.target.checked ? payloadSignature : null)} className="mt-0.5 size-4 accent-zinc-950" /><span><span className="font-semibold text-zinc-800">我已檢查來源與篩選條件，同意開始整理。</span><span className="mt-1 block text-zinc-500">確認內容改變時，核准會自動失效，需重新確認。</span></span></label>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-zinc-500">確認後即在本機整理發票。</p><button type="button" onClick={createRun} disabled={!canCreateRun} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-zinc-700 motion-reduce:transition-none disabled:cursor-not-allowed disabled:bg-zinc-300">{isCreatingRun ? '正在開始整理…' : runBlocksNewWork ? '正在整理中' : '確認並開始整理'} <ArrowRight aria-hidden="true" className="size-3.5" /></button></div>
+            <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 text-xs leading-5 ${isConfirmed ? 'border-emerald-300 bg-emerald-50' : 'border-zinc-200 bg-zinc-50'}`}><input type="checkbox" checked={isConfirmed} disabled={!source || isEditingPlan || Boolean(pillErrors.length) || isCreatingRun || runBlocksNewWork} onChange={(event) => setConfirmedSignature(event.target.checked ? payloadSignature : null)} className="mt-0.5 size-4 accent-zinc-950" /><span><span className="font-semibold text-zinc-800">我已核對指定資料、篩選條件、處理步驟、缺失欄位處理與 CSV 輸出。</span><span className="mt-1 block text-zinc-500">確認後將按此計畫處理指定資料；這不代表財務結果已經審核通過。來源、參數或步驟改變時，確認會自動失效。</span></span></label>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-zinc-500">只有按下按鈕後才會建立 Run；Builder 交接本身不執行。</p><button type="button" onClick={createRun} disabled={!canCreateRun} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-zinc-700 motion-reduce:transition-none disabled:cursor-not-allowed disabled:bg-zinc-300">{isCreatingRun ? '正在開始處理…' : runBlocksNewWork ? '正在處理中' : '確認計畫並開始處理'} <ArrowRight aria-hidden="true" className="size-3.5" /></button></div>
             {runError && <ErrorNotice detail={runError} message="處理尚未開始，請重試。" />}
           </> : runInfo && <p className="mt-4 rounded-xl bg-zinc-50 px-4 py-3 text-xs leading-5 text-zinc-600">此為從已保存的 Run ID 載入的 workflow 快照；來源內容不會從 localStorage 還原。</p>}
         </> : <div className="mt-4 flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50/60 px-5 py-8 text-center"><CircleDashed aria-hidden="true" className="size-5 text-zinc-500" /><p className="mt-3 text-sm font-semibold text-zinc-700">尚未建立計畫</p><p className="mt-1 max-w-md text-xs leading-5 text-zinc-500">按「使用示範發票」，再按「建立計畫」。確認前不會開始整理。</p></div>}
@@ -1403,7 +1470,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
 
       <section aria-labelledby="result-title" className="flex flex-col rounded-2xl border border-zinc-200 bg-zinc-50/60 p-5 sm:p-6">
         <div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-white text-zinc-600 ring-1 ring-zinc-200"><FileText aria-hidden="true" className="size-4" /></div><div><h2 id="result-title" className="text-sm font-semibold">處理結果</h2><p className="mt-0.5 text-xs text-zinc-500">完成後可下載並檢視 CSV</p></div></div>
-        {runInfo ? <div className="mt-5 flex flex-1 flex-col rounded-xl border border-zinc-200 bg-white p-4"><p role="status" aria-live="polite" className="text-sm font-semibold text-zinc-900">{syncError ? `最近一次 API 回報：${RUN_STATUS_LABELS[runInfo.status]}` : RUN_STATUS_LABELS[runInfo.status]}</p><details className="mt-3 text-xs"><summary className="cursor-pointer">進階詳情：處理識別與來源</summary><p className="mt-2 break-all font-mono text-[11px] text-zinc-500">Run ID · {runInfo.id}</p><p className="mt-1 text-[11px] text-zinc-500">Workflow version · {runInfo.workflowVersion}</p><p className="mt-1 break-all text-[11px] text-zinc-500">來源批次 · {runSourceBatch ?? (apiSourceBatchLabel || 'Run API 尚未回報來源參照')}</p><p className="mt-1 break-words text-[11px] text-zinc-500">模板版本 · {runTemplateLabel ?? 'GET Run 未提供模板版本（僅以 Run ID 恢復）'}</p>{runInfo.currentTask && <p className="mt-2 break-all text-xs text-zinc-600">目前 Task · {runInfo.currentTask}</p>}
+        {runInfo ? <div className="mt-5 flex flex-1 flex-col rounded-xl border border-zinc-200 bg-white p-4"><p role="status" aria-live="polite" className="text-sm font-semibold text-zinc-900">{syncError ? `最近一次 API 回報：${RUN_STATUS_LABELS[runInfo.status]}` : RUN_STATUS_LABELS[runInfo.status]}</p>{runInfo.status === 'completed' && (completedSummary || artifactTable) && <section className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3" aria-label="結果摘要"><h3 className="text-xs font-semibold text-emerald-950">結果摘要</h3><dl className="mt-2 grid grid-cols-2 gap-2 text-xs"><div><dt className="text-emerald-800">CSV 結果</dt><dd className="text-lg font-semibold">{completedSummary?.rowCount ?? artifactTable?.rows.length ?? '—'}</dd></div><div><dt className="text-emerald-800">需要檢查</dt><dd className="text-lg font-semibold">{completedSummary?.reviewCount ?? resultReviewCount ?? '—'}</dd></div></dl><p className="mt-2 text-[10px] leading-4 text-emerald-900">被金額或幣種規則篩選掉的記錄不會出現在結果 CSV；缺少資訊的記錄保留並標記。數字來自已完成 Run 的 artifact；下載後可逐行核對。</p></section>}<details className="mt-3 text-xs"><summary className="cursor-pointer">進階詳情：處理識別與來源</summary><p className="mt-2 break-all font-mono text-[11px] text-zinc-500">Run ID · {runInfo.id}</p><p className="mt-1 text-[11px] text-zinc-500">Workflow version · {runInfo.workflowVersion}</p>{runInfo.workflow.origin && <p className="mt-1 break-all text-[11px] text-zinc-500">Builder · {runInfo.workflow.origin.workflowId} · v{runInfo.workflow.origin.revision}</p>}<p className="mt-1 break-all text-[11px] text-zinc-500">來源批次 · {runSourceBatch ?? (apiSourceBatchLabel || 'Run API 尚未回報來源參照')}</p><p className="mt-1 break-words text-[11px] text-zinc-500">模板版本 · {runTemplateLabel ?? 'GET Run 未提供模板版本（僅以 Run ID 恢復）'}</p>{runInfo.currentTask && <p className="mt-2 break-all text-xs text-zinc-600">目前 Task · {runInfo.currentTask}</p>}
 </details>
           {runInfo.status === 'running' && <p role="status" className="mt-3 rounded-lg bg-sky-50 p-3 text-[11px] leading-5 text-sky-900">正在整理發票，完成後會顯示下載按鈕。</p>}
           {runInfo.status === 'cancelling' && <p role="status" className="mt-3 rounded-lg bg-amber-50 p-3 text-[11px] leading-5 text-amber-900">已送出取消要求，正在等待 Agent API 回報 cancelled 或其他最終狀態。</p>}

@@ -5,7 +5,7 @@ export type WorkflowSection = 'input' | 'extract' | 'process' | 'exception' | 'o
 export type WorkflowItemSource = 'user-request' | 'template-default' | 'system-inference' | 'user-edit'
 export type WorkflowItemConfirmation = 'confirmed' | 'pending'
 export type ExecutionCapabilityStatus = 'unchecked' | 'not-connected' | 'ready'
-export type WorkflowPreviewParameterKey = 'dateInterpretation' | 'acceptedCurrencies' | 'missingMerchantHandling'
+export type WorkflowPreviewParameterKey = 'dateInterpretation' | 'acceptedCurrencies' | 'missingMerchantHandling' | 'invoiceThresholdMinor'
 export type WorkflowParameterSource = 'template-default' | 'user-request' | 'user-edit'
 
 export interface WorkflowParameter<T> {
@@ -15,9 +15,10 @@ export interface WorkflowParameter<T> {
 }
 
 export interface WorkflowPreviewParameters {
-  dateInterpretation: WorkflowParameter<'DD/MM/YYYY' | 'MM/DD/YYYY'>
+  dateInterpretation?: WorkflowParameter<'DD/MM/YYYY' | 'MM/DD/YYYY'>
   acceptedCurrencies: WorkflowParameter<string[]>
   missingMerchantHandling: WorkflowParameter<'needs-review' | 'keep-empty-marked'>
+  invoiceThresholdMinor?: WorkflowParameter<number>
 }
 
 export interface WorkflowItem {
@@ -37,7 +38,7 @@ export interface WorkflowQuestion {
 }
 
 export interface WorkflowConfig {
-  schemaVersion: '1.1'
+  schemaVersion: '1.2'
   workflowId: string
   revision: number
   name: string
@@ -106,7 +107,7 @@ function receiptWorkflow(requirement: string, workflowId: string, locale: Workfl
   const explicitCurrency = /\b(?:HKD|USD|EUR|GBP|CNY|RMB)\b/i.exec(requirement)?.[0].toUpperCase()
   const explicitDate = /DD\/MM\/YYYY/i.test(requirement) ? 'DD/MM/YYYY' as const : /MM\/DD\/YYYY/i.test(requirement) ? 'MM/DD/YYYY' as const : undefined
   return {
-    schemaVersion: '1.1',
+    schemaVersion: '1.2',
     workflowId,
     revision: 1,
     name: local(locale, '每月收據整理', 'Monthly receipt organization'),
@@ -134,9 +135,52 @@ function receiptWorkflow(requirement: string, workflowId: string, locale: Workfl
   }
 }
 
+function invoiceThresholdMinor(requirement: string) {
+  const match = /(?:HKD|港幣|港币)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i.exec(requirement)
+    ?? /([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:HKD|港幣|港币)/i.exec(requirement)
+  if (!match) return undefined
+  const normalized = match[1].replaceAll(',', '')
+  const [whole, fraction = ''] = normalized.split('.')
+  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'))
+  return Number.isSafeInteger(minor) && minor <= 100_000_000_000 ? minor : undefined
+}
+
+function invoiceWorkflow(requirement: string, workflowId: string, locale: WorkflowLocale): WorkflowConfig {
+  const currencyMatch = /\b(?:HKD|USD|EUR|GBP|CNY|RMB)\b/i.exec(requirement)?.[0].toUpperCase().replace('RMB', 'CNY')
+  const explicitCurrency = currencyMatch ?? (/港幣|港币/.test(requirement) ? 'HKD' : undefined)
+  const explicitThresholdMinor = invoiceThresholdMinor(requirement)
+  const hasUnsupportedAction = /傳送|发送|寄送|通知|分派|指派|核准|審批|付款|覆寫|覆盖|email|e-mail|send|notify|assign|approve|pay|overwrite|\bPDF\b|\bXLSX\b|\bOCR\b/i.test(requirement)
+  return {
+    schemaVersion: '1.2',
+    workflowId,
+    revision: 1,
+    name: local(locale, '發票篩選與匯出', 'Invoice filtering and export'),
+    goal: normalizeText(requirement),
+    templateId: 'invoice-filter-export',
+    inputs: [item('invoice-source', 'input', local(locale, '使用者每次重新選擇的 UTF-8 CSV 或 TXT 發票資料', 'UTF-8 CSV or TXT invoice data selected again for each run'), 'template-default', 'pending')],
+    rules: [
+      item('invoice-threshold-rule', 'process', local(locale, '只納入金額嚴格超過已確認門檻的發票', 'Include only invoices strictly above the confirmed amount threshold'), explicitThresholdMinor === undefined ? 'template-default' : 'user-request', explicitThresholdMinor === undefined ? 'pending' : 'confirmed', { status: 'mapped', parameter: 'invoiceThresholdMinor' }),
+      item('invoice-currency-rule', 'process', local(locale, '只納入一個已確認幣種，不自動換匯', 'Include one confirmed currency only and never convert currencies'), explicitCurrency ? 'user-request' : 'template-default', explicitCurrency ? 'confirmed' : 'pending', { status: 'mapped', parameter: 'acceptedCurrencies' }),
+      item('invoice-missing-rule', 'exception', local(locale, '缺少必要欄位時保留空值、標記並交給人工檢查', 'Keep missing required fields empty, flag them, and send them to human review'), 'template-default', 'pending', { status: 'mapped', parameter: 'missingMerchantHandling' }),
+      ...(hasUnsupportedAction ? [item('invoice-unmapped-request', 'process', requirement, 'user-request', 'confirmed', { status: 'recorded-only' })] : []),
+    ],
+    unresolvedQuestions: [],
+    outputs: [item('invoice-output', 'output', local(locale, '產生保留來源列與檢核狀態的 CSV', 'Create a CSV with source-row references and validation status'), 'template-default', 'pending')],
+    confirmation: {},
+    requiredCapabilities: ['invoice.csv.parse', 'invoice.filter', 'invoice.validate', 'invoice.csv.export'],
+    execution: { status: 'unchecked', note: local(locale, '已定義發票 Agent 交接；模型狀態與目前設定仍須分別檢查。', 'Invoice Agent handoff is defined; model readiness and current configuration still require separate checks.') },
+    governance: unassignedWorkflowGovernance(),
+    previewParameters: {
+      acceptedCurrencies: { value: [explicitCurrency ?? 'HKD'], source: explicitCurrency ? 'user-request' : 'template-default', confirmation: explicitCurrency ? 'confirmed' : 'pending' },
+      missingMerchantHandling: { value: 'needs-review', source: 'template-default', confirmation: 'pending' },
+      invoiceThresholdMinor: { value: explicitThresholdMinor ?? 1_000_000, source: explicitThresholdMinor === undefined ? 'template-default' : 'user-request', confirmation: explicitThresholdMinor === undefined ? 'pending' : 'confirmed' },
+    },
+  }
+}
+
 function generalWorkflow(requirement: string, workflowId: string, locale: WorkflowLocale): WorkflowConfig {
   return {
-    schemaVersion: '1.1',
+    schemaVersion: '1.2',
     workflowId,
     revision: 1,
     name: local(locale, '未命名工作流程', 'Untitled workflow'),
@@ -160,6 +204,10 @@ function generalWorkflow(requirement: string, workflowId: string, locale: Workfl
 export function organizeRequirement(requirement: string, workflowId = `workflow-${Date.now()}`, locale: WorkflowLocale = 'zh-Hant'): WorkflowConfig {
   const normalized = normalizeText(requirement)
   if (!normalized) throw new Error('Describe the task before organizing it.')
+  const invoiceFilterIntent = /發票|发票|invoice/i.test(normalized)
+    && /篩選|筛选|超過|超过|高於|高于|above|greater than|filter/i.test(normalized)
+    && /CSV|匯出|导出|export/i.test(normalized)
+  if (invoiceFilterIntent) return invoiceWorkflow(normalized, workflowId, locale)
   return /收據|收据|票據|票据|receipt/i.test(normalized)
     ? receiptWorkflow(normalized, workflowId, locale)
     : generalWorkflow(normalized, workflowId, locale)
@@ -231,28 +279,34 @@ export function updateWorkflowGoal(config: WorkflowConfig, goal: string): Workfl
   return normalized === config.goal ? config : nextRevision({ ...config, goal: normalized })
 }
 
-export function updateWorkflowPreviewParameter(config: WorkflowConfig, key: WorkflowPreviewParameterKey, value: string | string[]): WorkflowConfig {
+export function updateWorkflowPreviewParameter(config: WorkflowConfig, key: WorkflowPreviewParameterKey, value: string | string[] | number): WorkflowConfig {
   if (!config.previewParameters) throw new Error('This workflow has no supported preview parameters.')
-  let normalized: WorkflowPreviewParameters[WorkflowPreviewParameterKey]['value']
+  let normalized: string | string[] | number
   if (key === 'dateInterpretation') {
     if (value !== 'DD/MM/YYYY' && value !== 'MM/DD/YYYY') throw new Error('Unsupported date interpretation.')
     normalized = value
   } else if (key === 'acceptedCurrencies') {
-    const values = (Array.isArray(value) ? value : value.split(',')).map((item) => item.trim().toUpperCase()).filter(Boolean)
+    const values = (Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []).map((item) => item.trim().toUpperCase()).filter(Boolean)
     if (!values.length || values.length > 10 || values.some((item) => !/^[A-Z]{3}$/.test(item))) throw new Error('Accepted currencies must use three-letter codes.')
     normalized = [...new Set(values)]
-  } else {
+  } else if (key === 'missingMerchantHandling') {
     if (value !== 'needs-review' && value !== 'keep-empty-marked') throw new Error('Unsupported missing merchant handling.')
     normalized = value
+  } else {
+    if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 100_000_000_000) throw new Error('Invoice threshold must be a non-negative integer in minor units.')
+    normalized = value as number
   }
   const current = config.previewParameters[key]
+  if (!current) throw new Error('This workflow does not support that preview parameter.')
   if (JSON.stringify(current.value) === JSON.stringify(normalized) && current.confirmation === 'confirmed') return config
-  return nextRevision({ ...config, previewParameters: { ...config.previewParameters, [key]: { value: normalized, source: 'user-edit', confirmation: 'confirmed' } } })
+  const previewParameters = { ...config.previewParameters, [key]: { value: normalized, source: 'user-edit', confirmation: 'confirmed' } } as WorkflowPreviewParameters
+  return nextRevision({ ...config, previewParameters })
 }
 
 export function confirmWorkflowPreviewParameter(config: WorkflowConfig, key: WorkflowPreviewParameterKey): WorkflowConfig {
   if (!config.previewParameters) return config
   const current = config.previewParameters[key]
+  if (!current) return config
   if (current.confirmation === 'confirmed') return config
   return nextRevision({ ...config, previewParameters: { ...config.previewParameters, [key]: { ...current, confirmation: 'confirmed' } } })
 }
@@ -309,20 +363,30 @@ export function summarizeWorkflow(config: WorkflowConfig): WorkflowSummary {
 
 export function buildWorkflowExplanationCard(config: WorkflowConfig, locale: WorkflowLocale = 'en'): WorkflowExplanationCard {
   const receipt = config.templateId === 'receipt-processing' && config.previewParameters
-  const currencies = receipt ? receipt.acceptedCurrencies.value.join(', ') : ''
+  const invoice = config.templateId === 'invoice-filter-export' && config.previewParameters?.invoiceThresholdMinor
+    ? config.previewParameters
+    : null
+  const currencies = (receipt || invoice) ? (receipt || invoice)!.acceptedCurrencies.value.join(', ') : ''
+  const threshold = invoice?.invoiceThresholdMinor?.value ?? 0
   return {
     title: config.name,
     uses: config.inputs.map((value) => value.text).join(local(locale, '；', '; ')),
-    result: receipt
+    result: invoice
+      ? local(locale, `嚴格超過 ${currencies} ${(threshold / 100).toFixed(2)} 的發票 CSV，含來源列與檢核狀態`, `Invoice CSV strictly above ${currencies} ${(threshold / 100).toFixed(2)}, with source rows and validation status`)
+      : receipt
       ? local(locale, `日期、商戶、金額、幣種表格（接受 ${currencies}）`, `Table of date, merchant, amount, and currency (accepts ${currencies})`)
       : config.outputs.map((value) => value.text).join(local(locale, '；', '; ')),
-    exceptions: receipt
+    exceptions: invoice
+      ? local(locale, '缺少必要欄位時保留空值與來源，並在結果中標記待檢查。', 'Missing required fields remain empty with their source and are flagged for review.')
+      : receipt
       ? receipt.missingMerchantHandling.value === 'needs-review'
         ? local(locale, '缺少商戶時交給人工檢查；缺少或非法金額一律待處理。', 'Missing merchant goes to human review; missing or invalid amounts always need review.')
         : local(locale, '缺少商戶時保留空值並標記；缺少或非法金額一律待處理。', 'Missing merchant stays empty and marked; missing or invalid amounts always need review.')
       : config.rules.filter((value) => value.section === 'exception').map((value) => value.text).join(local(locale, '；', '; ')),
     willNot: local(locale, '傳送訊息、覆寫原檔案或擴大檔案存取。', 'Send messages, overwrite source files, or expand file access.'),
-    capability: receipt
+    capability: invoice
+      ? local(locale, '設定可交給發票 Agent；仍須選擇資料、建立並確認實際計畫。', 'Configuration can be handed to the invoice Agent; source selection and actual plan confirmation are still required.')
+      : receipt
       ? local(locale, '可預演部分規則；真實票據讀取尚未接入。', 'Some rules can be previewed; real receipt reading is not connected.')
       : local(locale, '可整理和保存規則；此場景尚未接入執行能力。', 'Rules can be organized and saved; execution is not connected for this scenario.'),
   }
@@ -331,9 +395,10 @@ export function buildWorkflowExplanationCard(config: WorkflowConfig, locale: Wor
 export function buildWorkflowPrompt(config: WorkflowConfig, locale: WorkflowLocale = 'en'): string {
   const lines = allWorkflowItems(config).map((value, index) => `${index + 1}. [${value.section.toUpperCase()}] ${value.text}`)
   const parameters = config.previewParameters ? [
-    `- ${local(locale, '日期格式', 'Date interpretation')}: ${config.previewParameters.dateInterpretation.value}`,
+    ...(config.previewParameters.dateInterpretation ? [`- ${local(locale, '日期格式', 'Date interpretation')}: ${config.previewParameters.dateInterpretation.value}`] : []),
     `- ${local(locale, '接受幣種', 'Accepted currencies')}: ${config.previewParameters.acceptedCurrencies.value.join(', ')}`,
     `- ${local(locale, '缺少商戶', 'Missing merchant')}: ${config.previewParameters.missingMerchantHandling.value}`,
+    ...(config.previewParameters.invoiceThresholdMinor ? [`- ${local(locale, '發票金額門檻（最小貨幣單位，嚴格大於）', 'Invoice threshold (minor units, strictly above)')}: ${config.previewParameters.invoiceThresholdMinor.value}`] : []),
   ] : []
   const recordedOnly = allWorkflowItems(config).filter((value) => value.mapping.status === 'recorded-only').map((value) => `- ${value.text}`)
   return [
@@ -368,9 +433,10 @@ function mergeItems(current: WorkflowItem[], candidate: WorkflowItem[]) {
 function mergePreviewParameters(current: WorkflowPreviewParameters | null, candidate: WorkflowPreviewParameters | null) {
   if (!current || !candidate) return candidate
   return {
-    dateInterpretation: current.dateInterpretation.source === 'user-edit' ? current.dateInterpretation : candidate.dateInterpretation,
+    ...(current.dateInterpretation || candidate.dateInterpretation ? { dateInterpretation: current.dateInterpretation?.source === 'user-edit' ? current.dateInterpretation : candidate.dateInterpretation } : {}),
     acceptedCurrencies: current.acceptedCurrencies.source === 'user-edit' ? current.acceptedCurrencies : candidate.acceptedCurrencies,
     missingMerchantHandling: current.missingMerchantHandling.source === 'user-edit' ? current.missingMerchantHandling : candidate.missingMerchantHandling,
+    ...(current.invoiceThresholdMinor || candidate.invoiceThresholdMinor ? { invoiceThresholdMinor: current.invoiceThresholdMinor?.source === 'user-edit' ? current.invoiceThresholdMinor : candidate.invoiceThresholdMinor } : {}),
   }
 }
 
@@ -413,30 +479,34 @@ function validateImportedItem(value: unknown): asserts value is WorkflowItem {
 }
 
 function normalizeImportedItem(value: WorkflowItem): WorkflowItem {
-  const mapping = value.mapping && typeof value.mapping === 'object' && (value.mapping.status === 'recorded-only' || (value.mapping.status === 'mapped' && ['dateInterpretation', 'acceptedCurrencies', 'missingMerchantHandling'].includes(value.mapping.parameter)))
+  const mapping = value.mapping && typeof value.mapping === 'object' && (value.mapping.status === 'recorded-only' || (value.mapping.status === 'mapped' && ['dateInterpretation', 'acceptedCurrencies', 'missingMerchantHandling', 'invoiceThresholdMinor'].includes(value.mapping.parameter)))
     ? value.mapping
     : { status: 'recorded-only' as const }
   return { ...value, mapping }
 }
 
 function migratedPreviewParameters(value: Omit<Partial<WorkflowConfig>, 'schemaVersion'> & { schemaVersion?: string }): WorkflowPreviewParameters | null {
-  if (value.templateId !== 'receipt-processing') return null
+  if (value.templateId !== 'receipt-processing' && value.templateId !== 'invoice-filter-export') return null
   const candidate = value.previewParameters
   const date = candidate?.dateInterpretation?.value
   const currencies = candidate?.acceptedCurrencies?.value
   const missing = candidate?.missingMerchantHandling?.value
+  const threshold = candidate?.invoiceThresholdMinor?.value
   return {
-    dateInterpretation: { value: date === 'MM/DD/YYYY' ? date : 'DD/MM/YYYY', source: 'template-default', confirmation: 'pending' },
+    ...(value.templateId === 'receipt-processing' ? { dateInterpretation: { value: date === 'MM/DD/YYYY' ? date : 'DD/MM/YYYY', source: 'template-default' as const, confirmation: 'pending' as const } } : {}),
     acceptedCurrencies: { value: Array.isArray(currencies) && currencies.length && currencies.every((item) => typeof item === 'string' && /^[A-Z]{3}$/.test(item)) ? [...new Set(currencies)] : ['HKD'], source: 'template-default', confirmation: 'pending' },
     missingMerchantHandling: { value: missing === 'keep-empty-marked' ? missing : 'needs-review', source: 'template-default', confirmation: 'pending' },
+    ...(value.templateId === 'invoice-filter-export' ? { invoiceThresholdMinor: { value: Number.isSafeInteger(threshold) && (threshold ?? -1) >= 0 && (threshold ?? Number.POSITIVE_INFINITY) <= 100_000_000_000 ? threshold as number : 1_000_000, source: 'template-default' as const, confirmation: 'pending' as const } } : {}),
   }
 }
 
 export function migrateStoredWorkflow(config: WorkflowConfig): WorkflowConfig {
   const candidate = config as Omit<Partial<WorkflowConfig>, 'schemaVersion'> & { schemaVersion?: string }
   const items = [candidate.inputs, candidate.rules, candidate.outputs].flatMap((values) => Array.isArray(values) ? values : [])
-  const needsMigration = candidate.schemaVersion !== '1.1'
+  const needsMigration = candidate.schemaVersion !== '1.2'
     || candidate.previewParameters === undefined
+    || (candidate.templateId === 'receipt-processing' && !candidate.previewParameters?.dateInterpretation)
+    || (candidate.templateId === 'invoice-filter-export' && !candidate.previewParameters?.invoiceThresholdMinor)
     || items.some((value) => !value.mapping)
   if (!needsMigration) return config
   const migrated = parseWorkflowBackup(JSON.stringify(candidate))
@@ -453,7 +523,7 @@ export function parseWorkflowBackup(raw: string): WorkflowConfig {
   try { parsed = JSON.parse(raw) } catch { throw new Error('Workflow backup is not valid JSON.') }
   if (!parsed || typeof parsed !== 'object') throw new Error('Workflow backup must contain an object.')
   const value = parsed as Omit<Partial<WorkflowConfig>, 'schemaVersion'> & { schemaVersion?: string }
-  if (value.schemaVersion !== '1.0' && value.schemaVersion !== '1.1') throw new Error('Unsupported workflow schema version.')
+  if (value.schemaVersion !== '1.0' && value.schemaVersion !== '1.1' && value.schemaVersion !== '1.2') throw new Error('Unsupported workflow schema version.')
   assertString(value.workflowId, 'workflow ID', 100)
   assertString(value.name, 'workflow name', 120)
   assertString(value.goal, 'workflow goal', 2000)
@@ -476,7 +546,7 @@ export function parseWorkflowBackup(raw: string): WorkflowConfig {
   if (!Array.isArray(value.requiredCapabilities) || value.requiredCapabilities.length > 20) throw new Error('Invalid required capabilities.')
   value.requiredCapabilities.forEach((capability) => assertString(capability, 'capability', 100))
   return {
-    schemaVersion: '1.1',
+    schemaVersion: '1.2',
     workflowId: value.workflowId,
     revision: value.revision! + 1,
     name: value.name,

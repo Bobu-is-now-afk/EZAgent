@@ -11,7 +11,7 @@ export default function Page() {
   const cards = [
     { href: '/invoice-demo', icon: FileText, title: en ? 'Try invoice processing' : '試用發票整理', description: en ? 'Load sample invoices, review a plan and download CSV. No file browsing needed.' : '載入示範發票、確認計畫、下載 CSV。不需尋找檔案。' },
     { href: '/chat', icon: MessageCircle, title: en ? 'Local AI chat' : '本機 AI 對話', description: en ? 'Ask questions and draft text using your prepared local model.' : '使用準備好的本機模型問問題、草擬文字。' },
-    { href: '/yolanda-builder', icon: Sparkles, title: en ? 'Design a workflow · Preview' : '設計流程 · 預覽', description: en ? 'Yolanda builder uses local rules and sample previews. General AI agents are not connected.' : 'Yolanda builder 使用本機規則與示範預覽；尚未接入通用 AI Agent。' },
+    { href: '/yolanda-builder', icon: Sparkles, title: en ? 'Design a workflow' : '設計工作流程', description: en ? 'Create and save rules. Supported invoice settings can be handed to the invoice Agent after review.' : '建立並儲存規則；受支援的發票設定可在核對後交給發票 Agent。' },
   ]
   return <main lang={locale} className="min-h-screen bg-white text-zinc-950">
     <header className="flex min-h-[76px] items-center justify-between border-b border-zinc-200 px-6 sm:px-10"><Link href="/" className="flex items-center gap-3 font-semibold"><Bot aria-hidden="true" className="size-6" />EZAgent</Link><div className="flex gap-2">{(['zh-Hant', 'en'] as const).map((value) => <button key={value} type="button" aria-pressed={locale === value} onClick={() => setLocale(value)} className="min-h-11 rounded-lg border border-zinc-200 px-3 text-sm">{value === 'en' ? 'EN' : '繁中'}</button>)}</div></header>

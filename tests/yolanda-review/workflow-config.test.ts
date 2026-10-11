@@ -98,8 +98,8 @@ test('reorganizing preserves manually edited and manually answered rules', () =>
   const candidate = organizeRequirement('Organize receipts and create a table.', 'candidate', 'en')
   const merged = mergeOrganizedRequirement(current, candidate)
   assert.equal(allWorkflowItems(merged).find((value) => value.id === 'receipt-records')?.text, 'Keep the original receipt order.')
-  assert.equal(merged.previewParameters?.dateInterpretation.value, 'MM/DD/YYYY')
-  assert.equal(merged.previewParameters?.dateInterpretation.source, 'user-edit')
+  assert.equal(merged.previewParameters?.dateInterpretation?.value, 'MM/DD/YYYY')
+  assert.equal(merged.previewParameters?.dateInterpretation?.source, 'user-edit')
 })
 
 test('stale candidate responses are rejected by request and revision', () => {
@@ -115,7 +115,7 @@ test('import validates content and clears confirmation and execution trust', () 
   assert.equal(imported.revision, original.revision + 1)
   assert.deepEqual(imported.confirmation, {})
   assert.equal(imported.execution.status, 'not-connected')
-  assert.equal(imported.previewParameters?.dateInterpretation.confirmation, 'pending')
+  assert.equal(imported.previewParameters?.dateInterpretation?.confirmation, 'pending')
   assert.equal(isWorkflowConfirmed(imported), false)
 })
 
@@ -123,7 +123,7 @@ test('legacy 1.0 import retains rules and creates pending preview parameters', (
   const current = confirmReceipt()
   const legacy = JSON.stringify({ ...current, schemaVersion: '1.0', previewParameters: undefined })
   const imported = parseWorkflowBackup(legacy)
-  assert.equal(imported.schemaVersion, '1.1')
+  assert.equal(imported.schemaVersion, '1.2')
   assert.equal(imported.rules.length, current.rules.length)
   assert.equal(imported.previewParameters?.acceptedCurrencies.confirmation, 'pending')
   assert.deepEqual(imported.confirmation, {})
@@ -142,9 +142,9 @@ test('legacy browser records are migrated before prompt and rule rendering', () 
   } as unknown as WorkflowConfig
   const migrated = migrateStoredWorkflow(legacy)
   assert.doesNotThrow(() => buildWorkflowPrompt(migrated))
-  assert.equal(migrated.schemaVersion, '1.1')
+  assert.equal(migrated.schemaVersion, '1.2')
   assert.equal(allWorkflowItems(migrated).every((value) => value.mapping.status === 'recorded-only'), true)
-  assert.equal(migrated.previewParameters?.dateInterpretation.confirmation, 'pending')
+  assert.equal(migrated.previewParameters?.dateInterpretation?.confirmation, 'pending')
   assert.deepEqual(migrated.confirmation, {})
 })
 
@@ -155,6 +155,31 @@ test('non-receipt drafts do not invent finance settings or trial-run support', (
   assert.equal(config.execution.status, 'not-connected')
   assert.equal(JSON.stringify(config).includes('currency'), false)
   assert.equal(JSON.stringify(config).includes('tolerance'), false)
+})
+
+test('invoice template stores a strict minor-unit threshold without inventing a date rule', () => {
+  const config = organizeRequirement('Filter invoices above a confirmed amount, flag missing fields, and export CSV.', 'workflow-invoice', 'en')
+  assert.equal(config.templateId, 'invoice-filter-export')
+  assert.equal(config.schemaVersion, '1.2')
+  assert.equal(config.previewParameters?.invoiceThresholdMinor?.value, 1_000_000)
+  assert.equal(config.previewParameters?.invoiceThresholdMinor?.confirmation, 'pending')
+  assert.equal(config.previewParameters?.dateInterpretation, undefined)
+  assert.match(buildWorkflowPrompt(config), /strictly above\): 1000000/)
+})
+
+test('an unrelated invoice-system request does not become an executable filter template', () => {
+  const config = organizeRequirement('Improve the invoice intake system and assign exceptions to an owner.', 'invoice-system', 'en')
+  assert.equal(config.templateId, null)
+  assert.equal(config.previewParameters, null)
+  assert.equal(config.execution.status, 'not-connected')
+})
+
+test('an explicit invoice amount is mapped exactly to minor units', () => {
+  const config = organizeRequirement('Filter invoices strictly above HKD 10,000.25 and export CSV.', 'invoice-amount', 'en')
+  assert.equal(config.templateId, 'invoice-filter-export')
+  assert.equal(config.previewParameters?.invoiceThresholdMinor?.value, 1_000_025)
+  assert.equal(config.previewParameters?.invoiceThresholdMinor?.source, 'user-request')
+  assert.equal(config.previewParameters?.invoiceThresholdMinor?.confirmation, 'confirmed')
 })
 
 test('backup rejects duplicate IDs and unsupported schema versions', () => {

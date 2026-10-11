@@ -29,3 +29,11 @@ test('preview results are bound to workflow, revision, request, and case version
   assert.equal(canApplyWorkflowPreview(result, changed.workflowId, changed.revision, 'request-1'), false)
   assert.equal(canApplyWorkflowPreview(result, config.workflowId, config.revision, 'request-2'), false)
 })
+
+test('invoice threshold preview uses the same strict comparison as the Agent executor', () => {
+  const base = organizeRequirement('Filter invoices above a confirmed amount, flag missing fields, and export CSV.', 'invoice-preview', 'en')
+  const lower = runWorkflowPreview(updateWorkflowPreviewParameter(base, 'invoiceThresholdMinor', 1_000_000), 'request-1')
+  const higher = runWorkflowPreview(updateWorkflowPreviewParameter(base, 'invoiceThresholdMinor', 1_300_000), 'request-2')
+  assert.equal(lower.results.find((value) => value.caseId === 'invoice-threshold')?.status, 'included')
+  assert.equal(higher.results.find((value) => value.caseId === 'invoice-threshold')?.status, 'excluded')
+})

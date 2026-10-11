@@ -23,7 +23,7 @@ const messages: Record<string, [string, string]> = {
   local_only: ['請從這部電腦開啟 App，才能準備本機 AI。', 'Open the app on this computer to prepare local AI.'],
 }
 
-export function LocalAiSetup({ locale = 'zh-Hant', onReady, showDemoLink = true }: { locale?: 'zh-Hant' | 'en'; onReady?: (ready: boolean) => void; showDemoLink?: boolean }) {
+export function LocalAiSetup({ locale = 'zh-Hant', onReady, showDemoLink = true, compact = false }: { locale?: 'zh-Hant' | 'en'; onReady?: (ready: boolean) => void; showDemoLink?: boolean; compact?: boolean }) {
   const en = locale === 'en'
   const t = (zh: string, english: string) => en ? english : zh
   const [status, setStatus] = useState<Status>({ state: 'checking' })
@@ -77,10 +77,8 @@ export function LocalAiSetup({ locale = 'zh-Hant', onReady, showDemoLink = true 
   }, [])
   const selected = inventory.models?.find((item) => item.id === model)
   const installUrl = inventory.os === 'macos' ? 'https://ollama.com/download/mac' : inventory.os === 'windows' ? 'https://ollama.com/download/windows' : 'https://ollama.com/download'
-  return <section aria-label={t('準備本機 AI', 'Prepare local AI')} className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-left">
-    <h2 className="text-lg font-semibold">{t('準備本機 AI', 'Prepare local AI')}</h2>
+  const controls = <>
     <p className="mt-2 text-sm leading-6 text-zinc-600">{t('首次使用需連網下載模型（約數 GB）。之後對話與發票整理在本機執行；完全斷網使用尚未驗證。', 'First use downloads several GB over the internet. Chat and invoice processing then run locally; fully disconnected use has not been verified.')}</p>
-    <p role="status" aria-live="polite" className="my-3 text-sm font-medium">{(messages[status.state] ?? messages.failed)[en ? 1 : 0]}{typeof status.percent === 'number' ? ` ${status.percent}%` : ''}</p>
     {inventory.models && <label className="block text-sm">{t('選擇 AI 模型', 'Choose an AI model')}<select value={model} disabled={busy} onChange={(event) => { setModel(event.target.value); setStatus({ state: 'selected' }); readyRef.current?.(false) }} className="mt-2 block min-h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm">
       {!model && <option value="">{t('目前沒有適合的模型', 'No suitable model available')}</option>}
       {inventory.models.filter((entry) => !entry.blocked).map((entry) => <option key={entry.id} value={entry.id} disabled={!entry.available}>{en ? entry.display_name_en : entry.display_name}{!entry.available ? t(' · 資源不足或無法確認', ' · Insufficient or unknown resources') : ''}</option>)}
@@ -93,5 +91,10 @@ export function LocalAiSetup({ locale = 'zh-Hant', onReady, showDemoLink = true 
     </div>
     {inventory.os === 'linux' && status.state === 'install_required' && <p className="mt-3 text-sm">{t('Linux 尚未提供免指令的引擎安裝流程，需要安裝人員協助。', 'Linux engine installation still requires help from the app installer.')}</p>}
     <details className="mt-4 text-xs text-zinc-500"><summary className="cursor-pointer">{t('進階詳情', 'Advanced details')}</summary><p className="mt-2 break-all">{status.state} · {model || '—'} · {inventory.host || '—'}</p><p>RAM: {inventory.ram_gb?.toFixed(0) ?? '—'} GB · {t('可用空間', 'Free storage')}: {inventory.disk_gb?.toFixed(0) ?? '—'} GB</p></details>
+  </>
+  return <section aria-label={t('準備本機 AI', 'Prepare local AI')} className={`w-full rounded-2xl border border-zinc-200 bg-zinc-50 text-left ${compact ? 'p-4' : 'p-5'}`}>
+    <h2 className={compact ? 'text-sm font-semibold' : 'text-lg font-semibold'}>{t('本機 AI 狀態', 'Local AI status')}</h2>
+    <p role="status" aria-live="polite" className="my-3 text-sm font-medium">{(messages[status.state] ?? messages.failed)[en ? 1 : 0]}{typeof status.percent === 'number' ? ` ${status.percent}%` : ''}</p>
+    {compact ? <details><summary className="cursor-pointer text-sm font-semibold underline underline-offset-2">{t('查看準備選項', 'View setup options')}</summary><div className="mt-3">{controls}</div></details> : controls}
   </section>
 }

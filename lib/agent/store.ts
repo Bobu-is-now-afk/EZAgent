@@ -139,7 +139,9 @@ function isSourceReference(value: unknown): value is SourceReference {
 function isArtifact(value: unknown): value is Artifact {
   return isRecord(value) && isNonEmptyString(value.id) && isNonEmptyString(value.type) &&
     isNonEmptyString(value.location) && Array.isArray(value.sourceRefs) &&
-    value.sourceRefs.every(isSourceReference) && isValidationResult(value.validation)
+    value.sourceRefs.every(isSourceReference) &&
+    (value.summary === undefined || (isRecord(value.summary) && Number.isSafeInteger(value.summary.rowCount) && (value.summary.rowCount as number) >= 0 && Number.isSafeInteger(value.summary.reviewCount) && (value.summary.reviewCount as number) >= 0 && (value.summary.reviewCount as number) <= (value.summary.rowCount as number))) &&
+    isValidationResult(value.validation)
 }
 
 function isJsonValue(value: unknown, seen = new Set<object>()): boolean {

@@ -7,6 +7,7 @@ export type InvoiceExecutionResult = {
   taskOutcomes: InvoiceTaskOutcome[]
   csv: string
   sourceRefs: SourceReference[]
+  summary: { rowCount: number; reviewCount: number }
 }
 
 type SourceRecord = { cells: string[]; rowNumber?: number; lineNumber?: number }
@@ -370,6 +371,10 @@ export function executeInvoiceWorkflow(
     taskOutcomes: [parse.outcome, normalize.outcome, filter.outcome, validate.outcome, exportResult.outcome],
     csv: exportResult.csv,
     sourceRefs: exportResult.refs,
+    summary: {
+      rowCount: validate.parsed.rows.length,
+      reviewCount: validate.parsed.rows.filter((row) => row.values.validation_status !== 'valid').length,
+    },
   }
 }
 

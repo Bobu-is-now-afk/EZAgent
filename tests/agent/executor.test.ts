@@ -64,6 +64,7 @@ test('invoice tools use strict minor-unit threshold, exact currency, and retain 
   assert.match(result.csv, /"MALFORMED".*"flagged: malformed_row/)
   assert.ok(result.sourceRefs.some((reference) => 'rowNumber' in reference && reference.rowNumber === 4))
   assert.ok(result.sourceRefs.every((reference) => 'fileName' in reference && reference.fileName === source.name))
+  assert.deepEqual(result.summary, { rowCount: 5, reviewCount: 4 })
 })
 
 test('invoice tools parse supported TXT rows and retain one-based line references', async () => {
