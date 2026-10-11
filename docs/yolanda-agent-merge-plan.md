@@ -8,7 +8,7 @@ Chosen strategy: B, Yolanda shell with additive restoration of the executable in
 - Keep Yolanda builder/review routes and libraries intact. Restore the former Main Stage
   UI in components/agent/agent-workspace.tsx and expose /invoice-demo and /chat.
   Home links to the real paths; builder remains a separately labelled design/preview surface.
-- No blind merge, removal of Agent functionality, fake preset launch, commit or push.
+- No blind merge, removal of Agent functionality, fake preset launch, remote push, or merge.
 - Local AI preparation uses the existing manifest and Python bootstrap. Readiness must
   be read-only; preparation explicitly discloses downloads, never executes remote scripts,
   and requires same-origin loopback requests. Runtime chat/planner use the selected config.
@@ -23,3 +23,5 @@ build; restored Agent and Yolanda suites; browser first-run/demo tests where ava
 No real model installation/download during automated tests. Full desktop packaging and
 PDF/XLSX support remain outside scope. Rollback: restore modified tracked files from the
 base and remove only this change's added files after review; retain .ezagent user data.
+
+Status checked 2026-10-11: PR #2 (`codex/yolanda-friction-reduce` → `Yolanda_v1`) was open, not merged. The local integration branch materializes that PR content as baseline commit `7422f4d`; it does not change either remote branch.

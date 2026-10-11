@@ -72,4 +72,16 @@ pnpm dev --port 3107
 
 宿主负责人按 `INTEGRATION.md` 接入 JASON 数据、SAYA 本地模型和可信身份。首页入口、根布局 Analytics、服务端授权和整应用断网验收均未在本分支扩展修改。
 
-Builder 已由主舞台入口挂载；下一步由首页工具库负责人读取同一保存接口，并由 JASON 按 `INTEGRATION.md` 接收配置 revision 与独立运行参数。当前只可预演三个结构化规则并校验结构化票据 JSON；真实票据文件、OCR、通用 Agent 执行和运行记录持久化仍未接入。3-5 名陌生用户任务验证也尚未执行。
+Builder 已由首页入口挂载，工作流库仍使用同一浏览器 IndexedDB。受支持的发票配置现可交给既有发票 Agent；图片／PDF OCR、任意行业 Agent、组织共享和可信身份仍未接入。3–5 名陌生用户任务验证也尚未执行。
+
+## 2026-10-11 Builder → 发票 Agent 更新
+
+- 本地分支：`yolanda/builder-agent-handoff-20261011`；PR #2 内容以本地 `7422f4d` 作为实施基线，远端 PR 当时仍为 open。
+- 首页保留两条清楚路径：“试用发票整理”直接进入既有 Agent；“设计工作流程”进入 Builder。
+- `WorkflowConfig` 升级为 schema `1.2`。发票模板增加整数分门槛；只有“发票筛选门槛＋CSV 导出”意图会进入可执行模板，其他发票系统需求保持不可执行，不静默降级。
+- 新增 `workflow-agent-handoff.ts`。单一币种、严格金额门槛及缺失字段策略映射到既有 Planner／Run；多币种、日期解释或影响结果的自由文本要求会阻止完整交接。
+- 交接 URL 只传工作流 ID 与 revision。Agent 从 IndexedDB 读取精确当前版本；点击交接不会选资料、建立计划或执行。
+- Agent 计划页显示资料、实际门槛／币种、缺失字段行为、CSV 输出与 Builder 差异；Run 保存 trace-only `origin`，服务端仍重新验证完整 workflow。`origin` 不是身份或权限。
+- 当前机器本机 AI 状态为 `failed`。配置、预演和保存可用；真实模型执行本轮未验证，也未下载模型。
+
+演示：打开 `http://localhost:3107/yolanda-builder`，从发票例子开始，将门槛改为 `13000.00`，确认 `HKD 12,500.00` 显示“被筛选掉”，保存并按“交给发票 Agent”。本机 AI 就绪后再使用示范发票、建立并核对实际计划。完整映射与限制见 `INTEGRATION.md`，验证结果见 `ACCEPTANCE.md`。

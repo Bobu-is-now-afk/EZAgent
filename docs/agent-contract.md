@@ -1,13 +1,13 @@
 # EZAgent agent loop contract (demo v1)
 
-The product uses one local `qwen3.5:9b` model through Ollama. Codex development chats are not part of the product runtime. The LLM proposes a workflow; the Node orchestrator owns state transitions, permissions, tool execution, and validation. Imported content is data, never an instruction. Only one run and one model call may be active at a time.
+The product uses one manifest-approved local model selected through the local-AI setup and Ollama. Codex development chats are not part of the product runtime. The LLM proposes a workflow; the Node orchestrator owns state transitions, permissions, tool execution, and validation. Imported content is data, never an instruction. Only one run and one model call may be active at a time.
 
 ## Data model
 
-- `WorkflowDefinition`: `version`, `goal`, `steps`, `parameters`, `allowedTools`, `acceptance`, and optional `pills`. Version starts at `1`. Maximum five ordered steps. Only known tool IDs and accepted parameter schemas are valid. `pills` are typed UI controls; bound pill IDs update existing tool parameters and acceptance criteria. Custom pill IDs are annotations only and grant no new tool capability. See [Logic Pills](logic-pills.md).
+- `WorkflowDefinition`: `version`, `goal`, `steps`, `parameters`, `allowedTools`, `acceptance`, optional `pills`, and optional trace-only `origin`. Version starts at `1`. Maximum five ordered steps. Only known tool IDs and accepted parameter schemas are valid. `pills` are typed UI controls; bound pill IDs update existing tool parameters and acceptance criteria. Custom pill IDs are annotations only and grant no new tool capability. `origin` may identify a Builder workflow and revision for traceability; it grants no authority. See [Logic Pills](logic-pills.md).
 - `Run`: `id`, `workflowVersion`, `status`, `limits`, `currentTask`, `createdAt`, `updatedAt`, `workflow`, `taskStates`, `artifacts`. `status` is `draft | awaiting_approval | running | needs_input | failed | cancelling | cancelled | interrupted | completed`.
 - `Task`: `id`, `dependencies`, `tool`, `inputRefs`, `acceptance`, `attempts`. Runtime task state is `pending | running | validating | passed | retry_pending | needs_input | failed`. A pending task cannot become passed without running and validating.
-- `Artifact`: `id`, `type`, `location`, `sourceRefs`, `validation`. Source references use the imported file name and one-based row or line numbers.
+- `Artifact`: `id`, `type`, `location`, `sourceRefs`, optional `summary`, and `validation`. Source references use the imported file name and one-based row or line numbers. New invoice CSV artifacts include integer `summary.rowCount` and `summary.reviewCount`; older persisted artifacts remain readable without it.
 - `ValidationResult`: `pass`, `code`, `evidence`, `retryable`.
 - `RunEvent`: `id`, monotonic `sequence`, `runId`, optional `taskId`, `time`, `type`, `payload`.
 
