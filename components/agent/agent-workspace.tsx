@@ -582,7 +582,7 @@ function describeWorkflowStep(step: WorkflowStep, thresholdMinor: number, curren
   return '保留來源參照並檢查 CSV 輸出安全性。'
 }
 
-function MainStage({ apiStatus, onApiStatusChange, showHeader }: { apiStatus: ApiResponseStatus; onApiStatusChange: (status: ApiResponseStatus) => void; showHeader: boolean }) {
+function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseStatus; onApiStatusChange: (status: ApiResponseStatus) => void }) {
   const [goal, setGoal] = useState('')
   const [source, setSource] = useState<LocalSource | null>(null)
   const [pills, setPills] = useState<LogicPill[]>([])
@@ -1402,8 +1402,7 @@ function MainStage({ apiStatus, onApiStatusChange, showHeader }: { apiStatus: Ap
     : undefined
 
   return <section className="mx-auto flex min-h-[calc(100vh-76px)] w-full max-w-[1840px] flex-col px-4 py-5 sm:px-7 sm:py-6 xl:px-10">
-    <div className={`mb-5 flex flex-wrap items-end gap-3 ${showHeader ? 'justify-between' : 'justify-end'}`}>
-      {showHeader && <div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Invoice demo</p><h1 className="mt-1 text-2xl font-semibold tracking-[-0.04em] sm:text-[28px]">發票整理示範</h1></div>}
+    <div className="mb-5 flex flex-wrap items-end justify-end gap-3">
       <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${apiStatus === 'responded' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : apiStatus === 'failed' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-zinc-200 bg-zinc-50 text-zinc-600'}`}><CircleDashed aria-hidden="true" className="size-3.5" />{API_RESPONSE_LABELS[apiStatus]}</div>
     </div>
 
@@ -1519,7 +1518,7 @@ function MainStage({ apiStatus, onApiStatusChange, showHeader }: { apiStatus: Ap
   </section>
 }
 
-export default function AgentWorkspace({ view, showMainStageHeader = true }: { view: 'main-stage' | 'normal-llm'; showMainStageHeader?: boolean }) {
+export default function AgentWorkspace({ view }: { view: 'main-stage' | 'normal-llm' }) {
   const [apiStatus, setApiStatus] = useState<ApiResponseStatus>('unconfirmed')
-  return view === 'normal-llm' ? <NormalLlm /> : <MainStage apiStatus={apiStatus} onApiStatusChange={setApiStatus} showHeader={showMainStageHeader} />
+  return view === 'normal-llm' ? <NormalLlm /> : <MainStage apiStatus={apiStatus} onApiStatusChange={setApiStatus} />
 }

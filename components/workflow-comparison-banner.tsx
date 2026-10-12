@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, Pause, Play, RotateCcw } from 'lucide-react'
 
 export type WorkflowComparisonLocale = 'zh-Hant' | 'en'
@@ -17,6 +17,7 @@ const COPY = {
     first: '第一次', second: '第二次', input: '輸入', output: '輸出',
     prompt100: '把這張收據整理成表格：海港文具，2026-10-01，HKD 100.00',
     prompt120: '把這張收據整理成表格：海港文具，2026-10-01，HKD 120.00',
+    merchantValue: '海港文具',
     fixed: '同一模板／同一規則', changed: '格式發生變化', amountChanged: '僅資料值改變',
     date: '日期', merchant: '商戶', amount: '金額', currency: '幣種', vendor: '供應商', total: '總額', transactionDate: '交易日',
     note: '示意，非真實模型評測。實際效果取決於輸入、規則與實現。',
@@ -31,6 +32,7 @@ const COPY = {
     first: 'First', second: 'Second', input: 'Input', output: 'Output',
     prompt100: 'Turn this receipt into a table: Harbour Stationery, 2026-10-01, HKD 100.00',
     prompt120: 'Turn this receipt into a table: Harbour Stationery, 2026-10-01, HKD 120.00',
+    merchantValue: 'Harbour Stationery',
     fixed: 'Same template / same rules', changed: 'Format changed', amountChanged: 'Only the data value changed',
     date: 'Date', merchant: 'Merchant', amount: 'Amount', currency: 'Currency', vendor: 'Vendor', total: 'Total', transactionDate: 'Transaction date',
     note: 'Illustration only, not a real model benchmark. Results depend on the input, rules, and implementation.',
@@ -41,17 +43,16 @@ const COPY = {
 
 function MiniTable({ headers, values, highlighted = false }: { headers: string[]; values: string[]; highlighted?: boolean }) {
   return <div className="mt-2 min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
-    <div className={`grid grid-cols-4 border-b border-zinc-200 text-[10px] font-semibold text-zinc-600 ${highlighted ? 'bg-amber-50' : 'bg-zinc-50'}`}>
-      {headers.map((value) => <span key={value} className="min-w-0 truncate px-2 py-1.5">{value}</span>)}
-    </div>
-    <div className="grid grid-cols-4 text-[10px] text-zinc-800">
-      {values.map((value, index) => <span key={`${value}-${index}`} className={`min-w-0 truncate px-2 py-2 ${highlighted && index === 2 ? 'bg-emerald-50 font-semibold text-emerald-800' : ''}`}>{value}</span>)}
-    </div>
+    <table className="w-full table-fixed text-left text-xs">
+      <thead className={`border-b border-zinc-200 font-semibold text-zinc-600 ${highlighted ? 'bg-amber-50' : 'bg-zinc-50'}`}><tr>{headers.map((value) => <th key={value} className="break-words px-2 py-1.5 align-top">{value}</th>)}</tr></thead>
+      <tbody className="text-zinc-800"><tr>{values.map((value, index) => <td key={`${value}-${index}`} className={`break-words px-2 py-2 align-top ${highlighted && index === 2 ? 'bg-emerald-50 font-semibold text-emerald-800' : ''}`}>{value}</td>)}</tr></tbody>
+    </table>
   </div>
 }
 
 export function WorkflowComparisonBanner({ locale = 'zh-Hant' }: { locale?: WorkflowComparisonLocale }) {
   const c = COPY[locale]
+  const titleId = useId()
   const rootRef = useRef<HTMLElement>(null)
   const [frame, setFrame] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
@@ -91,14 +92,14 @@ export function WorkflowComparisonBanner({ locale = 'zh-Hant' }: { locale?: Work
 
   const second = frame >= 2
   const showOutput = frame === 1 || frame === 3
-  const leftHeaders = second ? [c.vendor, c.total, c.transactionDate, c.currency] : [c.date, c.merchant, c.amount, c.currency]
-  const leftValues = second ? ['海港文具', '100.00', '01/10/2026', 'HKD'] : ['2026-10-01', '海港文具', '100.00', 'HKD']
+  const leftHeaders = second ? [c.vendor, c.total, c.transactionDate] : [c.date, c.merchant, c.amount]
+  const leftValues = second ? [c.merchantValue, '100.00', '01/10/2026'] : ['2026-10-01', c.merchantValue, '100.00']
   const rightAmount = second ? '120.00' : '100.00'
 
-  return <section ref={rootRef} data-workflow-comparison data-frame={frame} aria-labelledby="workflow-comparison-title" className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-white via-zinc-50 to-stone-100 p-4 shadow-[0_12px_36px_-30px_rgba(24,24,27,0.45)] sm:p-5">
+  return <section ref={rootRef} data-workflow-comparison data-frame={frame} aria-labelledby={titleId} className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-white via-zinc-50 to-stone-100 p-4 shadow-[0_12px_36px_-30px_rgba(24,24,27,0.45)] sm:p-5">
     <p className="sr-only">{c.staticExplanation}</p>
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 flex-1"><h2 id="workflow-comparison-title" className="text-base font-semibold tracking-[-0.02em] text-zinc-950 sm:text-lg">{c.title}</h2>{!collapsed && <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-600 sm:text-sm">{c.subtitle}</p>}</div>
+      <div className="min-w-0 flex-1"><h2 id={titleId} className="text-base font-semibold tracking-[-0.02em] text-zinc-950 sm:text-lg">{c.title}</h2>{!collapsed && <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-600 sm:text-sm">{c.subtitle}</p>}</div>
       <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{collapsed ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronUp aria-hidden="true" className="size-4" />}{collapsed ? c.expand : c.collapse}</button>
     </div>
     {!collapsed && <>
@@ -111,7 +112,7 @@ export function WorkflowComparisonBanner({ locale = 'zh-Hant' }: { locale?: Work
         <article className="min-w-0 rounded-xl border border-zinc-300 bg-white/90 p-3.5 ring-1 ring-zinc-200">
           <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-semibold">{c.rightTitle}</h3><p className="mt-0.5 text-[11px] text-zinc-500">{c.rightSubtitle}</p></div><span className="rounded-full bg-zinc-950 px-2 py-1 text-[10px] font-semibold text-white">{c.fixed}</span></div>
           <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">{second ? c.second : c.first} · {showOutput ? c.output : c.input}</p>
-          {showOutput ? <><MiniTable headers={[c.date, c.merchant, c.amount, c.currency]} values={['2026-10-01', '海港文具', rightAmount, 'HKD']} highlighted={second} />{second && <p className="mt-1.5 text-[10px] font-semibold text-emerald-700">{c.amountChanged}</p>}</> : <p className="mt-2 min-h-[58px] rounded-lg bg-zinc-100 p-3 text-xs leading-5 text-zinc-700">{second ? c.prompt120 : c.prompt100}</p>}
+          {showOutput ? <><MiniTable headers={[c.date, c.merchant, c.amount, c.currency]} values={['2026-10-01', c.merchantValue, rightAmount, 'HKD']} highlighted={second} />{second && <p className="mt-1.5 text-[11px] font-semibold text-emerald-700">{c.amountChanged}</p>}</> : <p className="mt-2 min-h-[58px] rounded-lg bg-zinc-100 p-3 text-xs leading-5 text-zinc-700">{second ? c.prompt120 : c.prompt100}</p>}
         </article>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 pt-3">

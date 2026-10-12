@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 
-const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+const edge = process.env.EZAGENT_EDGE_PATH ?? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const siteUrl = process.env.EZAGENT_URL ?? 'http://localhost:3112'
-const scratch = 'D:\\个人开发探索\\ignite\\scratch-2026-10-12\\ezagent-workflow-comparison'
+const scratch = process.env.EZAGENT_SCRATCH ?? 'D:\\个人开发探索\\ignite\\scratch-2026-10-12\\ezagent-workflow-comparison'
 const debugPort = 9800 + Math.floor(Math.random() * 150)
 await mkdir(scratch, { recursive: true })
 
@@ -121,14 +121,17 @@ try {
   assert.equal(await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`), collapsedFrame)
   assert.equal(await clickExact('展開對比'), true)
   assert.equal(await clickExact('繼續'), true)
-  await evaluate(`window.scrollTo(0, document.body.scrollHeight)`)
-  await wait(500)
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 500, deviceScaleFactor: 1, mobile: false })
+  await evaluate(`document.querySelector('[data-builder-step="describe"]')?.scrollIntoView({ block: 'start' })`)
+  await until(`document.querySelector('[data-workflow-comparison]').getBoundingClientRect().bottom <= 0`, 'banner leaves viewport')
+  await wait(3_500)
   const offscreenFrame = await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`)
   await wait(3_700)
   assert.equal(await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`), offscreenFrame)
   await evaluate(`document.querySelector('[data-workflow-comparison]')?.scrollIntoView()`)
   await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame !== ${JSON.stringify(offscreenFrame)}`, 'resume after returning to viewport')
   assert.equal(await clickExact('暫停'), true)
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false })
   const builderScreenshot = await screenshot('builder-comparison-paused.png')
 
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
