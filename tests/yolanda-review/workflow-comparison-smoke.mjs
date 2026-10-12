@@ -132,10 +132,12 @@ try {
   await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame !== ${JSON.stringify(offscreenFrame)}`, 'resume after returning to viewport')
   assert.equal(await clickExact('暫停'), true)
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false })
+  const desktopBannerHeight = await evaluate(`Math.round(document.querySelector('[data-workflow-comparison]').getBoundingClientRect().height)`)
   const builderScreenshot = await screenshot('builder-comparison-paused.png')
 
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true)
+  const mobileBannerHeight = await evaluate(`Math.round(document.querySelector('[data-workflow-comparison]').getBoundingClientRect().height)`)
   const mobileScreenshot = await screenshot('builder-comparison-mobile.png')
 
   await command('Emulation.setEmulatedMedia', { media: '', features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
@@ -153,6 +155,7 @@ try {
     result: 'passed',
     homeOrder: order,
     sameLeftInput: firstLeftInput === secondLeftInput,
+    bannerHeights: { desktop: desktopBannerHeight, mobile: mobileBannerHeight },
     screenshots: [homeScreenshot, builderScreenshot, mobileScreenshot, invoiceScreenshot],
   }))
 } finally {
