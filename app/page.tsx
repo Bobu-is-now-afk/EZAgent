@@ -1,26 +1,95 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Bot, FileText, MessageCircle, Sparkles } from 'lucide-react'
 import { LocalAiSetup } from '@/components/local-ai-setup'
 
+const GUIDE_STORAGE_KEY = 'ezagent:first-use-guide:v1:handled'
+
+const COPY = {
+  'zh-Hant': {
+    workspace: '工作區', title: '你今天想做什麼？', subtitle: '選擇一個模組開始使用。',
+    guide: '第一次使用？先和本機 AI 聊一句，再試試把重複工作變成工具。',
+    guideHelp: '真實對話需要先完成本機 AI 準備；工作流程的配置與預覽不受影響。',
+    chatFirst: '先體驗對話', skip: '跳過，直接體驗工具',
+    chat: '本機 AI 對話', chatDescription: '使用準備好的本機模型問問題、草擬文字。',
+    builder: '設計工作流程', builderDescription: '把重複工作的要求整理成可復用規則。', featured: '推薦',
+    preset: '試用預設工具', presetDescription: '目前提供合成資料的發票整理示範；不是完整工具市場。',
+    boundary: '發票示範僅支援 CSV／TXT。配置、儲存或預演不代表已執行業務工作。',
+    language: '語言',
+  },
+  en: {
+    workspace: 'Workspace', title: 'What would you like to do today?', subtitle: 'Choose a module to get started.',
+    guide: 'First time here? Chat with local AI, then turn repetitive work into a tool.',
+    guideHelp: 'Real chat requires local AI setup first. Workflow configuration and preview remain available without it.',
+    chatFirst: 'Try chat first', skip: 'Skip to tools',
+    chat: 'Local AI chat', chatDescription: 'Ask questions and draft text with your prepared local model.',
+    builder: 'Design a workflow', builderDescription: 'Turn repetitive work requirements into reusable rules.', featured: 'Featured',
+    preset: 'Try a preset tool', presetDescription: 'Currently an invoice-processing demo with synthetic data, not a complete tool marketplace.',
+    boundary: 'The invoice demo supports CSV/TXT only. Configuring, saving, or previewing a workflow does not mean business work has run.',
+    language: 'Language',
+  },
+} as const
+
+const cardClass = 'group flex min-h-[224px] flex-col rounded-xl border border-zinc-200 bg-white p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-400 hover:shadow-[0_10px_30px_-18px_rgba(24,24,27,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none'
+
 export default function Page() {
   const [locale, setLocale] = useState<'zh-Hant' | 'en'>('zh-Hant')
-  const en = locale === 'en'
-  const cards = [
-    { href: '/invoice-demo', icon: FileText, title: en ? 'Try invoice processing' : '試用發票整理', description: en ? 'Load sample invoices, review a plan and download CSV. No file browsing needed.' : '載入示範發票、確認計畫、下載 CSV。不需尋找檔案。' },
-    { href: '/chat', icon: MessageCircle, title: en ? 'Local AI chat' : '本機 AI 對話', description: en ? 'Ask questions and draft text using your prepared local model.' : '使用準備好的本機模型問問題、草擬文字。' },
-    { href: '/yolanda-builder', icon: Sparkles, title: en ? 'Design a workflow' : '設計工作流程', description: en ? 'Create and save rules. Supported invoice settings can be handed to the invoice Agent after review.' : '建立並儲存規則；受支援的發票設定可在核對後交給發票 Agent。' },
-  ]
-  return <main lang={locale} className="min-h-screen bg-white text-zinc-950">
-    <header className="flex min-h-[76px] items-center justify-between border-b border-zinc-200 px-6 sm:px-10"><Link href="/" className="flex items-center gap-3 font-semibold"><Bot aria-hidden="true" className="size-6" />EZAgent</Link><div className="flex gap-2">{(['zh-Hant', 'en'] as const).map((value) => <button key={value} type="button" aria-pressed={locale === value} onClick={() => setLocale(value)} className="min-h-11 rounded-lg border border-zinc-200 px-3 text-sm">{value === 'en' ? 'EN' : '繁中'}</button>)}</div></header>
-    <section className="mx-auto max-w-[960px] px-6 py-10 sm:py-14">
-      <h1 className="text-3xl font-semibold tracking-tight">{en ? 'Prepare AI, then try your first task.' : '準備 AI，試做第一個任務。'}</h1>
-      <p className="mb-7 mt-3 text-sm text-zinc-600">{en ? 'A local-first desktop helper. Start with synthetic sample invoices.' : '以本機處理為主的桌面助手。先用合成發票資料試一次。'}</p>
-      <LocalAiSetup locale={locale} />
-      <div className="mt-7 grid gap-4 sm:grid-cols-3">{cards.map(({ href, icon: Icon, title, description }) => <Link key={href} href={href} className="rounded-xl border border-zinc-200 p-5 transition hover:border-zinc-500 focus-visible:outline-2 focus-visible:outline-zinc-950"><Icon aria-hidden="true" className="size-6" /><h2 className="mt-5 font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-zinc-600">{description}</p></Link>)}</div>
-      <p className="mt-7 text-xs leading-6 text-zinc-500">{en ? 'Invoice demo supports CSV/TXT only. PDF, XLSX and a packaged desktop installer are not available yet. This is not a clinical or insurance tool, and no personal-data compliance assessment is claimed.' : '發票示範僅支援 CSV／TXT。PDF、XLSX 與桌面安裝包尚未完成。不提供臨床或保險業務工具，也不代表已通過個資法規評估。'}</p>
+  const [showGuide, setShowGuide] = useState(false)
+  const toolsRef = useRef<HTMLElement>(null)
+  const c = COPY[locale]
+
+  useEffect(() => {
+    try { setShowGuide(window.localStorage.getItem(GUIDE_STORAGE_KEY) !== 'true') }
+    catch { setShowGuide(true) }
+  }, [])
+
+  function markGuideHandled() {
+    setShowGuide(false)
+    try { window.localStorage.setItem(GUIDE_STORAGE_KEY, 'true') } catch { /* The page remains usable without storage. */ }
+  }
+
+  function skipToTools() {
+    markGuideHandled()
+    window.setTimeout(() => {
+      toolsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      toolsRef.current?.focus({ preventScroll: true })
+    }, 0)
+  }
+
+  return <main lang={locale} className="min-h-[100dvh] bg-white text-zinc-950">
+    <header className="flex min-h-[76px] items-center justify-between border-b border-zinc-200/80 px-5 sm:px-10">
+      <Link href="/" className="flex items-center gap-3 rounded-lg font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2"><span className="flex size-9 items-center justify-center rounded-[10px] bg-zinc-950 text-white"><Bot aria-hidden="true" className="size-[19px]" /></span>EZAgent</Link>
+      <div className="inline-flex rounded-xl border border-zinc-200 bg-white p-1" aria-label={c.language}>
+        {(['zh-Hant', 'en'] as const).map((value) => <button key={value} type="button" aria-pressed={locale === value} onClick={() => setLocale(value)} className={`min-h-9 rounded-lg px-3 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${locale === value ? 'bg-zinc-950 text-white' : 'text-zinc-600'}`}>{value === 'en' ? 'EN' : '繁中'}</button>)}
+      </div>
+    </header>
+
+    <section className="mx-auto flex w-full max-w-[880px] flex-col items-center px-5 pb-16 pt-[clamp(3.5rem,9vh,7rem)] sm:px-6">
+      <div className="text-center"><p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">{c.workspace}</p><h1 className="text-balance text-[clamp(2rem,4vw,2.75rem)] font-semibold tracking-[-0.045em]">{c.title}</h1><p className="mt-3 text-[15px] text-zinc-500">{c.subtitle}</p></div>
+
+      {showGuide && <aside aria-label={c.guide} className="mt-8 w-full rounded-xl border border-sky-200 bg-sky-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5">
+        <div><p className="text-sm font-semibold text-sky-950">{c.guide}</p><p className="mt-1 text-xs leading-5 text-sky-900/80">{c.guideHelp}</p></div>
+        <div className="mt-3 flex shrink-0 flex-wrap gap-2 sm:mt-0"><Link href="/chat" onClick={markGuideHandled} className="inline-flex min-h-11 items-center rounded-lg bg-zinc-950 px-4 text-xs font-semibold text-white outline-none hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{c.chatFirst}</Link><button type="button" onClick={skipToTools} className="min-h-11 rounded-lg border border-zinc-300 bg-white px-4 text-xs font-semibold outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{c.skip}</button></div>
+      </aside>}
+
+      <div className="mt-8 grid w-full gap-4 sm:grid-cols-2">
+        <LocalAiSetup locale={locale} compact showDemoLink={false} />
+        <Link href="/chat" className={cardClass}>
+          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><MessageCircle aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-7 text-[17px] font-semibold tracking-[-0.025em]">{c.chat}</h2><p className="mt-2 text-[13px] leading-5 text-zinc-500">{c.chatDescription}</p>
+        </Link>
+      </div>
+
+      <section ref={toolsRef} tabIndex={-1} aria-label={locale === 'en' ? 'Tool entries' : '工具入口'} className="mt-4 grid w-full scroll-mt-6 gap-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-4 sm:grid-cols-2">
+        <Link href="/yolanda-builder" className={`${cardClass} border-zinc-400 ring-1 ring-zinc-200`}>
+          <span className="flex items-start justify-between"><span className="flex size-10 items-center justify-center rounded-lg bg-zinc-950 text-white"><Sparkles aria-hidden="true" className="size-[19px]" /></span><span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">{c.featured}</span></span><h2 className="mt-7 text-[17px] font-semibold tracking-[-0.025em]">{c.builder}</h2><p className="mt-2 text-[13px] leading-5 text-zinc-500">{c.builderDescription}</p>
+        </Link>
+        <Link href="/invoice-demo" className={cardClass}>
+          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><FileText aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-7 text-[17px] font-semibold tracking-[-0.025em]">{c.preset}</h2><p className="mt-2 text-[13px] leading-5 text-zinc-500">{c.presetDescription}</p>
+        </Link>
+      </section>
+      <p className="mt-6 w-full text-xs leading-5 text-zinc-500">{c.boundary}</p>
     </section>
   </main>
 }

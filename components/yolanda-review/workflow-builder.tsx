@@ -1,6 +1,7 @@
 'use client'
 
 import { LocalAiSetup } from '@/components/local-ai-setup'
+import { WorkflowComparisonBanner } from '@/components/workflow-comparison-banner'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Check, ChevronRight, Download, FolderOpen, House, LoaderCircle, Play, Plus, Save, Sparkles, Trash2, Upload } from 'lucide-react'
@@ -404,6 +405,7 @@ export function WorkflowBuilder() {
     </header>
 
     <div className="mx-auto max-w-6xl px-4 py-7 sm:px-6">
+      {!showSaved && <div className="mb-7"><WorkflowComparisonBanner locale={locale} /></div>}
       {showSaved && <WorkflowLibrary locale={locale} actor={actor} refreshKey={libraryRefreshKey} onActorChange={(identity) => { setActor(identity); setEditingId(undefined); setError(''); setNotice('') }} onCreate={startNewWorkflow} onOpen={openManaged} onChanged={handleManagedChange} onDeleted={handleDeleted} />}
 
       {!showSaved && <>
