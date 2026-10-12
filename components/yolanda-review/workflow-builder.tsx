@@ -409,6 +409,7 @@ export function WorkflowBuilder() {
       {showSaved && <WorkflowLibrary locale={locale} actor={actor} refreshKey={libraryRefreshKey} onActorChange={(identity) => { setActor(identity); setEditingId(undefined); setError(''); setNotice('') }} onCreate={startNewWorkflow} onOpen={openManaged} onChanged={handleManagedChange} onDeleted={handleDeleted} />}
 
       {!showSaved && <>
+      <h2 data-builder-operation-title className="mb-5 text-xl font-semibold tracking-[-0.02em]">{locale === 'zh-Hant' ? '開始建立工作流程' : 'Start creating a workflow'}</h2>
       <p className="mb-5 text-sm font-semibold sm:hidden">{locale === 'zh-Hant' ? `第 ${step} 步，共 3 步` : `Step ${step} of 3`} · {c.steps[step - 1]}</p>
       <nav aria-label="Workflow steps" className="mb-7 hidden gap-2 sm:grid sm:grid-cols-3">{c.steps.map((label, index) => {
         const number = index + 1

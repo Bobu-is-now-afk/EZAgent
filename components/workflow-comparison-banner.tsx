@@ -5,51 +5,85 @@ import { ChevronDown, ChevronUp, Pause, Play, RotateCcw } from 'lucide-react'
 
 export type WorkflowComparisonLocale = 'zh-Hant' | 'en'
 
-const LAST_FRAME = 3
-const FRAME_DURATION_MS = 3_250
+const LAST_FRAME = 4
+const FRAME_DURATION_MS = 2_400
 
 const COPY = {
   'zh-Hant': {
-    title: '資料可以變，格式和規則保持一致。',
-    subtitle: 'AI 協助理解需求，程式按已確認規則執行。你可以設計自己的流程，也可以使用預設工具。',
-    leftTitle: '每次重新生成答案', leftSubtitle: '相同需求，輸出格式可能變化',
-    rightTitle: '復用固定工作流', rightSubtitle: '資料改變，仍按同一模板處理',
-    prompt100: '把這張收據整理成表格：海港文具，2026-10-01，HKD 100.00',
-    prompt120: '把這張收據整理成表格：海港文具，2026-10-01，HKD 120.00',
+    eyebrow: '原理示意',
+    title: '資料可以變，輸出格式不必跟著變。',
+    leftTitle: '直接生成答案',
+    leftSubtitle: '相同輸入，兩次生成的格式可能不同。',
+    leftConclusion: '相同輸入，格式可能變化。',
+    rightTitle: '復用固定工作流程',
+    rightSubtitle: '資料改變，兩次輸出仍使用同一模板。',
+    rightConclusion: '金額改變，模板保持一致。',
+    first: '第一次', second: '第二次', input: '輸入', output: '輸出',
     merchantValue: '海港文具',
-    fixed: '同一模板／同一規則', changed: '格式發生變化',
-    date: '日期', merchant: '商戶', amount: '金額', currency: '幣種', vendor: '供應商', total: '總額', transactionDate: '交易日',
-    note: '示意，非真實模型評測。實際效果取決於輸入、規則與實現。',
-    staticExplanation: '左側示意相同要求可能得到不同格式；右側示意資料值改變時，已確認的模板與規則保持一致。',
+    date: '日期', merchant: '商戶', amount: '金額', vendor: '供應商', total: '總額', transactionDate: '交易日',
+    note: '示意，非真實模型評測；實際效果取決於輸入、規則與實現。',
     pause: '暫停', resume: '繼續', replay: '重播', collapse: '收起對比', expand: '展開對比', collapseShort: '收起', expandShort: '展開', reduced: '已依系統設定停用動畫',
   },
   en: {
-    title: 'Data can change while the format and rules stay consistent.',
-    subtitle: 'AI helps interpret the request; software applies confirmed rules. Design your own workflow or use a preset tool.',
-    leftTitle: 'Generate an answer each time', leftSubtitle: 'The same request may return a different format',
-    rightTitle: 'Reuse a fixed workflow', rightSubtitle: 'Changed data follows the same template',
-    prompt100: 'Turn this receipt into a table: Harbour Stationery, 2026-10-01, HKD 100.00',
-    prompt120: 'Turn this receipt into a table: Harbour Stationery, 2026-10-01, HKD 120.00',
+    eyebrow: 'How it works',
+    title: 'Data can change without changing the output format.',
+    leftTitle: 'Generate an answer directly',
+    leftSubtitle: 'The same input may produce two different formats.',
+    leftConclusion: 'Same input, format may change.',
+    rightTitle: 'Reuse a fixed workflow',
+    rightSubtitle: 'Changed data still uses the same output template.',
+    rightConclusion: 'Amount changes, template stays consistent.',
+    first: 'First', second: 'Second', input: 'Input', output: 'Output',
     merchantValue: 'Harbour Stationery',
-    fixed: 'Same template / same rules', changed: 'Format changed',
-    date: 'Date', merchant: 'Merchant', amount: 'Amount', currency: 'Currency', vendor: 'Vendor', total: 'Total', transactionDate: 'Transaction date',
-    note: 'Illustration only, not a real model benchmark. Results depend on the input, rules, and implementation.',
-    staticExplanation: 'The left illustrates format drift for an unchanged request. The right shows changed data while the confirmed template and rules stay fixed.',
+    date: 'Date', merchant: 'Merchant', amount: 'Amount', vendor: 'Vendor', total: 'Total', transactionDate: 'Transaction date',
+    note: 'Illustration only, not a real model benchmark; results depend on the input, rules, and implementation.',
     pause: 'Pause', resume: 'Continue', replay: 'Replay', collapse: 'Collapse comparison', expand: 'Expand comparison', collapseShort: 'Collapse', expandShort: 'Expand', reduced: 'Animation disabled by system preference',
   },
 } as const
 
-function MiniTable({ headers, values, highlighted = false }: { headers: string[]; values: string[]; highlighted?: boolean }) {
-  return <div className="mt-1.5 min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
-    <table className="w-full table-fixed text-left text-xs">
-      <thead className={`border-b border-zinc-200 font-semibold text-zinc-600 ${highlighted ? 'bg-amber-50' : 'bg-zinc-50'}`}><tr>{headers.map((value) => <th key={value} className="break-words px-1 py-1 align-top leading-4 sm:px-2">{value}</th>)}</tr></thead>
-      <tbody className="text-zinc-800"><tr>{values.map((value, index) => <td key={`${value}-${index}`} className={`break-words px-1 py-1.5 align-top leading-4 sm:px-2 ${highlighted && index === 2 ? 'bg-emerald-50 font-semibold text-emerald-800' : ''}`}>{value}</td>)}</tr></tbody>
+type Copy = (typeof COPY)[WorkflowComparisonLocale]
+
+function OutputTable({ headers, values, highlightHeaders = false, highlightValueIndex }: { headers: string[]; values: string[]; highlightHeaders?: boolean; highlightValueIndex?: number }) {
+  return <div className="mt-1.5 min-w-0 overflow-hidden rounded-lg bg-white/70">
+    <table data-comparison-output className="w-full table-fixed text-left text-xs">
+      <thead data-output-headers className={`border-b border-slate-200 font-semibold text-slate-600 transition-colors duration-500 motion-reduce:transition-none ${highlightHeaders ? 'bg-[#DDEAF5]' : 'bg-white/40'}`}>
+        <tr>{headers.map((value) => <th key={value} className="break-words px-1.5 py-1.5 align-top leading-4 sm:px-2">{value}</th>)}</tr>
+      </thead>
+      <tbody className="text-zinc-800"><tr>{values.map((value, index) => <td key={`${value}-${index}`} className={`break-words px-1.5 py-1.5 align-top leading-4 transition-colors duration-500 motion-reduce:transition-none sm:px-2 ${highlightValueIndex === index ? 'bg-[#E4EEF7] font-semibold text-slate-950' : ''}`}>{value}</td>)}</tr></tbody>
     </table>
   </div>
 }
 
+function ComparisonRecord({ copy, order, amount, headers, values, highlightInput = false, highlightInputAmount = false, highlightHeaders = false, highlightValueIndex }: {
+  copy: Copy
+  order: 'first' | 'second'
+  amount: '100.00' | '120.00'
+  headers: string[]
+  values: string[]
+  highlightInput?: boolean
+  highlightInputAmount?: boolean
+  highlightHeaders?: boolean
+  highlightValueIndex?: number
+}) {
+  return <section data-comparison-record={order} className="border-t border-slate-200/90 pt-3 first:border-t-0 first:pt-0">
+    <h4 className="text-xs font-semibold text-slate-700">{copy[order]}</h4>
+    <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] sm:items-start">
+      <div>
+        <p className="text-[11px] font-medium text-slate-500">{copy.input}</p>
+        <p data-comparison-input className={`mt-1 rounded-md px-2 py-1.5 text-xs leading-5 text-zinc-800 transition-colors duration-500 motion-reduce:transition-none ${highlightInput ? 'bg-[#DDEAF5] ring-1 ring-inset ring-[#AFC4D8]' : 'bg-white/55'}`}>
+          {copy.merchantValue} · 2026-10-01 · <span className={highlightInputAmount ? 'rounded bg-[#D5E6F3] px-0.5 font-semibold' : ''}>HKD {amount}</span>
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium text-slate-500">{copy.output}</p>
+        <OutputTable headers={headers} values={values} highlightHeaders={highlightHeaders} highlightValueIndex={highlightValueIndex} />
+      </div>
+    </div>
+  </section>
+}
+
 export function WorkflowComparisonBanner({ locale = 'zh-Hant' }: { locale?: WorkflowComparisonLocale }) {
-  const c = COPY[locale]
+  const copy = COPY[locale]
   const titleId = useId()
   const rootRef = useRef<HTMLElement>(null)
   const [frame, setFrame] = useState(0)
@@ -88,36 +122,48 @@ export function WorkflowComparisonBanner({ locale = 'zh-Hant' }: { locale?: Work
     return () => window.clearInterval(timer)
   }, [collapsed, inView, pageVisible, reducedMotion, userPaused])
 
-  const second = frame >= 2
-  const showOutput = frame === 1 || frame === 3
-  const leftHeaders = second ? [c.vendor, c.total, c.transactionDate] : [c.date, c.merchant, c.amount]
-  const leftValues = second ? [c.merchantValue, '100.00', '01/10/2026'] : ['2026-10-01', c.merchantValue, '100.00']
-  const rightAmount = second ? '120.00' : '100.00'
+  const leftHeaders = [copy.date, copy.merchant, copy.amount]
+  const changedLeftHeaders = [copy.vendor, copy.total, copy.transactionDate]
+  const rightHeaders = [copy.date, copy.merchant, copy.amount]
 
-  return <section ref={rootRef} data-workflow-comparison data-frame={frame} aria-labelledby={titleId} className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-white via-zinc-50 to-stone-100 p-3 shadow-[0_12px_36px_-30px_rgba(24,24,27,0.45)] sm:p-4">
-    <p className="sr-only">{c.staticExplanation}</p>
-    <div className="flex items-start justify-between gap-3">
-      <h2 id={titleId} className="min-w-0 flex-1 text-base font-semibold tracking-[-0.02em] text-zinc-950 sm:text-lg">{c.title}</h2>
-      <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} aria-label={collapsed ? c.expand : c.collapse} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{collapsed ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronUp aria-hidden="true" className="size-4" />}<span className="sm:hidden">{collapsed ? c.expandShort : c.collapseShort}</span><span className="hidden sm:inline">{collapsed ? c.expand : c.collapse}</span></button>
+  return <section ref={rootRef} data-workflow-comparison data-frame={frame} aria-labelledby={titleId} className="overflow-hidden rounded-2xl border border-slate-200 bg-[#F3F6F9]">
+    <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5">
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{copy.eyebrow}</p>
+        <h2 id={titleId} className="mt-1 text-base font-semibold tracking-[-0.02em] text-zinc-950 sm:text-lg">{copy.title}</h2>
+      </div>
+      <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} aria-label={collapsed ? copy.expand : copy.collapse} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white/80 px-3 text-xs font-semibold text-slate-700 outline-none hover:border-slate-500 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">
+        {collapsed ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronUp aria-hidden="true" className="size-4" />}
+        <span className="sm:hidden">{collapsed ? copy.expandShort : copy.collapseShort}</span><span className="hidden sm:inline">{collapsed ? copy.expand : copy.collapse}</span>
+      </button>
     </div>
-    {!collapsed && <p className="mt-1 max-w-3xl text-xs leading-4 text-zinc-600 sm:text-sm sm:leading-5">{c.subtitle}</p>}
     {!collapsed && <>
-      <div aria-hidden="true" className="mt-3 grid gap-2 md:grid-cols-2">
-        <article className="min-w-0 rounded-xl border border-zinc-200 bg-white/90 p-2.5 sm:p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-semibold">{c.leftTitle}</h3><p className="mt-0.5 text-[11px] text-zinc-500">{c.leftSubtitle}</p></div>{second && showOutput && <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-900">{c.changed}</span>}</div>
-          {showOutput ? <MiniTable headers={leftHeaders} values={leftValues} highlighted={second} /> : <p className="mt-1.5 rounded-lg bg-zinc-100 p-2 text-xs leading-4 text-zinc-700">{c.prompt100}</p>}
+      <div className="grid border-t border-slate-200 md:grid-cols-2 md:divide-x md:divide-slate-200">
+        <article data-comparison-side="left" className="min-w-0 px-4 py-4 sm:px-5">
+          <h3 className="text-sm font-semibold text-zinc-950">{copy.leftTitle}</h3>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600">{copy.leftSubtitle}</p>
+          <div className="mt-3 space-y-3">
+            <ComparisonRecord copy={copy} order="first" amount="100.00" headers={leftHeaders} values={['2026-10-01', copy.merchantValue, 'HKD 100.00']} highlightInput={frame === 0} />
+            <ComparisonRecord copy={copy} order="second" amount="100.00" headers={changedLeftHeaders} values={[copy.merchantValue, 'HKD 100.00', '01/10/2026']} highlightInput={frame === 0} highlightHeaders={frame === 1} highlightValueIndex={frame === 1 ? 2 : undefined} />
+          </div>
+          <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-semibold text-slate-800">{copy.leftConclusion}</p>
         </article>
-        <article className="min-w-0 rounded-xl border border-zinc-300 bg-white/90 p-2.5 ring-1 ring-zinc-200 sm:p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-semibold">{c.rightTitle}</h3><p className="mt-0.5 text-[11px] text-zinc-500">{c.rightSubtitle}</p></div><span className="rounded-full bg-zinc-950 px-2 py-1 text-[10px] font-semibold text-white">{c.fixed}</span></div>
-          {showOutput ? <MiniTable headers={[c.date, c.merchant, c.amount, c.currency]} values={['2026-10-01', c.merchantValue, rightAmount, 'HKD']} highlighted={second} /> : <p className="mt-1.5 rounded-lg bg-zinc-100 p-2 text-xs leading-4 text-zinc-700">{second ? c.prompt120 : c.prompt100}</p>}
+        <article data-comparison-side="right" className="min-w-0 border-t border-slate-200 px-4 py-4 sm:px-5 md:border-t-0">
+          <h3 className="text-sm font-semibold text-zinc-950">{copy.rightTitle}</h3>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600">{copy.rightSubtitle}</p>
+          <div className="mt-3 space-y-3">
+            <ComparisonRecord copy={copy} order="first" amount="100.00" headers={rightHeaders} values={['2026-10-01', copy.merchantValue, 'HKD 100.00']} highlightHeaders={frame === 3} />
+            <ComparisonRecord copy={copy} order="second" amount="120.00" headers={rightHeaders} values={['2026-10-01', copy.merchantValue, 'HKD 120.00']} highlightInput={frame === 2} highlightInputAmount={frame === 2} highlightHeaders={frame === 3} highlightValueIndex={frame === 2 ? 2 : undefined} />
+          </div>
+          <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-semibold text-slate-800">{copy.rightConclusion}</p>
         </article>
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 pt-2">
-        <p className="max-w-2xl text-[11px] leading-4 text-zinc-500">{c.note}</p>
-        <div className="flex flex-wrap items-center gap-2">
-          {reducedMotion && <span className="text-[11px] text-zinc-500">{c.reduced}</span>}
-          <button type="button" disabled={reducedMotion} onClick={() => setUserPaused((value) => !value)} aria-pressed={userPaused} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50">{userPaused ? <Play aria-hidden="true" className="size-3.5" /> : <Pause aria-hidden="true" className="size-3.5" />}{userPaused ? c.resume : c.pause}</button>
-          <button type="button" disabled={reducedMotion} onClick={() => { setFrame(0); setUserPaused(false) }} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw aria-hidden="true" className="size-3.5" />{c.replay}</button>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-300 bg-white px-4 py-2.5 sm:px-5">
+        <p className="max-w-2xl text-[11px] leading-4 text-slate-500">{copy.note}</p>
+        <div className="flex flex-wrap items-center gap-1">
+          {reducedMotion && <span className="mr-1 text-[11px] text-slate-500">{copy.reduced}</span>}
+          <button type="button" disabled={reducedMotion} onClick={() => setUserPaused((value) => !value)} aria-pressed={userPaused} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50">{userPaused ? <Play aria-hidden="true" className="size-3.5" /> : <Pause aria-hidden="true" className="size-3.5" />}{userPaused ? copy.resume : copy.pause}</button>
+          <button type="button" disabled={reducedMotion} onClick={() => { setFrame(0); setUserPaused(false) }} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs text-slate-600 underline-offset-4 outline-none hover:bg-slate-100 hover:underline focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"><RotateCcw aria-hidden="true" className="size-3.5" />{copy.replay}</button>
         </div>
       </div>
     </>}

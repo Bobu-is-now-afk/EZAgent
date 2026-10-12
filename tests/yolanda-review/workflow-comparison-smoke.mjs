@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 
 const edge = process.env.EZAGENT_EDGE_PATH ?? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const siteUrl = process.env.EZAGENT_URL ?? 'http://localhost:3112'
-const scratch = process.env.EZAGENT_SCRATCH ?? 'D:\\个人开发探索\\ignite\\scratch-2026-10-12\\ezagent-workflow-comparison'
+const scratch = process.env.EZAGENT_SCRATCH ?? 'D:\\个人开发探索\\ignite\\scratch-2026-10-13\\ezagent-static-comparison'
 const debugPort = 9800 + Math.floor(Math.random() * 150)
 await mkdir(scratch, { recursive: true })
 
@@ -99,23 +99,43 @@ try {
 
   await navigate('/yolanda-builder')
   await until(`document.querySelector('[data-workflow-comparison]') !== null`, 'Builder comparison banner')
-  assert.equal(await evaluate(bodyIncludes('示意，非真實模型評測。')), true)
+  assert.equal(await evaluate(bodyIncludes('示意，非真實模型評測；')), true)
   assert.equal(await evaluate(`document.querySelectorAll('[data-workflow-comparison]').length`), 1)
+  assert.equal(await evaluate(`document.querySelectorAll('[data-comparison-record]').length`), 4)
+  assert.equal(await evaluate(`document.querySelectorAll('[data-comparison-input]').length`), 4)
+  assert.equal(await evaluate(`document.querySelectorAll('[data-comparison-output]').length`), 4)
+  assert.equal(await evaluate(`document.querySelector('[data-builder-operation-title]')?.textContent === '開始建立工作流程'`), true)
+  const leftInputs = await evaluate(`[...document.querySelectorAll('[data-comparison-side="left"] [data-comparison-input]')].map((item) => item.textContent.trim())`)
+  assert.equal(leftInputs.length, 2)
+  assert.equal(leftInputs[0], leftInputs[1])
+  const rightInputs = await evaluate(`[...document.querySelectorAll('[data-comparison-side="right"] [data-comparison-input]')].map((item) => item.textContent.trim())`)
+  assert.equal(rightInputs[0].includes('HKD 100.00'), true)
+  assert.equal(rightInputs[1].includes('HKD 120.00'), true)
+  const rightHeaders = await evaluate(`[...document.querySelectorAll('[data-comparison-side="right"] [data-output-headers]')].map((item) => item.textContent.trim())`)
+  assert.equal(rightHeaders.length, 2)
+  assert.equal(rightHeaders[0], rightHeaders[1])
+  assert.equal(await evaluate(`document.querySelector('[data-comparison-side="right"] [data-comparison-record="second"] [data-comparison-output]')?.textContent.includes('HKD 120.00')`), true)
+  const initialRecordHeight = await evaluate(`document.querySelector('[data-workflow-comparison]').getBoundingClientRect().height`)
   assert.equal(await clickExact('重播'), true)
-  await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame === '0'`, 'animation first input')
-  const firstLeftInput = await evaluate(`document.querySelector('[data-workflow-comparison] article:first-of-type p:last-child')?.textContent`)
-  await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame === '2'`, 'animation second input')
-  const secondLeftInput = await evaluate(`document.querySelector('[data-workflow-comparison] article:first-of-type p:last-child')?.textContent`)
-  assert.equal(secondLeftInput, firstLeftInput)
-
+  await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame === '0'`, 'matching input highlight')
+  const leftInputHighlightScreenshot = await screenshot('builder-highlight-matching-input.png')
+  await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame === '1'`, 'format difference highlight')
   assert.equal(await clickExact('暫停'), true)
   const pausedFrame = await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`)
+  assert.equal(pausedFrame, '1')
+  const formatHighlightScreenshot = await screenshot('builder-paused-format-difference.png')
   await wait(3_700)
   assert.equal(await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`), pausedFrame)
+  assert.equal(await evaluate(`document.querySelectorAll('[data-comparison-record]').length`), 4)
+  assert.equal(Math.round(await evaluate(`document.querySelector('[data-workflow-comparison]').getBoundingClientRect().height`)), Math.round(initialRecordHeight))
   assert.equal(await clickExact('EN'), true)
   assert.equal(await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`), pausedFrame)
   assert.equal(await evaluate(bodyIncludes('Continue')), true)
   assert.equal(await clickExact('繁中'), true)
+  assert.equal(await clickExact('繼續'), true)
+  await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame === '2'`, 'amount change highlight')
+  assert.equal(await clickExact('暫停'), true)
+  const amountHighlightScreenshot = await screenshot('builder-paused-amount-change.png')
   assert.equal(await clickAriaLabel('收起對比'), true)
   const collapsedFrame = await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`)
   await wait(3_700)
@@ -140,24 +160,31 @@ try {
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true)
   const mobileBannerHeight = await evaluate(`Math.round(document.querySelector('[data-workflow-comparison]').getBoundingClientRect().height)`)
   const mobileScreenshot = await screenshot('builder-comparison-mobile.png')
+  assert.equal(await clickExact('EN'), true)
+  assert.equal(await evaluate(bodyIncludes('Same input, format may change.')), true)
+  assert.equal(await evaluate(bodyIncludes('Amount changes, template stays consistent.')), true)
+  assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true)
+  assert.equal(await clickExact('繁中'), true)
 
   await command('Emulation.setEmulatedMedia', { media: '', features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
   await navigate('/invoice-demo')
   await until(`document.querySelector('[data-workflow-comparison]') !== null`, 'invoice comparison banner')
-  await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame === '3'`, 'reduced-motion final frame')
+  await until(`document.querySelector('[data-workflow-comparison]')?.dataset.frame === '4'`, 'reduced-motion static frame')
   const reducedFrame = await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`)
   await wait(3_700)
   assert.equal(await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`), reducedFrame)
   assert.equal(await evaluate(bodyIncludes('已依系統設定停用動畫')), true)
+  assert.equal(await evaluate(`document.querySelectorAll('[data-comparison-record]').length`), 4)
+  assert.equal(await evaluate(`document.querySelector('[data-invoice-operation-title]')?.textContent === '開始發票整理'`), true)
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true)
   const invoiceScreenshot = await screenshot('invoice-comparison-reduced-mobile.png')
 
   console.log(JSON.stringify({
     result: 'passed',
     homeOrder: order,
-    sameLeftInput: firstLeftInput === secondLeftInput,
+    sameLeftInput: leftInputs[0] === leftInputs[1],
     bannerHeights: { desktop: desktopBannerHeight, mobile: mobileBannerHeight },
-    screenshots: [homeScreenshot, builderScreenshot, mobileScreenshot, invoiceScreenshot],
+    screenshots: [homeScreenshot, leftInputHighlightScreenshot, formatHighlightScreenshot, amountHighlightScreenshot, builderScreenshot, mobileScreenshot, invoiceScreenshot],
   }))
 } finally {
   if (socket?.readyState === WebSocket.OPEN) socket.close()
