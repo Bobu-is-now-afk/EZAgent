@@ -21,7 +21,7 @@ const COPY = {
     date: '日期', merchant: '商戶', amount: '金額', currency: '幣種', vendor: '供應商', total: '總額', transactionDate: '交易日',
     note: '示意，非真實模型評測。實際效果取決於輸入、規則與實現。',
     staticExplanation: '左側示意相同要求可能得到不同格式；右側示意資料值改變時，已確認的模板與規則保持一致。',
-    pause: '暫停', resume: '繼續', replay: '重播', collapse: '收起對比', expand: '展開對比', reduced: '已依系統設定停用動畫',
+    pause: '暫停', resume: '繼續', replay: '重播', collapse: '收起對比', expand: '展開對比', collapseShort: '收起', expandShort: '展開', reduced: '已依系統設定停用動畫',
   },
   en: {
     title: 'Data can change while the format and rules stay consistent.',
@@ -35,7 +35,7 @@ const COPY = {
     date: 'Date', merchant: 'Merchant', amount: 'Amount', currency: 'Currency', vendor: 'Vendor', total: 'Total', transactionDate: 'Transaction date',
     note: 'Illustration only, not a real model benchmark. Results depend on the input, rules, and implementation.',
     staticExplanation: 'The left illustrates format drift for an unchanged request. The right shows changed data while the confirmed template and rules stay fixed.',
-    pause: 'Pause', resume: 'Continue', replay: 'Replay', collapse: 'Collapse comparison', expand: 'Expand comparison', reduced: 'Animation disabled by system preference',
+    pause: 'Pause', resume: 'Continue', replay: 'Replay', collapse: 'Collapse comparison', expand: 'Expand comparison', collapseShort: 'Collapse', expandShort: 'Expand', reduced: 'Animation disabled by system preference',
   },
 } as const
 
@@ -96,10 +96,11 @@ export function WorkflowComparisonBanner({ locale = 'zh-Hant' }: { locale?: Work
 
   return <section ref={rootRef} data-workflow-comparison data-frame={frame} aria-labelledby={titleId} className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-white via-zinc-50 to-stone-100 p-3 shadow-[0_12px_36px_-30px_rgba(24,24,27,0.45)] sm:p-4">
     <p className="sr-only">{c.staticExplanation}</p>
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 flex-1"><h2 id={titleId} className="text-base font-semibold tracking-[-0.02em] text-zinc-950 sm:text-lg">{c.title}</h2>{!collapsed && <p className="mt-1 max-w-3xl text-xs leading-4 text-zinc-600 sm:text-sm sm:leading-5">{c.subtitle}</p>}</div>
-      <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} aria-label={collapsed ? c.expand : c.collapse} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{collapsed ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronUp aria-hidden="true" className="size-4" />}<span className="hidden sm:inline">{collapsed ? c.expand : c.collapse}</span></button>
+    <div className="flex items-start justify-between gap-3">
+      <h2 id={titleId} className="min-w-0 flex-1 text-base font-semibold tracking-[-0.02em] text-zinc-950 sm:text-lg">{c.title}</h2>
+      <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} aria-label={collapsed ? c.expand : c.collapse} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{collapsed ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronUp aria-hidden="true" className="size-4" />}<span className="sm:hidden">{collapsed ? c.expandShort : c.collapseShort}</span><span className="hidden sm:inline">{collapsed ? c.expand : c.collapse}</span></button>
     </div>
+    {!collapsed && <p className="mt-1 max-w-3xl text-xs leading-4 text-zinc-600 sm:text-sm sm:leading-5">{c.subtitle}</p>}
     {!collapsed && <>
       <div aria-hidden="true" className="mt-3 grid gap-2 md:grid-cols-2">
         <article className="min-w-0 rounded-xl border border-zinc-200 bg-white/90 p-2.5 sm:p-3">

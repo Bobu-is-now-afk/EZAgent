@@ -53,6 +53,7 @@ async function until(expression, description) {
 
 const bodyIncludes = (value) => `document.body.innerText.includes(${JSON.stringify(value)})`
 const clickExact = (value) => evaluate(`(() => { const element = [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === ${JSON.stringify(value)}); if (!element) return false; element.click(); return true })()`)
+const clickAriaLabel = (value) => evaluate(`(() => { const element = [...document.querySelectorAll('button')].find((item) => item.getAttribute('aria-label') === ${JSON.stringify(value)}); if (!element) return false; element.click(); return true })()`)
 
 async function navigate(path) {
   await command('Page.navigate', { url: `${siteUrl}${path}` })
@@ -115,11 +116,11 @@ try {
   assert.equal(await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`), pausedFrame)
   assert.equal(await evaluate(bodyIncludes('Continue')), true)
   assert.equal(await clickExact('繁中'), true)
-  assert.equal(await clickExact('收起對比'), true)
+  assert.equal(await clickAriaLabel('收起對比'), true)
   const collapsedFrame = await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`)
   await wait(3_700)
   assert.equal(await evaluate(`document.querySelector('[data-workflow-comparison]')?.dataset.frame`), collapsedFrame)
-  assert.equal(await clickExact('展開對比'), true)
+  assert.equal(await clickAriaLabel('展開對比'), true)
   assert.equal(await clickExact('繼續'), true)
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 500, deviceScaleFactor: 1, mobile: false })
   await evaluate(`document.querySelector('[data-builder-step="describe"]')?.scrollIntoView({ block: 'start' })`)
