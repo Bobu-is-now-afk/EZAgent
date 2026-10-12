@@ -85,3 +85,14 @@ Builder 已由首页入口挂载，工作流库仍使用同一浏览器 IndexedD
 - 当前机器本机 AI 状态为 `failed`。配置、预演和保存可用；真实模型执行本轮未验证，也未下载模型。
 
 演示：打开 `http://localhost:3107/yolanda-builder`，从发票例子开始，将门槛改为 `13000.00`，确认 `HKD 12,500.00` 显示“被筛选掉”，保存并按“交给发票 Agent”。本机 AI 就绪后再使用示范发票、建立并核对实际计划。完整映射与限制见 `INTEGRATION.md`，验证结果见 `ACCEPTANCE.md`。
+
+## 2026-10-12 首页引导与工作流对比横幅
+
+- 实施分支：`yolanda/workflow-comparison-guide-20261012`；基线：`560d893`。
+- 首页恢复 `origin/main`／`origin/Yolanda_v1` 最初的白色居中四卡片工作区视觉，不沿用后续 localhost 首页排版。
+- 首页顺序：本机 AI 状态 → 本机 AI 对话 → 设计工作流程 → 试用预设工具；现有 `/chat`、`/yolanda-builder`、`/invoice-demo` 路由不变。
+- 首次引导不是弹窗。选择对话或跳过后只保存 `ezagent:first-use-guide:v1:handled`；储存失败时页面继续可用。跳过会聚焦工具入口，不自动下载、安装、发送或执行。
+- Builder 与发票工具共用 `components/workflow-comparison-banner.tsx`。动画使用固定合成数据，支持暂停、继续、重播、收起、离开视口／后台暂停及 `prefers-reduced-motion` 静态最终态。
+- 横幅不调用模型、Agent API 或外部资源；它只解释产品原理。真实能力仍由发票 Agent 的计划、确认、运行与 CSV 结果证明。
+- 发票页在模型未准备好时也显示标题和横幅；实际输入、计划与运行仍由既有本机 AI 就绪检查阻止，没有放宽执行条件。
+- 当前无账户注册。主机板绑定与 License 输入属于未来发行集成，本轮未实现，也未宣称存在真实授权能力。

@@ -14,6 +14,12 @@
 
 首页将“试用发票整理”与“设计工作流程”分开。前者进入真实发票 Agent，后者进入 Builder；配置完成不等于已经执行。
 
+首页沿用团队最初的居中四卡片工作区视觉，DOM 与键盘阅读顺序固定为：本机 AI 状态、本机 AI 对话、设计工作流程、试用预设工具。首次引导只在浏览器保存版本化的“已处理”标记，不保存聊天内容，也不把进入聊天记作已经完成真实对话。跳过只滚动并聚焦工具入口，不会下载模型、建立计划或运行 Agent。
+
+`WorkflowComparisonBanner` 是 Builder 与发票预设工具共用的纯展示组件。它只读取 locale 与浏览器的可见性／减少动画偏好，使用固定合成资料，不读取工作流、票据、身份或审批状态，不发起模型、业务 API 或外部资源请求。横幅用于说明“资料值可变、模板与规则保持一致”，不能作为真实模型或执行结果的证据。
+
+当前页面不要求注册账户。未来“绑定主机板＋输入 License 解锁”属于发行、设备识别、License 生命周期与服务端验证设计，本轮没有实现；任何本地标记、浏览器储存或前端状态都不能当作 License 安全边界。
+
 `workflow-config.ts` 的 `WorkflowConfig` 是配置、摘要、Prompt、备份和保存数据的唯一来源。宿主不要把派生 Prompt 当成配置或权限载体。
 
 本机接口由 `workflow-storage.ts` 提供：`saveWorkflow`、`listSavedWorkflows`、`getSavedWorkflow`、`saveWorkflowVersion`。当前实现是浏览器 IndexedDB；读取时会通过 `migrateStoredWorkflow` 兼容旧 schema，工具库负责人可以在不改变页面状态模型的情况下提供第二个 adapter，并须保持相同迁移边界。
@@ -108,7 +114,7 @@ CSV 对公式前缀及前导空白/控制字符变体加保护。数值列由严
 6. 整机断网、真实文件权限和整应用外联审计；
 7. 生产级不可篡改审计、签名与数据保留政策。
 8. Logic Pill 持久化、Preset 编译器、模型 adapter、组织模板治理及会员服务。
-9. 用真实 capability 检测替换首页固定引擎激活文案；无结果时显示未检查。
+9. 为正式发行定义主机绑定、License 签发／撤销／迁移及离线宽限政策；不得复用浏览器 localStorage 或前端状态作为授权依据。
 10. 为 `receipt.read`、`table.create` 等能力建立正式参数 schema 和试跑协议。
 11. 若要保存或共享执行记录，建立与配置版本分离的 run store；不要把运行结果塞回 `WorkflowConfig`。
 12. 提供真实 Organization / Department / Membership / Role 数据和服务端资源授权，不复用演示身份。
