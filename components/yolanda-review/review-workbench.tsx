@@ -10,6 +10,7 @@ import { approvalBlockers, canExport, createInitialState, reviewReducer } from '
 import type { ApprovalSnapshot, ChangeEvent, EditorScope, ExtractedFields, ReviewBatch, ReviewDocument } from '@/lib/yolanda-review/types'
 import { parseWorkingCopy } from '@/lib/yolanda-review/working-copy'
 import { useReducer } from 'react'
+import Link from 'next/link'
 import { LogicPillStudio } from './logic-pill-studio'
 import { localizeRuntimeText, t, type ReviewLocale } from '@/lib/yolanda-review/i18n'
 
@@ -30,7 +31,7 @@ function StatusPill({ tone, children }: { tone: 'neutral' | 'warning' | 'success
 }
 
 export function ReviewWorkbench() {
-  const [locale, setLocale] = useState<ReviewLocale>('en')
+  const [locale, setLocale] = useState<ReviewLocale>('zh-Hant')
   const [state, dispatch] = useReducer(reviewReducer, demoBatch, createInitialState)
   const [selectedId, setSelectedId] = useState(demoBatch.documents[0].recordId)
   const [assumptionEditor, setAssumptionEditor] = useState(state.batch.assumptions)
@@ -238,13 +239,13 @@ export function ReviewWorkbench() {
     <header className="border-b border-zinc-300/80 bg-[#faf9f6] px-5 py-5 sm:px-8">
       <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-zinc-950 text-white"><ClipboardCheck className="size-5" /></div><div><p className="text-xs font-semibold uppercase tracking-[0.17em] text-zinc-500">{t(locale, 'EZAgent · Review control')}</p><h1 className="text-xl font-semibold tracking-tight">{t(locale, 'Review & Approval')}</h1></div></div>
-        <div className="flex flex-wrap items-center gap-2"><div aria-label="Language" className="inline-flex rounded-lg border border-zinc-300 bg-white p-1"><Languages className="mx-2 my-auto size-4 text-zinc-500" aria-hidden="true" /><button type="button" aria-pressed={locale === 'en'} onClick={() => setLocale('en')} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${locale === 'en' ? 'bg-zinc-950 text-white' : 'text-zinc-600'}`}>EN</button><button type="button" aria-pressed={locale === 'zh-Hant'} onClick={() => setLocale('zh-Hant')} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${locale === 'zh-Hant' ? 'bg-zinc-950 text-white' : 'text-zinc-600'}`}>繁中</button></div><StatusPill tone={state.batch.mode === 'synthetic' ? 'warning' : 'danger'}>{t(locale, state.batch.mode === 'synthetic' ? SYNTHETIC_NOTICE : 'Real-mode working copy · adapter disconnected')}</StatusPill><StatusPill tone={state.status === 'approved' ? 'success' : state.status === 'error' ? 'danger' : 'neutral'}>{t(locale, state.status)}</StatusPill><StatusPill tone={hardBlockerCount ? 'danger' : state.calculation ? 'success' : 'neutral'}>{state.calculation ? localizeRuntimeText(locale, `${hardBlockerCount} blockers`) : t(locale, 'blockers pending')}</StatusPill></div>
+        <div className="flex flex-wrap items-center gap-2"><Link href="/" className={`${buttonClass} border border-zinc-300 bg-white`}>{locale === 'zh-Hant' ? '回首頁' : 'Home'}</Link><Link href="/invoice-demo" className={`${buttonClass} border border-zinc-300 bg-white`}>{locale === 'zh-Hant' ? '發票示範' : 'Invoice demo'}</Link><div aria-label="Language" className="inline-flex rounded-lg border border-zinc-300 bg-white p-1"><Languages className="mx-2 my-auto size-4 text-zinc-500" aria-hidden="true" /><button type="button" aria-pressed={locale === 'en'} onClick={() => setLocale('en')} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${locale === 'en' ? 'bg-zinc-950 text-white' : 'text-zinc-600'}`}>EN</button><button type="button" aria-pressed={locale === 'zh-Hant'} onClick={() => setLocale('zh-Hant')} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${locale === 'zh-Hant' ? 'bg-zinc-950 text-white' : 'text-zinc-600'}`}>繁中</button></div><StatusPill tone={state.batch.mode === 'synthetic' ? 'warning' : 'danger'}>{t(locale, state.batch.mode === 'synthetic' ? SYNTHETIC_NOTICE : 'Real-mode working copy · adapter disconnected')}</StatusPill><StatusPill tone={state.status === 'approved' ? 'success' : state.status === 'error' ? 'danger' : 'neutral'}>{t(locale, state.status)}</StatusPill><StatusPill tone={hardBlockerCount ? 'danger' : state.calculation ? 'success' : 'neutral'}>{state.calculation ? localizeRuntimeText(locale, `${hardBlockerCount} blockers`) : t(locale, 'blockers pending')}</StatusPill></div>
       </div>
     </header>
 
     <div className="mx-auto max-w-[1500px] px-5 py-6 sm:px-8">
       <section aria-label={t(locale, 'Task status')} className="grid gap-3 rounded-2xl border border-zinc-300 bg-white p-4 shadow-[0_12px_40px_-32px_rgba(24,24,27,.45)] md:grid-cols-[1fr_auto]">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"><span><b>{state.batch.batchId}</b></span><span>{t(locale, 'Revision')} <b>v{state.batch.revision}</b></span><span>{t(locale, 'Source')} <b>{state.batch.sourceVersion}</b></span><span className="inline-flex items-center gap-1.5"><LockKeyhole className="size-4" /> {t(locale, 'No sending · no ledger overwrite')}</span></div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"><span><b>{state.batch.batchId}</b></span><span>{t(locale, 'Revision')} <b>v{state.batch.revision}</b></span><span>{t(locale, 'Source')} <b>{state.batch.sourceVersion}</b></span><span className="inline-flex items-center gap-1.5"><LockKeyhole className="size-4" /> {locale === 'zh-Hant' ? '不會外發訊息 · 不會覆寫帳本' : t(locale, 'No sending · no ledger overwrite')}</span></div>
         <label className="flex items-center gap-2 text-sm font-medium"><UserRound className="size-4" /> {t(locale, 'Demo role')} <select aria-label={t(locale, 'Demo role')} value={state.role} onChange={(event) => dispatch({ type: 'SET_ROLE', role: event.target.value as 'reviewer' | 'manager' })} className="rounded-lg border border-zinc-300 bg-white px-3 py-2"><option value="reviewer">{t(locale, 'Operator')}</option><option value="manager">{t(locale, 'Manager')}</option></select></label>
         <p className="text-xs text-zinc-500 md:col-span-2">{t(locale, 'Demo identity, not real authentication. Browser checks are prototype behavior constraints, not a security boundary.')}</p>
       </section>

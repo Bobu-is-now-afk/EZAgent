@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Building2, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Building2, Plus, RefreshCw, ShieldCheck, Trash2, Upload } from 'lucide-react'
 import { buildWorkflowExplanationCard, type WorkflowConfig, type WorkflowLocale, type WorkflowSummary } from '@/lib/yolanda-review/workflow-config'
 import { deleteSavedWorkflow, getSavedWorkflow, listSavedWorkflows, saveWorkflowVersion } from '@/lib/yolanda-review/workflow-storage'
 import { canWorkflowAction, DEMO_WORKFLOW_IDENTITIES, normalizeWorkflowGovernance, updateWorkflowAccess, type DemoWorkflowIdentity, type WorkflowRole } from '@/lib/yolanda-review/workflow-governance'
@@ -12,10 +12,10 @@ const selectClass = 'rounded-xl border border-zinc-300 bg-white px-3 py-2 text-s
 
 const COPY = {
   'zh-Hant': {
-    title: '工作流庫', description: '重新開啟儲存在目前瀏覽器的工作流。', identity: '演示身分', demoControls: '演示控制（不是真實登入）', create: '建立新工作流', empty: '尚未儲存任何工作流。', select: '選擇要管理的工作流', creator: '建立者', modified: '上次修改', modifiedBy: '修改者', organization: '公司', department: '部門', revision: '版本', unknown: '未知／舊版未記錄', permissions: '組織角色權限', management: '管理詳情', view: '查看', run: '試跑', edit: '編輯', remove: '刪除', manage: '權限管理', allowed: '允許', denied: '不允許', open: '開啟', deleteWorkflow: '刪除工作流', confirmDelete: '永久刪除此本機工作流及其本機版本記錄？此操作不能復原。', minimumRun: '最低試跑角色', minimumEdit: '最低編輯角色', saveAccess: '儲存權限', savedAccess: '權限設定已儲存。', role: { staff: '員工', lead: '組長', manager: '部門經理', admin: '組織管理員' }, loadError: '無法載入工作流庫。', deleteError: '無法刪除工作流。', accessError: '無法儲存權限設定。', localOnly: '僅此瀏覽器。更換瀏覽器、網站地址或清除網站資料後，可能無法在這裡找到；可下載配置備份。',
+    title: '工作流庫', description: '重新開啟儲存在目前瀏覽器的工作流。', identity: '演示身分', demoControls: '演示控制（不是真實登入）', create: '建立新工作流', importBackup: '匯入配置備份', retry: '重新載入', loading: '載入中…', empty: '尚未儲存任何工作流。', select: '選擇要管理的工作流', creator: '建立者', modified: '上次修改', modifiedBy: '修改者', organization: '公司', department: '部門', revision: '版本', unknown: '未知／舊版未記錄', permissions: '組織角色權限', management: '管理詳情', view: '查看', run: '試跑', edit: '編輯', remove: '刪除', manage: '權限管理', allowed: '允許', denied: '不允許', open: '開啟', deleteWorkflow: '刪除工作流', confirmDelete: '永久刪除此本機工作流及其本機版本記錄？此操作不能復原。', minimumRun: '最低試跑角色', minimumEdit: '最低編輯角色', saveAccess: '儲存權限', savedAccess: '權限設定已儲存。', role: { staff: '員工', lead: '組長', manager: '部門經理', admin: '組織管理員' }, loadError: '無法載入工作流庫。', deleteError: '無法刪除工作流。', accessError: '無法儲存權限設定。', localOnly: '僅此瀏覽器。更換瀏覽器、網站地址或清除網站資料後，可能無法在這裡找到；可下載配置備份。',
   },
   en: {
-    title: 'Workflow library', description: 'Reopen workflows saved in this browser.', identity: 'Demo identity', demoControls: 'Demo controls (not a real sign-in)', create: 'Create workflow', empty: 'No saved workflows yet.', select: 'Choose a workflow to manage', creator: 'Creator', modified: 'Last modified', modifiedBy: 'Modified by', organization: 'Company', department: 'Department', revision: 'Revision', unknown: 'Unknown / not recorded by legacy version', permissions: 'Role access', management: 'Management details', view: 'View', run: 'Trial', edit: 'Edit', remove: 'Delete', manage: 'Manage access', allowed: 'Allowed', denied: 'Not allowed', open: 'Open', deleteWorkflow: 'Delete workflow', confirmDelete: 'Permanently delete this local workflow and its local version records? This cannot be undone.', minimumRun: 'Minimum trial role', minimumEdit: 'Minimum edit role', saveAccess: 'Save access', savedAccess: 'Access settings saved.', role: { staff: 'Staff', lead: 'Team lead', manager: 'Department manager', admin: 'Organization admin' }, loadError: 'Could not load the workflow library.', deleteError: 'Could not delete the workflow.', accessError: 'Could not save access settings.', localOnly: 'This browser only. It may disappear after changing browser, site address, or clearing site data; download a configuration backup.',
+    title: 'Workflow library', description: 'Reopen workflows saved in this browser.', identity: 'Demo identity', demoControls: 'Demo controls (not a real sign-in)', create: 'Create workflow', importBackup: 'Import configuration backup', retry: 'Reload library', loading: 'Loading…', empty: 'No saved workflows yet.', select: 'Choose a workflow to manage', creator: 'Creator', modified: 'Last modified', modifiedBy: 'Modified by', organization: 'Company', department: 'Department', revision: 'Revision', unknown: 'Unknown / not recorded by legacy version', permissions: 'Role access', management: 'Management details', view: 'View', run: 'Trial', edit: 'Edit', remove: 'Delete', manage: 'Manage access', allowed: 'Allowed', denied: 'Not allowed', open: 'Open', deleteWorkflow: 'Delete workflow', confirmDelete: 'Permanently delete this local workflow and its local version records? This cannot be undone.', minimumRun: 'Minimum trial role', minimumEdit: 'Minimum edit role', saveAccess: 'Save access', savedAccess: 'Access settings saved.', role: { staff: 'Staff', lead: 'Team lead', manager: 'Department manager', admin: 'Organization admin' }, loadError: 'Could not load the workflow library.', deleteError: 'Could not delete the workflow.', accessError: 'Could not save access settings.', localOnly: 'This browser only. It may disappear after changing browser, site address, or clearing site data; download a configuration backup.',
   },
 } as const
 
@@ -25,6 +25,7 @@ interface WorkflowLibraryProps {
   refreshKey: number
   onActorChange: (actor: DemoWorkflowIdentity) => void
   onCreate: () => void
+  onImport: (file?: File) => Promise<string | undefined>
   onOpen: (config: WorkflowConfig, mode: 'view' | 'edit' | 'run') => void
   onChanged: (config: WorkflowConfig) => void
   onDeleted: (workflowId: string) => void
@@ -36,16 +37,29 @@ function formatTime(value: string | null, locale: WorkflowLocale, fallback: stri
   return Number.isNaN(date.getTime()) ? fallback : new Intl.DateTimeFormat(locale === 'zh-Hant' ? 'zh-Hant' : 'en', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
-export function WorkflowLibrary({ locale, actor, refreshKey, onActorChange, onCreate, onOpen, onChanged, onDeleted }: WorkflowLibraryProps) {
+export function WorkflowLibrary({ locale, actor, refreshKey, onActorChange, onCreate, onImport, onOpen, onChanged, onDeleted }: WorkflowLibraryProps) {
   const c = COPY[locale]
   const [summaries, setSummaries] = useState<WorkflowSummary[]>([])
   const [selected, setSelected] = useState<WorkflowConfig>()
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [loading, setLoading] = useState(true)
   const [runRole, setRunRole] = useState<WorkflowRole>('staff')
   const [editRole, setEditRole] = useState<WorkflowRole>('lead')
 
-  useEffect(() => { listSavedWorkflows().then(setSummaries).catch(() => setError(c.loadError)) }, [c.loadError, refreshKey])
+  async function refreshLibrary() {
+    setLoading(true)
+    try {
+      setSummaries(await listSavedWorkflows())
+      setError('')
+    } catch {
+      setError(c.loadError)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void refreshLibrary() }, [c.loadError, refreshKey])
   useEffect(() => {
     if (!selected) return
     const governance = normalizeWorkflowGovernance(selected.governance)
@@ -113,18 +127,26 @@ export function WorkflowLibrary({ locale, actor, refreshKey, onActorChange, onCr
     } catch (caught) { setError(caught instanceof Error ? caught.message : c.accessError) }
   }
 
+  async function importBackup(file?: File) {
+    if (!file) return
+    setError('')
+    setNotice('')
+    const message = await onImport(file)
+    if (message) setError(message)
+  }
+
   const governance = selected ? normalizeWorkflowGovernance(selected.governance) : undefined
   const roles: WorkflowRole[] = ['staff', 'lead', 'manager', 'admin']
 
   return <section data-workflow-library className="mb-6 rounded-2xl border border-zinc-300 bg-white p-5 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">{c.title}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600">{c.description}</p><p className="mt-1 text-xs text-zinc-500">{c.localOnly}</p></div><button type="button" onClick={onCreate} disabled={!canWorkflowAction(actor, 'create')} className={buttonClass}><Plus className="size-4" />{c.create}</button></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">{c.title}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-600">{c.description}</p><p className="mt-1 text-xs text-zinc-500">{c.localOnly}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={onCreate} disabled={!canWorkflowAction(actor, 'create')} className={buttonClass}><Plus className="size-4" />{c.create}</button><label className={`${buttonClass} cursor-pointer`}><Upload className="size-4" />{c.importBackup}<input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => { void importBackup(event.target.files?.[0]); event.target.value = '' }} /></label><button type="button" onClick={() => void refreshLibrary()} disabled={loading} className={buttonClass}><RefreshCw className={`size-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} />{loading ? c.loading : c.retry}</button></div></div>
     <details className="mt-5 max-w-lg rounded-xl border border-zinc-200 bg-zinc-50 p-4"><summary className="cursor-pointer text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950">{c.demoControls}</summary><label className="mt-4 block text-xs font-semibold text-zinc-600">{c.identity}<select aria-label={c.identity} value={actor.userId} onChange={(event) => onActorChange(DEMO_WORKFLOW_IDENTITIES.find((identity) => identity.userId === event.target.value) ?? actor)} className={`${selectClass} mt-1 w-full`}>{DEMO_WORKFLOW_IDENTITIES.map((identity) => <option key={identity.userId} value={identity.userId}>{identity.displayName} · {c.role[identity.role]} · {identity.departmentName}</option>)}</select></label></details>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`mt-4 rounded-xl border px-3 py-2 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || notice}</p>}
 
     {visibleSummaries.length > 0 && <details className="mt-5 max-w-lg rounded-xl border border-zinc-200 bg-white p-4"><summary className="cursor-pointer text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950">{c.management}</summary><p className="mt-2 text-xs text-zinc-500">{c.select}</p><div className="mt-3 flex flex-wrap gap-2">{visibleSummaries.map((summary) => <button key={summary.workflowId} type="button" onClick={() => selectWorkflow(summary.workflowId)} className={buttonClass}>{summary.name}</button>)}</div></details>}
 
     <div className={`mt-6 grid min-w-0 gap-5 ${selected ? 'lg:grid-cols-[320px_minmax(0,1fr)]' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
-      <div className={selected ? 'space-y-3' : 'contents'}>{visibleSummaries.length ? visibleSummaries.map((summary) => <article key={summary.workflowId} className="rounded-xl border border-zinc-200 p-4"><h3 className="font-semibold">{summary.name}</h3><p className="mt-2 line-clamp-2 text-sm leading-5 text-zinc-600">{summary.goal}</p><p className="mt-3 text-xs text-zinc-500">{c.modified}: {formatTime(summary.governance.updatedAt, locale, c.unknown)}</p><button type="button" onClick={() => openWorkflow(summary.workflowId)} className={`${buttonClass} mt-4`}>{c.open}</button></article>) : <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-600">{c.empty}</p>}</div>
+      <div className={selected ? 'space-y-3' : 'contents'}>{visibleSummaries.length ? visibleSummaries.map((summary) => <article key={summary.workflowId} className="rounded-xl border border-zinc-200 p-4"><h3 className="font-semibold">{summary.name}</h3><p className="mt-2 line-clamp-2 text-sm leading-5 text-zinc-600">{summary.goal}</p><p className="mt-3 text-xs text-zinc-500">{c.modified}: {formatTime(summary.governance.updatedAt, locale, c.unknown)}</p><button type="button" onClick={() => openWorkflow(summary.workflowId)} className={`${buttonClass} mt-4`}>{c.open}</button></article>) : <p className="rounded-xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-600">{loading ? c.loading : c.empty}</p>}</div>
 
       {selected && governance && permissions ? <article className="min-w-0 rounded-2xl border border-zinc-200 bg-zinc-50 p-5" data-managed-workflow={selected.workflowId}>
         <div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-zinc-950 text-white"><Building2 className="size-5" /></span><div><h3 className="text-lg font-semibold">{selected.name}</h3><p className="mt-1 text-sm text-zinc-600">{buildWorkflowExplanationCard(selected, locale).capability}</p></div></div>

@@ -43,7 +43,7 @@ const secondaryButton = 'inline-flex min-h-10 items-center justify-center gap-2 
 
 const COPY = {
   'zh-Hant': {
-    title: '建立工作流程', taskQuestion: '你想讓助手重複完成什麼？', subtitle: '先從例子或一句話開始，再確認少量關鍵決定。', localOnly: '可預演；受支援的發票設定可交給 Agent', savedDrafts: '工作流庫', home: '首頁', leaveWarning: '目前有未儲存的修改，仍要返回首頁嗎？',
+    title: '建立工作流程', libraryTitle: '工作流庫', taskQuestion: '你想讓助手重複完成什麼？', subtitle: '先從例子或一句話開始，再確認少量關鍵決定。', localOnly: '可預演；受支援的發票設定可交給 Agent', savedDrafts: '工作流庫', home: '首頁', leaveWarning: '目前有未儲存的修改，仍要返回首頁嗎？',
     steps: ['描述任務', '確認決定', '說明與儲存'], requirement: '描述其他任務', organize: '整理需求', organizing: '整理中…', reorganize: '重新整理', examples: '從例子開始',
     receiptStart: '從發票整理例子開始', otherStart: '描述其他任務', sampleQuestion: '你希望得到這樣的結果嗎？下一步可以修改門檻與幣種。', sampleOnly: '輸出示例，不是已處理的業務資料。', unsupportedEarly: '可以整理和儲存規則；只有支援的發票 CSV／TXT 設定可交給執行模組。',
     receiptExample: '篩選超過已確認金額門檻的發票，標記缺少的必要欄位，最後匯出 CSV。',
@@ -61,7 +61,7 @@ const COPY = {
     trialTitle: '本機結構化資料校驗', trialDescription: '使用 JSON 資料檢查票據資料的固定結構。這不是規則預演、PDF／圖片 OCR，也不會執行任意提示詞。', trialInput: '校驗 JSON', trialExample: '載入範例資料', trialUpload: '匯入 JSON', trialRun: '開始資料校驗', trialSaveFirst: '先確認並儲存目前版本，才能校驗。', trialUnsupported: '目前只支援票據模板的結構化 JSON 校驗。', trialReady: '可輸出', trialReview: '需人工檢查', trialResult: '校驗結果', trialDownload: '下載校驗 CSV', trialNotSaved: '校驗結果只存在於目前頁面，重新整理後會消失。', totalRows: '總筆數', columns: { id: 'ID', date: '日期', merchant: '商戶', amount: '金額', currency: '幣種', status: '狀態' }, issues: { 'invalid-date': '日期必須是有效的 YYYY-MM-DD。', 'missing-merchant': '缺少商戶。', 'invalid-amount': '金額必須是非負數，最多兩位小數。', 'missing-currency': '缺少幣種；不會靜默補成 HKD。', 'invalid-currency': '幣種必須是三個英文字母。' },
   },
   en: {
-    title: 'Create workflow', taskQuestion: 'What should the assistant repeat for you?', subtitle: 'Start with an example or one sentence, then confirm a few key decisions.', localOnly: 'Previewable; supported invoice settings can go to the Agent', savedDrafts: 'Workflow library', home: 'Home', leaveWarning: 'You have unsaved changes. Return home anyway?',
+    title: 'Create workflow', libraryTitle: 'Workflow library', taskQuestion: 'What should the assistant repeat for you?', subtitle: 'Start with an example or one sentence, then confirm a few key decisions.', localOnly: 'Previewable; supported invoice settings can go to the Agent', savedDrafts: 'Workflow library', home: 'Home', leaveWarning: 'You have unsaved changes. Return home anyway?',
     steps: ['Describe task', 'Confirm decisions', 'Explain & save'], requirement: 'Describe another task', organize: 'Organize requirement', organizing: 'Organizing…', reorganize: 'Organize again', examples: 'Start from an example',
     receiptStart: 'Start with invoice processing', otherStart: 'Describe another task', sampleQuestion: 'Is this the result you want? You can change the threshold and currency next.', sampleOnly: 'Output example, not processed business data.', unsupportedEarly: 'You can organize and save rules; only supported invoice CSV/TXT settings can be handed to execution.',
     receiptExample: 'Filter invoices above a confirmed amount threshold, flag missing required fields, and export CSV.',
@@ -96,7 +96,7 @@ function downloadJson(config: WorkflowConfig) {
   URL.revokeObjectURL(url)
 }
 
-export function WorkflowBuilder() {
+export function WorkflowBuilder({ initialView = 'builder' }: { initialView?: 'builder' | 'library' }) {
   const [locale, setLocale] = useState<WorkflowLocale>('zh-Hant')
   const c = COPY[locale]
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -112,7 +112,7 @@ export function WorkflowBuilder() {
   const [newRule, setNewRule] = useState('')
   const [nameDraft, setNameDraft] = useState('')
   const [savedRevision, setSavedRevision] = useState<number>()
-  const [showSaved, setShowSaved] = useState(false)
+  const [showSaved, setShowSaved] = useState(initialView === 'library')
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
   const [actor, setActor] = useState<DemoWorkflowIdentity>(DEMO_WORKFLOW_IDENTITIES.find((identity) => identity.userId === 'demo-yolanda') ?? DEMO_WORKFLOW_IDENTITIES[0])
   const [notice, setNotice] = useState('')
@@ -125,6 +125,16 @@ export function WorkflowBuilder() {
   const activeRequestId = useRef('')
 
   useEffect(() => { configRef.current = config }, [config])
+  useEffect(() => {
+    const syncViewFromPath = () => {
+      const isLibrary = window.location.pathname === '/workflows'
+      setShowSaved(isLibrary)
+      document.title = isLibrary ? 'Workflow Library | EZAgent' : 'Workflow Builder | EZAgent'
+    }
+    syncViewFromPath()
+    window.addEventListener('popstate', syncViewFromPath)
+    return () => window.removeEventListener('popstate', syncViewFromPath)
+  }, [])
   const summary = useMemo(() => config ? summarizeWorkflow(config) : undefined, [config])
   const explanation = useMemo(() => config ? buildWorkflowExplanationCard(config, locale) : undefined, [config, locale])
   const handoff = useMemo(() => config ? createInvoiceAgentHandoff(config, locale) : undefined, [config, locale])
@@ -234,6 +244,13 @@ export function WorkflowBuilder() {
     window.location.assign('/')
   }
 
+  function setLibraryView(open: boolean) {
+    setShowSaved(open)
+    const nextPath = open ? '/workflows' : '/yolanda-builder'
+    if (window.location.pathname !== nextPath) window.history.pushState(null, '', nextPath)
+    document.title = open ? 'Workflow Library | EZAgent' : 'Workflow Builder | EZAgent'
+  }
+
   function saveItem(id: string) {
     if (!config) return
     try {
@@ -296,7 +313,7 @@ export function WorkflowBuilder() {
     setNameDraft(saved.name)
     setSavedRevision(saved.revision)
     setStep(mode === 'edit' ? 2 : 3)
-    setShowSaved(false)
+    setLibraryView(false)
     setTrialResult(undefined)
     setError('')
     if (mode === 'run') window.setTimeout(() => document.querySelector('[data-trial-run]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
@@ -311,7 +328,7 @@ export function WorkflowBuilder() {
     setTrialResult(undefined)
     setStep(1)
     setStartMode('receipt')
-    setShowSaved(false)
+    setLibraryView(false)
     setError('')
     setNotice('')
   }
@@ -334,7 +351,7 @@ export function WorkflowBuilder() {
     setTrialResult(undefined)
   }
 
-  async function importBackup(file?: File) {
+  async function importBackup(file?: File): Promise<string | undefined> {
     if (!file) return
     try {
       if (!canEditCurrent) throw new Error(c.permissionDenied)
@@ -344,9 +361,15 @@ export function WorkflowBuilder() {
       setNameDraft(imported.name)
       setSavedRevision(undefined)
       setStep(2)
+      setLibraryView(false)
       setNotice(c.imported)
       setError('')
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not import this backup.') }
+      return undefined
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Could not import this backup.'
+      if (!showSaved) setError(message)
+      return message
+    }
   }
 
   async function importTrialInput(file?: File) {
@@ -391,12 +414,12 @@ export function WorkflowBuilder() {
   return <main lang={locale === 'zh-Hant' ? 'zh-Hant' : 'en'} className="min-h-[100dvh] bg-[#f5f3ee] text-zinc-950">
     <header className="border-b border-zinc-300 bg-white">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">EZAgent · Workflow Builder</p><h1 className="mt-1 text-xl font-semibold">{c.title}</h1></div>
+        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">EZAgent · {showSaved ? c.savedDrafts : c.title}</p><h1 className="mt-1 text-xl font-semibold">{showSaved ? c.libraryTitle : c.title}</h1></div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={returnToWorkspace} className={secondaryButton}><House className="size-4" />{c.home}</button>
           <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-950">{c.localOnly}</span>
           <span className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700">{c.demoIdentity}: {actor.displayName}</span>
-          <button type="button" onClick={() => setShowSaved((value) => !value)} className={secondaryButton}><FolderOpen className="size-4" />{c.savedDrafts}</button>
+          <button type="button" onClick={() => setLibraryView(!showSaved)} aria-current={showSaved ? 'page' : undefined} className={secondaryButton}><FolderOpen className="size-4" />{c.savedDrafts}</button>
           <div className="inline-flex rounded-xl border border-zinc-300 bg-white p-1" aria-label="Language">
             {(['en', 'zh-Hant'] as const).map((value) => <button key={value} type="button" aria-pressed={locale === value} onClick={() => setLocale(value)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${locale === value ? 'bg-zinc-950 text-white' : 'text-zinc-600'}`}>{value === 'en' ? 'EN' : '繁中'}</button>)}
           </div>
@@ -406,7 +429,7 @@ export function WorkflowBuilder() {
 
     <div className="mx-auto max-w-6xl px-4 py-7 sm:px-6">
       {!showSaved && <div className="mb-7"><WorkflowComparisonBanner locale={locale} /></div>}
-      {showSaved && <WorkflowLibrary locale={locale} actor={actor} refreshKey={libraryRefreshKey} onActorChange={(identity) => { setActor(identity); setEditingId(undefined); setError(''); setNotice('') }} onCreate={startNewWorkflow} onOpen={openManaged} onChanged={handleManagedChange} onDeleted={handleDeleted} />}
+      {showSaved && <WorkflowLibrary locale={locale} actor={actor} refreshKey={libraryRefreshKey} onActorChange={(identity) => { setActor(identity); setEditingId(undefined); setError(''); setNotice('') }} onCreate={startNewWorkflow} onImport={importBackup} onOpen={openManaged} onChanged={handleManagedChange} onDeleted={handleDeleted} />}
 
       {!showSaved && <>
       <h2 data-builder-operation-title className="mb-5 text-xl font-semibold tracking-[-0.02em]">{locale === 'zh-Hant' ? '開始建立工作流程' : 'Start creating a workflow'}</h2>
@@ -448,7 +471,7 @@ export function WorkflowBuilder() {
         <div className="min-w-0 rounded-2xl border border-zinc-300 bg-white p-5 sm:p-7">
           <label className="block text-sm font-semibold">{c.workflowName}<input aria-label={c.workflowName} value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} disabled={!canEditCurrent} maxLength={120} className={`${inputClass} mt-2 disabled:bg-zinc-100 disabled:text-zinc-500`} /></label>
           {explanation && <article className="mt-6 rounded-2xl border border-zinc-950 bg-zinc-50 p-5" aria-label={c.explanationTitle}><p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{c.explanationTitle}</p><h2 className="mt-2 text-xl font-semibold">{nameDraft || explanation.title}</h2><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-zinc-500">{c.cardUses}</dt><dd className="mt-1 leading-6">{explanation.uses}</dd></div><div><dt className="text-xs text-zinc-500">{c.cardResult}</dt><dd className="mt-1 leading-6">{explanation.result}</dd></div><div><dt className="text-xs text-zinc-500">{c.cardExceptions}</dt><dd className="mt-1 leading-6">{explanation.exceptions}</dd></div><div><dt className="text-xs text-zinc-500">{c.cardWillNot}</dt><dd className="mt-1 leading-6">{explanation.willNot}</dd></div></dl><div className="mt-5 border-t border-zinc-200 pt-4 text-sm"><p className="font-medium">{handoff?.status === 'ready' ? c.handoffReady : c.configuredStatus}</p><p className="mt-1 text-zinc-600">{c.coverage(workflowItems.length, previewableRuleCount)}</p></div></article>}
-          {!isSaved ? <><p className="mt-6 text-xs leading-5 text-zinc-500">{c.fixedLimits}</p><div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={saveCurrent} aria-busy={saving} disabled={!canEditCurrent || saving} className={primaryButton}>{saving ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> : <Save className="size-4" />}{saving ? c.saving : c.saveWorkflow}</button><button type="button" onClick={() => setStep(2)} disabled={!canEditCurrent || saving} className={`${secondaryButton} disabled:cursor-not-allowed disabled:opacity-45`}><ArrowLeft className="size-4" />{c.modifyRules}</button></div><p className="mt-3 text-xs font-medium text-zinc-600">{c.unsaved}</p></> : <section className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><h3 className="font-semibold">{c.savedTitle}</h3><p className="mt-1 text-sm text-emerald-950">{c.savedHelp}</p><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setShowSaved(true)} className={primaryButton}><FolderOpen className="size-4" />{c.viewWorkflow}</button><button type="button" onClick={() => preparedConfig && downloadJson(preparedConfig)} className={secondaryButton}><Download className="size-4" />{c.backup}</button></div></section>}
+          {!isSaved ? <><p className="mt-6 text-xs leading-5 text-zinc-500">{c.fixedLimits}</p><div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={saveCurrent} aria-busy={saving} disabled={!canEditCurrent || saving} className={primaryButton}>{saving ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> : <Save className="size-4" />}{saving ? c.saving : c.saveWorkflow}</button><button type="button" onClick={() => setStep(2)} disabled={!canEditCurrent || saving} className={`${secondaryButton} disabled:cursor-not-allowed disabled:opacity-45`}><ArrowLeft className="size-4" />{c.modifyRules}</button></div><p className="mt-3 text-xs font-medium text-zinc-600">{c.unsaved}</p></> : <section className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><h3 className="font-semibold">{c.savedTitle}</h3><p className="mt-1 text-sm text-emerald-950">{c.savedHelp}</p><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setLibraryView(true)} className={primaryButton}><FolderOpen className="size-4" />{c.viewWorkflow}</button><button type="button" onClick={() => preparedConfig && downloadJson(preparedConfig)} className={secondaryButton}><Download className="size-4" />{c.backup}</button></div></section>}
           {isSaved && handoff && <section className={`mt-5 rounded-xl border p-5 ${handoff.status === 'ready' ? 'border-sky-200 bg-sky-50' : 'border-amber-200 bg-amber-50'}`} aria-label={c.handoffTitle}><h3 className="font-semibold">{c.handoffTitle}</h3><p className="mt-2 text-sm leading-6">{handoff.status === 'ready' ? c.handoffReady : c.handoffBlocked}</p><p className="mt-2 text-sm font-medium">{handoff.summary}</p>{handoff.mappedParameters.length > 0 && <details className="mt-3 text-xs"><summary className="cursor-pointer font-semibold">{c.mappedParameters}</summary><ul className="mt-2 space-y-2">{handoff.mappedParameters.map((item) => <li key={item.builderParameter}><code>{item.builderParameter}</code> → <code>{item.agentParameter}</code> = {item.value}<span className="block text-zinc-600">{item.meaning}</span></li>)}</ul></details>}{handoff.blockers.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-950">{handoff.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>}{handoff.unsupportedRequirements.length > 0 && <details className="mt-3 text-xs"><summary className="cursor-pointer font-semibold">{c.unsupportedRequirements}</summary><ul className="mt-2 space-y-2">{handoff.unsupportedRequirements.map((item) => <li key={item.id}><span className="font-medium">{item.text}</span><span className="block text-zinc-600">{item.reason}</span></li>)}</ul></details>}<button type="button" disabled={handoff.status !== 'ready'} onClick={() => window.location.assign(`/invoice-demo?workflowId=${encodeURIComponent(handoff.workflowId)}&revision=${handoff.revision}`)} className={`${primaryButton} mt-4`}><Play className="size-4" />{c.handoffAction}</button><p className="mt-2 text-xs text-zinc-600">{c.fixedLimits}</p></section>}
           <details data-trial-run className="min-w-0 mt-7 border-t border-zinc-200 pt-6">
             <summary className="cursor-pointer font-semibold outline-none focus-visible:ring-2 focus-visible:ring-zinc-950">{c.developerValidation}</summary>
