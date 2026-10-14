@@ -140,6 +140,11 @@ async function withCreationLock<T>(state: RuntimeState, operation: () => Promise
 
 export type AgentRunService = ReturnType<typeof createAgentRunService>
 
+export function publicRunView(run: Run): Omit<Run, 'ownerId'> {
+  const { ownerId: _ownerId, ...publicRun } = run
+  return publicRun
+}
+
 export function createAgentRunService(root = resolve(process.cwd(), '.ezagent')) {
   const resolvedRoot = resolve(root)
   let state = runtimes.get(resolvedRoot)
@@ -326,11 +331,25 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
   }
 
   return {
-    async createRun(input: unknown): Promise<{ run: Run; created: boolean }> {
-      if (!isRecord(input) || !hasOnlyKeys(input, ['workflow', 'source', 'idempotencyKey']) ||
+    hasActiveRun(): boolean {
+      return runtime.active !== null
+    },
+
+    async createRun(input: unknown, ownerId = 'local'): Promise<{ run: Run; created: boolean }> {
+      if (!/^[a-zA-Z0-9_-]{1,80}$/.test(ownerId)) throw safeError('invalid_owner', 'Run owner is invalid.')
+      if (!isRecord(input) || !hasOnlyKeys(input, ['workflow', 'source', 'idempotencyKey', 'planBinding']) ||
           !isRecord(input.workflow) || !isRecord(input.source) || typeof input.idempotencyKey !== 'string' ||
           input.idempotencyKey.trim().length === 0 || input.idempotencyKey.length > 512) {
         throw safeError('invalid_request', 'Run request must contain a workflow, source, and idempotency key.')
+      }
+      let planBinding: Run['planBinding']
+      if (input.planBinding !== undefined) {
+        if (!isRecord(input.planBinding) || !hasOnlyKeys(input.planBinding, ['jobId', 'planVersion', 'sourceSha256']) ||
+            typeof input.planBinding.jobId !== 'string' || !/^[0-9a-f-]{36}$/.test(input.planBinding.jobId) || input.planBinding.planVersion !== 1 ||
+            typeof input.planBinding.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(input.planBinding.sourceSha256)) {
+          throw safeError('invalid_request', 'Hosted plan binding is invalid.')
+        }
+        planBinding = { jobId: input.planBinding.jobId, planVersion: 1, sourceSha256: input.planBinding.sourceSha256 }
       }
       const source = input.source
       if (typeof source.name !== 'string' || (source.type !== 'csv' && source.type !== 'text') || typeof source.content !== 'string') {
@@ -340,13 +359,20 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
       if (!validation.ok) throw new RunServiceError('invalid_workflow', 'Run workflow failed invoice demo validation.', 400, validation.issues)
       const workflow = validation.value
       const validatedSource = source as InvoiceSource
-      const fingerprint = sha256(JSON.stringify({ workflow, source: validatedSource }))
-      const idempotencyHash = sha256(input.idempotencyKey)
+      if (planBinding && sha256(validatedSource.content) !== planBinding.sourceSha256) {
+        throw safeError('replan_required', 'Source changed; create a new plan for this exact source.', 409)
+      }
+      const fingerprint = sha256(JSON.stringify({ ownerId, workflow, source: validatedSource, planBinding }))
+      const scopedIdempotencyKey = sha256(`${ownerId}:${input.idempotencyKey}`)
+      const idempotencyHash = sha256(scopedIdempotencyKey)
       const store = await getStore()
       return withCreationLock(runtime, async () => {
         try {
-          const existing = await store.findRunByIdempotencyKey(input.idempotencyKey as string, fingerprint)
-          if (existing) return { run: existing, created: false }
+          const existing = await store.findRunByIdempotencyKey(scopedIdempotencyKey, fingerprint)
+          if (existing) {
+            if ((existing.ownerId ?? 'local') !== ownerId) throw safeError('owner_conflict', 'Run is owned by another visitor.', 404)
+            return { run: existing, created: false }
+          }
         } catch (error) {
           if (error instanceof AgentStoreError && error.code === 'idempotency_conflict') {
             throw safeError('idempotency_conflict', 'Idempotency key was already used with different run input.', 409)
@@ -359,6 +385,8 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
         const now = new Date().toISOString()
         const run: Run = {
           id: randomUUID(),
+          ownerId,
+          ...(planBinding ? { planBinding } : {}),
           workflowVersion: 1,
           status: 'running',
           limits: { ...DEFAULT_RUN_LIMITS },
@@ -371,7 +399,7 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
         }
         let created
         try {
-          created = await store.createRun({ idempotencyKey: input.idempotencyKey as string, payloadFingerprint: fingerprint, run })
+          created = await store.createRun({ idempotencyKey: scopedIdempotencyKey, payloadFingerprint: fingerprint, run })
         } catch (error) {
           if (error instanceof AgentStoreError && error.code === 'idempotency_conflict') {
             throw safeError('idempotency_conflict', 'Idempotency key was already used with different run input.', 409)
@@ -399,6 +427,11 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
       return (await getStore()).getRun(runId)
     },
 
+    async getOwnedRun(runId: string, ownerId = 'local'): Promise<Run | null> {
+      const run = await (await getStore()).getRun(runId)
+      return run && (run.ownerId ?? 'local') === ownerId ? run : null
+    },
+
     async listEvents(runId: string, afterSequence = 0): Promise<{ events: RunEvent[]; nextSequence: number }> {
       if (!Number.isSafeInteger(afterSequence) || afterSequence < 0) throw safeError('invalid_cursor', 'Event cursor is invalid.')
       const store = await getStore()
@@ -406,10 +439,10 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
       return store.listEvents(runId, afterSequence)
     },
 
-    async cancelRun(runId: string): Promise<Run> {
+    async cancelRun(runId: string, ownerId = 'local'): Promise<Run> {
       const store = await getStore()
       const run = await store.getRun(runId)
-      if (!run) throw safeError('run_not_found', 'Run does not exist.', 404)
+      if (!run || (run.ownerId ?? 'local') !== ownerId) throw safeError('run_not_found', 'Run does not exist.', 404)
       if (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') return run
       if (run.status === 'running' || run.status === 'needs_input') run.status = transition(run.status, 'cancelling')
       else if (run.status === 'interrupted') {
@@ -438,11 +471,11 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
       return saved
     },
 
-    async resumeRun(runId: string, rawInput?: unknown): Promise<Run> {
+    async resumeRun(runId: string, rawInput?: unknown, ownerId = 'local'): Promise<Run> {
       const store = await getStore()
       return withCreationLock(runtime, async () => {
         const run = await store.getRun(runId)
-        if (!run) throw safeError('run_not_found', 'Run does not exist.', 404)
+        if (!run || (run.ownerId ?? 'local') !== ownerId) throw safeError('run_not_found', 'Run does not exist.', 404)
         if (run.status !== 'needs_input' && run.status !== 'interrupted') {
           throw safeError('run_not_resumable', 'Only interrupted or actionable runs can resume.', 409)
         }
@@ -507,8 +540,9 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
       })
     },
 
-    async readArtifact(runId: string, artifactId: string): Promise<{ artifact: Artifact; contents: Uint8Array } | null> {
+    async readArtifact(runId: string, artifactId: string, ownerId = 'local'): Promise<{ artifact: Artifact; contents: Uint8Array } | null> {
       const run = await (await getStore()).getRun(runId)
+      if (!run || (run.ownerId ?? 'local') !== ownerId) return null
       const artifact = run?.artifacts.find((item) => item.id === artifactId && item.type === 'text/csv')
       if (!artifact) return null
       try {
@@ -551,7 +585,7 @@ export function runServiceErrorResponse(error: unknown): Response {
 }
 
 export function createRunPostHandler(service: AgentRunService = agentRunService) {
-  return async function handleRunPost(request: Request): Promise<Response> {
+  return async function handleRunPost(request: Request, ownerId = 'local'): Promise<Response> {
     let body: unknown
     try {
       body = await request.json()
@@ -559,8 +593,8 @@ export function createRunPostHandler(service: AgentRunService = agentRunService)
       return Response.json({ error: { code: 'invalid_json', message: 'Request body must be valid JSON.' } }, { status: 400 })
     }
     try {
-      const result = await service.createRun(body)
-      return Response.json({ run: result.run }, { status: result.created ? 202 : 200 })
+      const result = await service.createRun(body, ownerId)
+      return Response.json({ run: publicRunView(result.run) }, { status: result.created ? 202 : 200 })
     } catch (error) {
       return runServiceErrorResponse(error)
     }
@@ -568,7 +602,7 @@ export function createRunPostHandler(service: AgentRunService = agentRunService)
 }
 
 export function createResumePostHandler(service: AgentRunService = agentRunService) {
-  return async function handleResumePost(request: Request, runId: string): Promise<Response> {
+  return async function handleResumePost(request: Request, runId: string, ownerId = 'local'): Promise<Response> {
     let body: unknown
     try {
       body = await request.json()
@@ -579,7 +613,7 @@ export function createResumePostHandler(service: AgentRunService = agentRunServi
       return Response.json({ error: { code: 'invalid_request', message: 'Resume request may contain only an input object.' } }, { status: 400 })
     }
     try {
-      return Response.json({ run: await service.resumeRun(runId, body.input) })
+      return Response.json({ run: publicRunView(await service.resumeRun(runId, body.input, ownerId)) })
     } catch (error) {
       return runServiceErrorResponse(error)
     }
@@ -587,9 +621,9 @@ export function createResumePostHandler(service: AgentRunService = agentRunServi
 }
 
 export function createCancelPostHandler(service: AgentRunService = agentRunService) {
-  return async function handleCancelPost(_request: Request, runId: string): Promise<Response> {
+  return async function handleCancelPost(_request: Request, runId: string, ownerId = 'local'): Promise<Response> {
     try {
-      return Response.json({ run: await service.cancelRun(runId) })
+      return Response.json({ run: publicRunView(await service.cancelRun(runId, ownerId)) })
     } catch (error) {
       return runServiceErrorResponse(error)
     }

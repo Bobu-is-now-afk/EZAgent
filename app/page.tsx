@@ -4,29 +4,30 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { Bot, FileText, MessageCircle, Sparkles } from 'lucide-react'
 import { LocalAiSetup } from '@/components/local-ai-setup'
+import { isHostedDemoHostname } from '@/lib/demo-host'
 
 const GUIDE_STORAGE_KEY = 'ezagent:first-use-guide:v1:handled'
 
 const COPY = {
   'zh-Hant': {
-    workspace: 'EZAgent 工作區', title: '你今天想做什麼？', subtitle: '先查看本機 AI 狀態，再選擇要開始的工作。',
+    workspace: 'EZAgent 工作區', title: '你今天想做什麼？', subtitle: '先查看本機 AI 狀態，再選擇要開始的工作。', onlineSubtitle: '先確認線上示範服務狀態，再選擇可用功能。',
     guide: '第一次使用？先和本機 AI 聊一句，再試試把重複工作變成工具。',
     guideHelp: '真實對話需要先完成本機 AI 準備；工作流程的配置與預覽不受影響。',
     chatFirst: '先體驗對話', skip: '跳過，直接體驗工具',
-    chat: '本機 AI 對話', chatDescription: '使用準備好的本機模型問問題、草擬文字。', chatAction: '開始對話',
+    chat: '本機 AI 對話', chatDescription: '使用準備好的本機模型問問題、草擬文字。', onlineChat: '線上示範不提供對話', onlineChatDescription: '聊天只在已準備本機 AI 的本機版提供；此線上頁不會傳送聊天訊息。', chatAction: '開始對話', onlineChatAction: '查看說明',
     builder: '設計工作流程', builderDescription: '把重複工作的要求整理成可復用規則。', featured: '推薦', builderAction: '建立工作流程',
-    preset: '試用預設發票工具', presetDescription: '使用合成資料建立計畫、核對後再執行整理示範。', invoiceAction: '開始發票示範',
+    preset: '試用預設發票工具', presetDescription: '使用合成資料建立計畫、核對後再執行整理示範。', onlinePreset: '線上發票示範尚未開放', onlinePresetDescription: '目前只能查看合成資料預覽，不能上傳來源、建立計畫或執行；請勿提交真實資料。', onlinePresetReady: '線上發票示範 · 需要評審代碼', onlinePresetReadyDescription: '只用合成資料；取得有效工作階段後，CSV／TXT 會送到 Mac mini。', onlinePresetChecking: '正在檢查線上示範', onlinePresetCheckingDescription: '檢查是否已開放；目前尚未上傳資料。', invoiceAction: '開始發票示範',
     boundary: '發票示範僅支援 CSV／TXT。配置、儲存或預演不代表已執行業務工作。',
     language: '語言',
   },
   en: {
-    workspace: 'EZAgent Workspace', title: 'What would you like to do today?', subtitle: 'Check local AI status, then choose where to start.',
+    workspace: 'EZAgent Workspace', title: 'What would you like to do today?', subtitle: 'Check local AI status, then choose where to start.', onlineSubtitle: 'Check hosted demo availability before choosing a path.',
     guide: 'First time here? Chat with local AI, then turn repetitive work into a tool.',
     guideHelp: 'Real chat requires local AI setup first. Workflow configuration and preview remain available without it.',
     chatFirst: 'Try chat first', skip: 'Skip to tools',
-    chat: 'Local AI chat', chatDescription: 'Ask questions and draft text with your prepared local model.', chatAction: 'Start a chat',
+    chat: 'Local AI chat', chatDescription: 'Ask questions and draft text with your prepared local model.', onlineChat: 'Chat unavailable online', onlineChatDescription: 'Chat is available in the prepared local edition only. This hosted page does not send chat messages.', chatAction: 'Start a chat', onlineChatAction: 'View details',
     builder: 'Design a workflow', builderDescription: 'Turn repetitive work requirements into reusable rules.', featured: 'Featured', builderAction: 'Create a workflow',
-    preset: 'Try the invoice demo', presetDescription: 'Build a plan with synthetic data, review it, then run the demo.', invoiceAction: 'Start invoice demo',
+    preset: 'Try the invoice demo', presetDescription: 'Build a plan with synthetic data, review it, then run the demo.', onlinePreset: 'Online invoice demo is not open', onlinePresetDescription: 'Synthetic preview only; upload, planning, and execution are disabled. Do not submit real data.', onlinePresetReady: 'Online invoice demo · access code required', onlinePresetReadyDescription: 'Synthetic data only. After access, CSV/TXT input is sent to the Mac mini.', onlinePresetChecking: 'Checking online demo', onlinePresetCheckingDescription: 'Checking whether the demo is open. No data has been uploaded.', invoiceAction: 'Start invoice demo',
     boundary: 'The invoice demo supports CSV/TXT only. Configuring, saving, or previewing a workflow does not mean business work has run.',
     language: 'Language',
   },
@@ -37,12 +38,27 @@ const cardClass = 'group flex min-h-[168px] flex-col rounded-xl border border-zi
 export default function Page() {
   const [locale, setLocale] = useState<'zh-Hant' | 'en'>('zh-Hant')
   const [showGuide, setShowGuide] = useState(false)
+  const [hostedDemo, setHostedDemo] = useState<boolean | null>(null)
+  const [hostedDemoStatus, setHostedDemoStatus] = useState<'checking' | 'ready' | 'closed'>('checking')
   const toolsRef = useRef<HTMLElement>(null)
   const c = COPY[locale]
 
   useEffect(() => {
     try { setShowGuide(window.localStorage.getItem(GUIDE_STORAGE_KEY) !== 'true') }
     catch { setShowGuide(true) }
+    const isHosted = isHostedDemoHostname(window.location.hostname)
+    setHostedDemo(isHosted)
+    if (isHosted) {
+      let cancelled = false
+      void fetch('/api/demo/capabilities', { cache: 'no-store', credentials: 'same-origin' })
+        .then(async (response) => response.ok ? await response.json() as { status?: unknown; capabilities?: { invoicePlan?: unknown; invoicePlanQueue?: unknown; invoiceRun?: unknown } } : null)
+        .then((data) => {
+          if (cancelled) return
+          setHostedDemoStatus(['ready', 'busy', 'stopped'].includes(String(data?.status)) && data?.capabilities?.invoicePlanQueue === true ? 'ready' : 'closed')
+        })
+        .catch(() => { if (!cancelled) setHostedDemoStatus('closed') })
+      return () => { cancelled = true }
+    }
   }, [])
 
   function markGuideHandled() {
@@ -67,9 +83,9 @@ export default function Page() {
     </header>
 
     <section className="mx-auto flex w-full max-w-[880px] flex-col items-center px-5 pb-8 pt-8 sm:px-6 sm:pb-10 sm:pt-10">
-      <div className="text-center"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">{c.workspace}</p><h1 className="text-balance text-[clamp(2rem,4vw,2.75rem)] font-semibold tracking-[-0.045em]">{c.title}</h1><p className="mt-2 text-[15px] text-zinc-500">{c.subtitle}</p></div>
+      <div className="text-center"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">{c.workspace}</p><h1 className="text-balance text-[clamp(2rem,4vw,2.75rem)] font-semibold tracking-[-0.045em]">{c.title}</h1><p className="mt-2 text-[15px] text-zinc-500">{hostedDemo ? c.onlineSubtitle : c.subtitle}</p></div>
 
-      {showGuide && <aside aria-label={c.guide} className="mt-5 w-full rounded-xl border border-sky-200 bg-sky-50 p-3 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:p-3.5">
+      {showGuide && hostedDemo === false && <aside aria-label={c.guide} className="mt-5 w-full rounded-xl border border-sky-200 bg-sky-50 p-3 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:p-3.5">
         <div><p className="text-sm font-semibold text-sky-950">{c.guide}</p><p className="mt-1 text-xs leading-5 text-sky-900/80">{c.guideHelp}</p></div>
         <div className="mt-2 flex shrink-0 flex-wrap gap-2 sm:mt-0"><Link href="/chat" onClick={markGuideHandled} className="inline-flex min-h-10 items-center rounded-lg bg-zinc-950 px-4 text-xs font-semibold text-white outline-none hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{c.chatFirst}</Link><button type="button" onClick={skipToTools} className="min-h-10 rounded-lg border border-zinc-300 bg-white px-4 text-xs font-semibold outline-none hover:border-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2">{c.skip}</button></div>
       </aside>}
@@ -77,7 +93,7 @@ export default function Page() {
       <div className="mt-5 grid w-full items-stretch gap-3 sm:grid-cols-2">
         <LocalAiSetup locale={locale} compact showDemoLink={false} />
         <Link href="/chat" className={cardClass}>
-          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><MessageCircle aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.chat}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.chatDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.chatAction} <span aria-hidden="true">→</span></span>
+          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><MessageCircle aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{hostedDemo ? c.onlineChat : c.chat}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{hostedDemo ? c.onlineChatDescription : c.chatDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{hostedDemo ? c.onlineChatAction : c.chatAction} <span aria-hidden="true">→</span></span>
         </Link>
       </div>
 
@@ -86,7 +102,7 @@ export default function Page() {
           <span className="flex items-start justify-between"><span className="flex size-10 items-center justify-center rounded-lg bg-zinc-950 text-white"><Sparkles aria-hidden="true" className="size-[19px]" /></span><span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">{c.featured}</span></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.builder}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.builderDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.builderAction} <span aria-hidden="true">→</span></span>
         </Link>
         <Link href="/invoice-demo" className={cardClass}>
-          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><FileText aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.preset}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.presetDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.invoiceAction} <span aria-hidden="true">→</span></span>
+          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><FileText aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{hostedDemo ? hostedDemoStatus === 'ready' ? c.onlinePresetReady : hostedDemoStatus === 'checking' ? c.onlinePresetChecking : c.onlinePreset : c.preset}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{hostedDemo ? hostedDemoStatus === 'ready' ? c.onlinePresetReadyDescription : hostedDemoStatus === 'checking' ? c.onlinePresetCheckingDescription : c.onlinePresetDescription : c.presetDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.invoiceAction} <span aria-hidden="true">→</span></span>
         </Link>
       </section>
       <p className="mt-3 w-full text-sm text-zinc-600">{locale === 'en' ? 'Already have a saved workflow?' : '已有儲存的工作流程？'} <Link href="/workflows" className="font-semibold text-zinc-900 underline underline-offset-4 hover:text-zinc-600 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950">{locale === 'en' ? 'Open workflow library' : '開啟工作流庫'}</Link></p>

@@ -159,7 +159,7 @@ function isJsonValue(value: unknown, seen = new Set<object>()): boolean {
 
 function isRun(value: unknown): value is Run {
   if (!isRecord(value)) return false
-  return isNonEmptyString(value.id) && Number.isInteger(value.workflowVersion) &&
+  return isNonEmptyString(value.id) && (value.ownerId === undefined || (typeof value.ownerId === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value.ownerId))) && Number.isInteger(value.workflowVersion) &&
     (value.workflowVersion as number) > 0 && validRunStatuses.has(value.status as RunStatus) && isRunLimits(value.limits) &&
     (value.currentTask === null || isNonEmptyString(value.currentTask)) &&
     typeof value.createdAt === 'string' && Number.isFinite(Date.parse(value.createdAt)) &&
@@ -330,6 +330,9 @@ class FileAgentStore implements AgentStore {
       const index = snapshot.runs.findIndex((storedRun) => storedRun.id === run.id)
       if (index < 0) throw safeError('run_not_found', 'Run does not exist.')
       const stored = snapshot.runs[index]
+      if ((stored.ownerId ?? 'local') !== (run.ownerId ?? 'local')) {
+        throw safeError('owner_conflict', 'A run owner cannot be changed.')
+      }
       const artifacts = [...stored.artifacts]
       for (const artifact of run.artifacts) {
         const committed = artifacts.find((candidate) => candidate.id === artifact.id)

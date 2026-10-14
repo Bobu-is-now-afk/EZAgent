@@ -9,6 +9,7 @@ import { applyLogicPills } from '../../lib/agent/logic-pills'
 import { createAgentRunService, createCancelPostHandler, createResumePostHandler, createRunPostHandler } from '../../lib/agent/run-service'
 import { createRunStreamResponse } from '../../lib/agent/run-stream'
 import { createAgentStore } from '../../lib/agent/store'
+import { createArtifactGetHandler } from '../../lib/agent/artifact-handler'
 import type { SourceType, WorkflowDefinition } from '../../lib/agent/contracts'
 
 const proposal = {
@@ -133,6 +134,77 @@ test('runs API stores the source immutably, validates every tool step, and commi
     body: JSON.stringify({ ...requestBody, source: { ...source, content: source.content.replace('10000.01', '20000.01') } }),
   }))
   assert.equal(conflict.status, 409)
+})
+
+test('independent runs of the bundled invoice fixture produce identical CSV and source evidence', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'ezagent-repeat-run-test-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const service = createAgentRunService(root)
+  const source = {
+    name: 'invoices-batch-1.csv',
+    type: 'csv' as const,
+    content: await readFile(join(process.cwd(), 'data/demo/invoices-batch-1.csv'), 'utf8'),
+  }
+  const workflow = await makeWorkflow(source)
+  const outputs: string[] = []
+  const completedRuns: Array<{ summary: { rowCount: number; reviewCount: number } | undefined; sourceRefs: Array<{ rowNumber: number } | { lineNumber: number }> }> = []
+
+  for (const idempotencyKey of ['fixture-run-a', 'fixture-run-b']) {
+    const created = await service.createRun({ workflow, source, idempotencyKey })
+    const completed = await waitForTerminal(service, created.run.id)
+    assert.equal(completed.status, 'completed')
+    assert.equal(completed.artifacts.length, 1)
+    completedRuns.push({ summary: completed.artifacts[0].summary, sourceRefs: completed.artifacts[0].sourceRefs })
+    outputs.push(Buffer.from((await service.readArtifact(completed.id, completed.artifacts[0].id))!.contents).toString('utf8'))
+    const download = await createArtifactGetHandler(service)(new Request('http://localhost/api/agent/runs/download'), {
+      params: Promise.resolve({ id: completed.id, artifactId: completed.artifacts[0].id }),
+    })
+    assert.equal(download.status, 200)
+    assert.match(download.headers.get('content-type') ?? '', /text\/csv/)
+    assert.match(download.headers.get('content-disposition') ?? '', new RegExp(`invoice-export-${completed.id}\\.csv`))
+    assert.equal(await download.text(), outputs.at(-1))
+  }
+
+  assert.equal(outputs[0], outputs[1])
+  for (const [index, completed] of completedRuns.entries()) {
+    assert.deepEqual(completed.summary, { rowCount: 4, reviewCount: 1 })
+    assert.deepEqual(completed.sourceRefs.map((reference) => 'rowNumber' in reference ? reference.rowNumber : null), [2, 4, 5, 7])
+    assert.match(outputs[index], /"INV-004","","14250\.00","HKD"/)
+    assert.match(outputs[index], /flagged: missing_customer/)
+  }
+})
+
+test('runs, idempotency keys, cancellation, and artifacts are isolated by visitor owner', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'ezagent-owner-isolation-test-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const service = createAgentRunService(root)
+  const source = { name: 'owner-isolation.csv', type: 'csv' as const, content: 'invoice_id,customer,amount,currency\nINV-OWN,Ada,12000.00,HKD\n' }
+  const workflow = await makeWorkflow(source)
+  const ownerA = 'visitor-owner-a'
+  const ownerB = 'visitor-owner-b'
+  const first = await service.createRun({ workflow, source, idempotencyKey: 'shared-owner-key' }, ownerA)
+  const completedA = await waitForTerminal(service, first.run.id)
+  assert.equal(completedA.status, 'completed')
+  assert.equal(await service.getOwnedRun(completedA.id, ownerA) !== null, true)
+  assert.equal(await service.getOwnedRun(completedA.id, ownerB), null)
+  assert.equal(await service.readArtifact(completedA.id, completedA.artifacts[0].id, ownerB), null)
+  await assert.rejects(service.cancelRun(completedA.id, ownerB), (error) => error instanceof Error && 'status' in error && error.status === 404)
+
+  const second = await service.createRun({ workflow, source, idempotencyKey: 'shared-owner-key' }, ownerB)
+  assert.notEqual(second.run.id, completedA.id)
+  const completedB = await waitForTerminal(service, second.run.id)
+  const foreignDownload = await createArtifactGetHandler(service, async () => ownerB)(new Request('http://localhost/api/artifact'), {
+    params: Promise.resolve({ id: completedA.id, artifactId: completedA.artifacts[0].id }),
+  })
+  assert.equal(foreignDownload.status, 404)
+  const ownerDownload = await createArtifactGetHandler(service, async () => ownerB)(new Request('http://localhost/api/artifact'), {
+    params: Promise.resolve({ id: completedB.id, artifactId: completedB.artifacts[0].id }),
+  })
+  assert.equal(ownerDownload.status, 200)
+
+  const stored = await service.getRun(completedA.id)
+  assert.ok(stored)
+  await assert.rejects((await createAgentStore(root)).saveRun({ ...stored, ownerId: ownerB }), (error) => error instanceof Error && 'code' in error && error.code === 'owner_conflict')
 })
 
 test('resume API applies bounded filter corrections to working data and preserves the source', async (t) => {
