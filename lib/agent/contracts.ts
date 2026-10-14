@@ -103,6 +103,8 @@ export type Artifact = {
 
 export type Run = {
   id: string
+  /** Owner is server-issued; older local snapshots omit it and default to `local`. */
+  ownerId?: string
   workflowVersion: number
   status: RunStatus
   limits: RunLimits
