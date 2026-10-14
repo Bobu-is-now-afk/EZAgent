@@ -206,7 +206,7 @@ test('production proxy rejects forged owner headers, cross-origin requests, loca
   const localAi = new NextRequest('https://demo.example.test/api/local-ai', {
     method: 'POST', headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, cookie: `${DEMO_SESSION_COOKIE}=${session.token}` }, body: '{}',
   })
-  const localAiResponse = proxy(localAi) as Response
+  const localAiResponse = await proxy(localAi)
   assert.equal(localAiResponse.status, 403)
   assert.deepEqual(await localAiResponse.json(), { state: 'local_only' })
   const hostedChat = new NextRequest('https://demo.example.test/api/chat', {
