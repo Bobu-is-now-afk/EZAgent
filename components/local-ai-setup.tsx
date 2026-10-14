@@ -90,11 +90,11 @@ export function LocalAiSetup({ locale = 'zh-Hant', onReady, showDemoLink = true,
       {showDemoLink && status.state === 'ready' && <Link href="/invoice-demo" className="rounded-lg bg-zinc-950 px-4 py-3 text-sm text-white">{t('開始發票示範', 'Start invoice demo')}</Link>}
     </div>
     {inventory.os === 'linux' && status.state === 'install_required' && <p className="mt-3 text-sm">{t('Linux 尚未提供免指令的引擎安裝流程，需要安裝人員協助。', 'Linux engine installation still requires help from the app installer.')}</p>}
-    <details className="mt-4 text-xs text-zinc-500"><summary className="cursor-pointer">{t('進階詳情', 'Advanced details')}</summary><p className="mt-2 break-all">{status.state} · {model || '—'} · {inventory.host || '—'}</p><p>RAM: {inventory.ram_gb?.toFixed(0) ?? '—'} GB · {t('可用空間', 'Free storage')}: {inventory.disk_gb?.toFixed(0) ?? '—'} GB</p></details>
+    <details className="mt-4 text-xs text-zinc-500"><summary className="cursor-pointer">{t('進階詳情', 'Advanced details')}</summary><p className="mt-2">{t('本機推理服務', 'Local inference service')} · Ollama</p><p className="mt-1 break-all">{status.state} · {model || '—'} · {inventory.host || '—'}</p><p>RAM: {inventory.ram_gb?.toFixed(0) ?? '—'} GB · {t('可用空間', 'Free storage')}: {inventory.disk_gb?.toFixed(0) ?? '—'} GB</p></details>
   </>
   return <section aria-label={t('準備本機 AI', 'Prepare local AI')} className={`w-full rounded-2xl border border-zinc-200 bg-zinc-50 text-left ${compact ? 'p-4' : 'p-5'}`}>
     <h2 className={compact ? 'text-sm font-semibold' : 'text-lg font-semibold'}>{t('本機 AI 狀態', 'Local AI status')}</h2>
     <p role="status" aria-live="polite" className="my-3 text-sm font-medium">{(messages[status.state] ?? messages.failed)[en ? 1 : 0]}{typeof status.percent === 'number' ? ` ${status.percent}%` : ''}</p>
-    {compact ? <details><summary className="cursor-pointer text-sm font-semibold underline underline-offset-2">{t('查看準備選項', 'View setup options')}</summary><div className="mt-3">{controls}</div></details> : controls}
+    {compact ? <details><summary className="cursor-pointer text-sm font-semibold underline underline-offset-2">{status.state === 'ready' ? t('更換模型或重新檢查', 'Change model or check again') : t('查看選項：準備本機 AI 或重新檢查', 'View options: prepare local AI or check again')}</summary><div className="mt-3">{controls}</div></details> : controls}
   </section>
 }

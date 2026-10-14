@@ -63,7 +63,7 @@ const API_ERROR_GUIDANCE: Record<string, string> = {
   invalid_proposal: 'AI 未能產生可執行的發票計畫，請重試。',
   invalid_request: '請求資料不完整或格式無效。請檢查任務目標、來源檔與必要欄位。',
   invalid_messages: '訊息格式或長度無效。請簡化內容後重新傳送。',
-  empty_stream: '服務沒有提供回覆串流。請確認本機 Ollama 正常，再重試。',
+  empty_stream: '服務沒有提供回覆串流。請確認本機 AI 服務正常，再重試。',
   row_limit_exceeded: '來源超過 5,000 列上限。請分批處理後建立新 Run。',
   active_run_limit: '已有一個 Run 正在執行。請先查看右側 Run 狀態，完成或取消後再建立下一個 Run。',
   task_limit: '工作流程超過 5 個步驟上限。請減少步驟後重新核准。',
@@ -182,15 +182,15 @@ function NormalLlm() {
         if (reason.startsWith('api:') && API_ERROR_GUIDANCE[reason.slice(4)]) {
           setError(API_ERROR_GUIDANCE[reason.slice(4)])
         } else if (reason === 'api:empty_stream' || reason === 'empty-response' || reason === 'empty-stream') {
-          setError('本機模型沒有傳回內容。請確認 Ollama 正常，再重新傳送。')
+          setError('本機模型沒有傳回內容。請確認本機 AI 服務正常，再重新傳送。')
         } else if (caught instanceof TypeError || /failed to fetch|network request failed|load failed/i.test(reason)) {
-          setError('無法連線至本機聊天 API。請確認 EZAgent 與 Ollama 正在執行，再重新傳送。')
+          setError('無法連線至本機聊天服務。請確認 EZAgent 與本機 AI 服務正在執行，再重新傳送。')
         } else if (/model.{0,30}(not found|missing)|model_missing/i.test(reason)) {
           setError(API_ERROR_GUIDANCE.model_missing)
         } else if (/ollama.{0,40}(unavailable|unreachable)|connection refused/i.test(reason)) {
           setError(API_ERROR_GUIDANCE.ollama_unavailable)
         } else if (/timeout|timed out/i.test(reason) || (caught instanceof Error && caught.name === 'TimeoutError')) {
-          setError('本機模型請求逾時。請確認 Ollama 正常，稍後重新傳送。')
+          setError('本機模型請求逾時。請確認本機 AI 服務正常，稍後重新傳送。')
         } else if (caught instanceof SyntaxError) {
           setError('本機聊天 API 傳回無法解讀的串流；目前對話已保留，請稍後重新傳送。')
         } else {
@@ -209,13 +209,21 @@ function NormalLlm() {
     controllerRef.current?.abort()
   }
 
+  function restoreLastMessage() {
+    const lastUserIndex = messages.map((message) => message.role).lastIndexOf('user')
+    if (lastUserIndex < 0) return
+    setPrompt(messages[lastUserIndex].content)
+    setMessages(messages.slice(0, lastUserIndex))
+    setError(null)
+  }
+
   return <section aria-labelledby="normal-llm-title" className="mx-auto flex min-h-[calc(100dvh-76px)] w-full max-w-4xl flex-col px-4 py-5 sm:px-6 sm:py-10">
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6 sm:gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">本機 AI 對話</p><h1 id="normal-llm-title" className="mt-2 text-2xl font-semibold tracking-[-0.04em]">Local chat</h1></div><span className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600">本機 AI</span></div>
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6 sm:gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">本機 AI 對話</p><h2 id="normal-llm-title" className="mt-2 text-lg font-semibold tracking-[-0.03em]">對話紀錄</h2></div><span className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600">本機 AI</span></div>
     <div role="log" aria-label="對話紀錄" aria-live="off" aria-relevant="additions text" className="flex min-h-[35vh] flex-1 flex-col overflow-auto rounded-2xl border border-zinc-200 bg-zinc-50/40 p-4 sm:p-8">
       {messages.length === 0 ? <div className="flex flex-1 flex-col items-center justify-center">
         <div className="flex size-12 items-center justify-center rounded-2xl bg-zinc-950 text-white"><MessageCircle aria-hidden="true" className="size-5" /></div>
-        <p className="mt-5 text-center text-lg font-medium text-zinc-900">Local Assistant Ready. How can I help you today?</p>
-        <p className="mt-2 text-center text-sm text-zinc-500">Your conversation runs through the local Ollama service.</p>
+        <p className="mt-5 text-center text-lg font-medium text-zinc-900">輸入問題，開始本機對話</p>
+        <p className="mt-2 text-center text-sm text-zinc-500">訊息會交由這部電腦上的本機 AI 服務處理。</p>
       </div> : <div className="flex flex-col gap-5">
         {messages.map((message, index) => <div key={`${index}-${message.role}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
           <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'bg-zinc-950 text-white' : 'border border-zinc-200 bg-white text-zinc-800'}`}>
@@ -227,7 +235,7 @@ function NormalLlm() {
       </div>}
     </div>
     <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">{announcement}</p>
-    {error && <ErrorNotice detail={error} message="本機 AI 未能回覆，請檢查上方準備狀態後重試。" />}
+    {error && <><ErrorNotice detail={error} message="本機 AI 未能回覆，請檢查上方準備狀態後重試。" />{messages.some((message) => message.role === 'user') && <button type="button" onClick={restoreLastMessage} className="mt-2 self-start rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950">重新編輯並傳送上則訊息</button>}</>}
     {notice && <p role="status" className="mt-3 text-sm text-zinc-500">{notice}</p>}
     <form onSubmit={sendMessage} aria-label="傳送訊息" className="mt-4 flex items-center gap-2 rounded-2xl border border-zinc-300 bg-white p-2 shadow-[0_8px_30px_-20px_rgba(24,24,27,0.35)] sm:mt-5 sm:gap-3"><input aria-label="輸入訊息" value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }} disabled={isLoading || isStreaming} placeholder="輸入訊息…" className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:opacity-60 sm:px-3" /><button type={isLoading || isStreaming ? 'button' : 'submit'} aria-label={isLoading || isStreaming ? '取消回覆' : '傳送訊息'} disabled={!isLoading && !isStreaming && !prompt.trim()} onClick={isLoading || isStreaming ? cancelMessage : undefined} className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-zinc-950 text-white transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-zinc-300">{isLoading || isStreaming ? <Square aria-hidden="true" className="size-3.5 fill-current" /> : <ArrowUp aria-hidden="true" className="size-[18px]" />}</button></form>
   </section>
@@ -1408,6 +1416,10 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
 
     {(builderHandoff || handoffError) && <section aria-label="Builder 交接" className={`mb-4 rounded-xl border p-4 text-sm ${builderHandoff?.status === 'ready' ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-amber-200 bg-amber-50 text-amber-950'}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{builderHandoff ? `${builderHandoff.workflowName} · Builder v${builderHandoff.revision}` : 'Builder 交接未載入'}</p><p className="mt-1 leading-6">{builderHandoff?.summary ?? handoffError}</p></div><span className="rounded-full border border-current/20 px-2.5 py-1 text-[10px] font-semibold">{builderHandoff?.status === 'ready' ? '可建立候選計畫' : '不可完整執行'}</span></div>{builderHandoff?.blockers.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{builderHandoff.blockers.map((item) => <li key={item}>{item}</li>)}</ul> : null}<p className="mt-2 text-xs">此交接只載入工作流 ID、版本與已儲存設定；尚未選擇本次資料，也未開始執行。</p></section>}
 
+    <ol aria-label="發票整理步驟" className="mb-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+      {[['載入資料', Boolean(source)], ['建立計畫', Boolean(plannedWorkflow || runInfo)], ['Run 已建立', Boolean(runInfo)], ['執行處理', Boolean(runInfo && ['running', 'needs_input', 'completed', 'failed', 'cancelled', 'interrupted'].includes(runInfo.status))], ['檢視結果', Boolean(runInfo?.status === 'completed')]].map(([label, complete], index) => <li key={String(label)} className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 ${complete ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-zinc-200 bg-white text-zinc-500'}`}><span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold">{complete ? '✓' : index + 1}</span><span>{label}</span></li>)}
+    </ol>
+
     <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(245px,0.82fr)_minmax(440px,1.55fr)_minmax(260px,0.9fr)]">
       <section aria-labelledby="mission-goal-title" className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_-24px_rgba(24,24,27,0.3)] sm:p-6">
         <div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700"><Sparkles aria-hidden="true" className="size-4" /></div><div><h2 id="mission-goal-title" className="text-sm font-semibold">目標與輸入</h2><p className="mt-0.5 text-xs text-zinc-500">載入資料 → 建立計畫 → 確認執行</p></div></div>
@@ -1445,7 +1457,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
         </details>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-zinc-500">先預覽計畫，確認後才會處理資料。</p><button type="button" onClick={createPlan} disabled={planningDisabled} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-zinc-700 motion-reduce:transition-none disabled:cursor-not-allowed disabled:bg-zinc-300"><Sparkles aria-hidden="true" className="size-3.5" />{isPlanning ? '建立計畫中…' : '建立計畫'}</button></div>
-        {planError && <ErrorNotice detail={planError} message="計畫尚未建立，請檢查本機 AI 與發票資料後重試。" />}
+        {planError && <><ErrorNotice detail={planError} message="計畫尚未建立；已保留目前目標與來源，修正問題後可重新建立。" /><button type="button" onClick={() => void createPlan()} disabled={planningDisabled} className="mt-2 self-start rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:opacity-50">重新建立計畫</button></>}
 
         {workflowForDisplay ? <>
           <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-xs font-semibold text-zinc-800">處理目標</h3><span className="text-[10px] font-medium text-zinc-500">{selectedTemplate ? `模板 ${selectedTemplate.name} · v${selectedTemplate.version}${selectedTemplateDirty ? ' · 有未儲存修改' : ''}` : '未套用已儲存模板'}</span></div><p className="mt-1 text-xs leading-5 text-zinc-600">{workflowForDisplay.goal}</p><p className="mt-2 break-all text-[10px] text-zinc-500">來源批次：{source?.name ?? '尚未選取；載入模板後請選取新來源檔案。'}</p></div>
@@ -1462,7 +1474,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
           {editedWorkflow && source ? <>
             <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 text-xs leading-5 ${isConfirmed ? 'border-emerald-300 bg-emerald-50' : 'border-zinc-200 bg-zinc-50'}`}><input type="checkbox" checked={isConfirmed} disabled={!source || isEditingPlan || Boolean(pillErrors.length) || isCreatingRun || runBlocksNewWork} onChange={(event) => setConfirmedSignature(event.target.checked ? payloadSignature : null)} className="mt-0.5 size-4 accent-zinc-950" /><span><span className="font-semibold text-zinc-800">我已核對指定資料、篩選條件、處理步驟、缺失欄位處理與 CSV 輸出。</span><span className="mt-1 block text-zinc-500">確認後將按此計畫處理指定資料；這不代表財務結果已經審核通過。來源、參數或步驟改變時，確認會自動失效。</span></span></label>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-zinc-500">只有按下按鈕後才會建立 Run；Builder 交接本身不執行。</p><button type="button" onClick={createRun} disabled={!canCreateRun} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-zinc-700 motion-reduce:transition-none disabled:cursor-not-allowed disabled:bg-zinc-300">{isCreatingRun ? '正在開始處理…' : runBlocksNewWork ? '正在處理中' : '確認計畫並開始處理'} <ArrowRight aria-hidden="true" className="size-3.5" /></button></div>
-            {runError && <ErrorNotice detail={runError} message="處理尚未開始，請重試。" />}
+            {runError && <><ErrorNotice detail={runError} message="Run 尚未成功建立；計畫仍保留，請確認狀態後再試。" /><button type="button" onClick={() => void createRun()} disabled={!canCreateRun} className="mt-2 self-start rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:opacity-50">重新確認並開始處理</button></>}
           </> : runInfo && <p className="mt-4 rounded-xl bg-zinc-50 px-4 py-3 text-xs leading-5 text-zinc-600">此為從已保存的 Run ID 載入的 workflow 快照；來源內容不會從 localStorage 還原。</p>}
         </> : <div className="mt-4 flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50/60 px-5 py-8 text-center"><CircleDashed aria-hidden="true" className="size-5 text-zinc-500" /><p className="mt-3 text-sm font-semibold text-zinc-700">尚未建立計畫</p><p className="mt-1 max-w-md text-xs leading-5 text-zinc-500">按「使用示範發票」，再按「建立計畫」。確認前不會開始整理。</p></div>}
       </section>

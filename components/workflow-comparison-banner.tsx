@@ -94,6 +94,12 @@ export function WorkflowComparisonBanner({ locale = 'zh-Hant' }: { locale?: Work
   const [reducedMotion, setReducedMotion] = useState(false)
 
   useEffect(() => {
+    // On narrow screens the full example pushes the actual task below the first view.
+    // Keep it available, but let the user reach the workflow controls first.
+    setCollapsed(window.matchMedia('(max-width: 639px)').matches)
+  }, [])
+
+  useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
     const update = () => { setReducedMotion(media.matches); if (media.matches) setFrame(LAST_FRAME) }
     update()
