@@ -9,6 +9,7 @@ import { applyLogicPills } from '../../lib/agent/logic-pills'
 import { createAgentRunService, createCancelPostHandler, createResumePostHandler, createRunPostHandler } from '../../lib/agent/run-service'
 import { createRunStreamResponse } from '../../lib/agent/run-stream'
 import { createAgentStore } from '../../lib/agent/store'
+import { createArtifactGetHandler } from '../../app/api/agent/runs/[id]/artifacts/[artifactId]/route'
 import type { SourceType, WorkflowDefinition } from '../../lib/agent/contracts'
 
 const proposal = {
@@ -133,6 +134,44 @@ test('runs API stores the source immutably, validates every tool step, and commi
     body: JSON.stringify({ ...requestBody, source: { ...source, content: source.content.replace('10000.01', '20000.01') } }),
   }))
   assert.equal(conflict.status, 409)
+})
+
+test('independent runs of the bundled invoice fixture produce identical CSV and source evidence', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'ezagent-repeat-run-test-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const service = createAgentRunService(root)
+  const source = {
+    name: 'invoices-batch-1.csv',
+    type: 'csv' as const,
+    content: await readFile(join(process.cwd(), 'data/demo/invoices-batch-1.csv'), 'utf8'),
+  }
+  const workflow = await makeWorkflow(source)
+  const outputs: string[] = []
+  const completedRuns: Array<{ summary: { rowCount: number; reviewCount: number } | undefined; sourceRefs: Array<{ rowNumber: number } | { lineNumber: number }> }> = []
+
+  for (const idempotencyKey of ['fixture-run-a', 'fixture-run-b']) {
+    const created = await service.createRun({ workflow, source, idempotencyKey })
+    const completed = await waitForTerminal(service, created.run.id)
+    assert.equal(completed.status, 'completed')
+    assert.equal(completed.artifacts.length, 1)
+    completedRuns.push({ summary: completed.artifacts[0].summary, sourceRefs: completed.artifacts[0].sourceRefs })
+    outputs.push(Buffer.from((await service.readArtifact(completed.id, completed.artifacts[0].id))!.contents).toString('utf8'))
+    const download = await createArtifactGetHandler(service)(new Request('http://localhost/api/agent/runs/download'), {
+      params: Promise.resolve({ id: completed.id, artifactId: completed.artifacts[0].id }),
+    })
+    assert.equal(download.status, 200)
+    assert.match(download.headers.get('content-type') ?? '', /text\/csv/)
+    assert.match(download.headers.get('content-disposition') ?? '', new RegExp(`invoice-export-${completed.id}\\.csv`))
+    assert.equal(await download.text(), outputs.at(-1))
+  }
+
+  assert.equal(outputs[0], outputs[1])
+  for (const [index, completed] of completedRuns.entries()) {
+    assert.deepEqual(completed.summary, { rowCount: 4, reviewCount: 1 })
+    assert.deepEqual(completed.sourceRefs.map((reference) => 'rowNumber' in reference ? reference.rowNumber : null), [2, 4, 5, 7])
+    assert.match(outputs[index], /"INV-004","","14250\.00","HKD"/)
+    assert.match(outputs[index], /flagged: missing_customer/)
+  }
 })
 
 test('resume API applies bounded filter corrections to working data and preserves the source', async (t) => {
