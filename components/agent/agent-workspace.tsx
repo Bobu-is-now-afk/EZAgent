@@ -42,7 +42,7 @@ const NEEDS_INPUT_CORRECTIONS_SUPPORTED = true
 
 const API_RESPONSE_LABELS: Record<ApiResponseStatus, string> = {
   unconfirmed: '尚未執行任務',
-  responded: '本機處理已回應',
+  responded: '示範服務已回應',
   failed: '最近一次處理未完成',
 }
 
@@ -51,8 +51,8 @@ const API_ERROR_GUIDANCE: Record<string, string> = {
   ollama_unavailable: '本機 AI 尚未啟動。請回到上方準備本機 AI，再重試。',
   ollama_unreachable: '無法連接本機 AI。請回到上方準備本機 AI，再重試。',
   ollama_request_failed: '本機 AI 未能完成處理，請稍後再試。',
-  planner_timeout: 'AI 準備計畫的時間較長，請稍後再試或改用較小模型。',
-  model_busy: '本機模型目前忙碌。請等待現有請求結束，再重新建立計畫。',
+  planner_timeout: '計畫服務逾時，尚未建立計畫或開始 Run。請稍後重新建立計畫。',
+  model_busy: '模型服務正在處理其他請求；這次請求不會排隊。請等待後再試，不要連續點擊。',
   invalid_source_content: '來源內容是空的或無法讀取。請選取非空的 UTF-8 CSV，或含標題列的 TXT。',
   source_too_large: '來源超過 1 MiB 上限。請縮小檔案後重新選取。',
   invalid_csv_header: 'CSV 標題列或欄位格式無效。請確認第一列是欄名，並包含所需發票欄位。',
@@ -65,11 +65,11 @@ const API_ERROR_GUIDANCE: Record<string, string> = {
   invalid_messages: '訊息格式或長度無效。請簡化內容後重新傳送。',
   empty_stream: '服務沒有提供回覆串流。請確認本機 AI 服務正常，再重試。',
   row_limit_exceeded: '來源超過 5,000 列上限。請分批處理後建立新 Run。',
-  active_run_limit: '已有一個 Run 正在執行。請先查看右側 Run 狀態，完成或取消後再建立下一個 Run。',
+  active_run_limit: '已有一個 Run 正在執行。服務目前不提供排隊；請查看右側狀態，完成或取消後再建立下一個 Run。',
   task_limit: '工作流程超過 5 個步驟上限。請減少步驟後重新核准。',
   attempt_limit: '此 Task 已達重試上限。請檢查來源與驗證證據，修正後建立新 Run。',
   model_call_limit: '此 Run 已達模型呼叫上限。請精簡工作流程，再建立新 Run。',
-  model_timeout: '模型請求超過時間上限。請檢查本機模型狀態，稍後重新執行。',
+  model_timeout: '模型請求逾時。先查看右側 Run 狀態，確認是否仍在執行，再決定是否恢復或重試。',
   run_timeout: 'Run 超過執行時間上限並停止。請檢查來源大小與驗證證據，再建立新 Run。',
   csv_formula_check_failed: '匯出檔未通過 CSV 公式安全檢查。請保留錯誤證據並交由管理者檢查，不要忽略檢核。',
   run_storage_failed: 'Agent 無法安全保存 Run 或來源。請確認本機儲存空間與權限，再建立新 Run。',
@@ -1381,6 +1381,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
   const displayRequiredFields = editedWorkflow
     ? requiredFields
     : isStringArray(storedRequiredFields) ? storedRequiredFields : requiredFields
+  const sourcePreview = source?.content.split(/\r\n|\n|\r/).slice(0, 6).map((line) => line.length > 400 ? `${line.slice(0, 400)}…` : line) ?? []
   const handoffDifferences = builderHandoff?.status === 'ready' && editedWorkflow && builderHandoff.parameters
     ? [
         ...(editedWorkflow.goal === builderHandoff.goal ? [] : ['任務目標已在 Agent 中修改。']),
@@ -1434,10 +1435,11 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
           <span className="mt-1 break-all text-[11px] text-zinc-500">{source?.name ?? '選取 CSV 或純文字檔'}</span>
           <input ref={fileInputRef} id="mission-source" type="file" accept=".csv,.txt,text/csv,text/plain" className="sr-only" disabled={isReadingSource || isPlanning || isCreatingRun || runBlocksNewWork} onClick={clearSource} onChange={selectSource} aria-describedby="source-note" />
         </label>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p id="source-note" className="text-[11px] leading-5 text-zinc-600">資料由本機處理。更換檔案後，需要重新確認計畫。PDF 與 Excel 檔案尚未支援。</p>{source && <button type="button" onClick={clearSource} disabled={isPlanning || isCreatingRun || runBlocksNewWork} className="min-h-11 rounded-md px-2 py-1 text-[11px] font-medium text-zinc-700 underline underline-offset-2 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:opacity-50">清除來源</button>}</div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p id="source-note" className="text-[11px] leading-5 text-zinc-600">資料會交由目前連線的 EZAgent 服務處理；託管示範會送至 Mac mini。更換檔案後，需要重新確認計畫。PDF 與 Excel 檔案尚未支援。</p>{source && <button type="button" onClick={clearSource} disabled={isPlanning || isCreatingRun || runBlocksNewWork} className="min-h-11 rounded-md px-2 py-1 text-[11px] font-medium text-zinc-700 underline underline-offset-2 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:opacity-50">清除來源</button>}</div>
         {source && <p aria-live="polite" className="mt-1 text-[11px] text-zinc-500">{(new TextEncoder().encode(source.content).byteLength / 1024).toFixed(1)} KiB · {source.type === 'csv' ? 'CSV' : '純文字'}</p>}
+        {source && <section aria-label="來源預覽" className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3"><h3 className="text-[11px] font-semibold text-zinc-700">來源文字預覽 · 前 5 列</h3><pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-4 text-zinc-600">{sourcePreview.join('\n')}</pre>{source.content.split(/\r\n|\n|\r/).length > 6 && <p className="mt-1 text-[10px] text-zinc-500">只顯示標題與前 5 列；完整來源會依上方計畫規則處理。</p>}</section>}
         {sourceError && <ErrorNotice detail={sourceError} message="無法讀取發票。請使用示範資料，或另存為 CSV 後重試。" />}
-        <div className="mt-auto pt-6"><div className="flex items-center justify-between border-t border-zinc-100 pt-4 text-xs"><span className="text-zinc-500">執行模式</span><span className="font-medium text-zinc-700">單一本機模型 · 序列流程</span></div></div>
+        <div className="mt-auto pt-6"><div className="flex items-center justify-between border-t border-zinc-100 pt-4 text-xs"><span className="text-zinc-500">執行模式</span><span className="font-medium text-zinc-700">單一模型服務 · 序列流程</span></div></div>
       </section>
 
       <section aria-labelledby="workflow-title" className="flex min-w-0 flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_-24px_rgba(24,24,27,0.3)] sm:p-6">

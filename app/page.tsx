@@ -7,6 +7,15 @@ import { LocalAiSetup } from '@/components/local-ai-setup'
 
 const GUIDE_STORAGE_KEY = 'ezagent:first-use-guide:v1:handled'
 
+function isLocalHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+  return normalized === 'localhost'
+    || normalized.endsWith('.localhost')
+    || normalized === '::1'
+    || normalized === '0.0.0.0'
+    || /^127(?:\.\d{1,3}){3}$/.test(normalized)
+}
+
 const COPY = {
   'zh-Hant': {
     workspace: 'EZAgent 工作區', title: '你今天想做什麼？', subtitle: '先查看本機 AI 狀態，再選擇要開始的工作。',
@@ -15,7 +24,7 @@ const COPY = {
     chatFirst: '先體驗對話', skip: '跳過，直接體驗工具',
     chat: '本機 AI 對話', chatDescription: '使用準備好的本機模型問問題、草擬文字。', chatAction: '開始對話',
     builder: '設計工作流程', builderDescription: '把重複工作的要求整理成可復用規則。', featured: '推薦', builderAction: '建立工作流程',
-    preset: '試用預設發票工具', presetDescription: '使用合成資料建立計畫、核對後再執行整理示範。', invoiceAction: '開始發票示範',
+    preset: '試用預設發票工具', presetDescription: '使用合成資料建立計畫、核對後再執行整理示範。', onlinePreset: '線上發票示範 · Mac mini', onlinePresetDescription: '只用合成資料；提交的 CSV／TXT 會送到 Mac mini 上的示範服務。', invoiceAction: '開始發票示範',
     boundary: '發票示範僅支援 CSV／TXT。配置、儲存或預演不代表已執行業務工作。',
     language: '語言',
   },
@@ -26,7 +35,7 @@ const COPY = {
     chatFirst: 'Try chat first', skip: 'Skip to tools',
     chat: 'Local AI chat', chatDescription: 'Ask questions and draft text with your prepared local model.', chatAction: 'Start a chat',
     builder: 'Design a workflow', builderDescription: 'Turn repetitive work requirements into reusable rules.', featured: 'Featured', builderAction: 'Create a workflow',
-    preset: 'Try the invoice demo', presetDescription: 'Build a plan with synthetic data, review it, then run the demo.', invoiceAction: 'Start invoice demo',
+    preset: 'Try the invoice demo', presetDescription: 'Build a plan with synthetic data, review it, then run the demo.', onlinePreset: 'Online invoice demo · Mac mini', onlinePresetDescription: 'Synthetic data only. Submitted CSV/TXT files are sent to the demo service on the Mac mini.', invoiceAction: 'Start invoice demo',
     boundary: 'The invoice demo supports CSV/TXT only. Configuring, saving, or previewing a workflow does not mean business work has run.',
     language: 'Language',
   },
@@ -37,12 +46,14 @@ const cardClass = 'group flex min-h-[168px] flex-col rounded-xl border border-zi
 export default function Page() {
   const [locale, setLocale] = useState<'zh-Hant' | 'en'>('zh-Hant')
   const [showGuide, setShowGuide] = useState(false)
+  const [hostedDemo, setHostedDemo] = useState(false)
   const toolsRef = useRef<HTMLElement>(null)
   const c = COPY[locale]
 
   useEffect(() => {
     try { setShowGuide(window.localStorage.getItem(GUIDE_STORAGE_KEY) !== 'true') }
     catch { setShowGuide(true) }
+    setHostedDemo(!isLocalHostname(window.location.hostname))
   }, [])
 
   function markGuideHandled() {
@@ -86,7 +97,7 @@ export default function Page() {
           <span className="flex items-start justify-between"><span className="flex size-10 items-center justify-center rounded-lg bg-zinc-950 text-white"><Sparkles aria-hidden="true" className="size-[19px]" /></span><span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">{c.featured}</span></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.builder}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.builderDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.builderAction} <span aria-hidden="true">→</span></span>
         </Link>
         <Link href="/invoice-demo" className={cardClass}>
-          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><FileText aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.preset}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.presetDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.invoiceAction} <span aria-hidden="true">→</span></span>
+          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><FileText aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{hostedDemo ? c.onlinePreset : c.preset}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{hostedDemo ? c.onlinePresetDescription : c.presetDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.invoiceAction} <span aria-hidden="true">→</span></span>
         </Link>
       </section>
       <p className="mt-3 w-full text-sm text-zinc-600">{locale === 'en' ? 'Already have a saved workflow?' : '已有儲存的工作流程？'} <Link href="/workflows" className="font-semibold text-zinc-900 underline underline-offset-4 hover:text-zinc-600 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950">{locale === 'en' ? 'Open workflow library' : '開啟工作流庫'}</Link></p>
