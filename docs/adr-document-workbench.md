@@ -21,14 +21,14 @@ When an order is selected, map its structured fields deterministically. Preserve
 
 For custom wording, the local model returns a bounded `DraftSuggestion`: proposed text fields, candidate item descriptions, source excerpts and explicit missing fields. The server validates the JSON schema and rejects unrecognized keys. An unclear price, tax, payment status, bank account, quantity or customer identity stays blank and blocks issue until a human enters or confirms it. The UI shows each suggestion beside its source and applies it only after user confirmation. All totals use deterministic integer minor units; the model never computes the payable total.
 
-The first release includes a manual order list inside EZAgent, as chosen by the product owner. Each order has an ID, revision and customer/item fields; saving or editing an order preserves the prior revision for draft provenance. An external order integration can be added later through an adapter with explicit source ID, version and field mapping. Importing an order is a draft action; it never sends a document, creates a payment request or grants approval.
+The first release includes a manual order list inside EZAgent, as chosen by the product owner. Each order has an ID, revision and customer/item fields; saving or editing an order preserves the prior revision for draft provenance. Orders, drafts and sample documents persist in ignored `.ezagent/documents` local storage, outside Git, with a clear-data action that identifies and removes only this workbench's data after explicit user confirmation. Browser refresh and app restart must preserve them until that action. An external order integration can be added later through an adapter with explicit source ID, version and field mapping. Importing an order is a draft action; it never sends a document, creates a payment request or grants approval.
 
 ## Primary user path
 
 1. Home → **Documents** → choose **From an order** or **Describe custom work**.
 2. Order path: select order → inspect buyer, items, prices, dates and source version → choose quotation/invoice/receipt → create draft.
 3. Custom path: describe work → local AI proposes only supported fields → inspect evidence and missing fields → apply selected suggestions to draft.
-4. Both paths: edit all fields → deterministic totals and paper preview → validation checklist → explicit **Issue SAMPLE document** → allocate a demo number → export/print SAMPLE PDF.
+4. Both paths: edit all fields → deterministic totals and paper preview → validation checklist → explicit **Create sample document** → allocate a demo number → export/print SAMPLE PDF. The button does not issue a real invoice or request payment.
 5. Quotation → invoice → receipt can link documents, but conversion requires a new review. Receipt requires a verified payment amount and date entered by a human or trusted payment record.
 
 ## Acceptance gates
@@ -47,7 +47,7 @@ Keep `/invoice-demo` and its API available as a legacy demo while the new path i
 
 ## Open decisions
 
-- Define the manual-order persistence and backup contract; an external source adapter is a later option.
+- Define the backup/export contract for locally stored orders, drafts and samples; an external source adapter is a later option.
 - Store real company contact, payment details and terms in an administrator-controlled profile outside public source control. The selected first style is the generic InkVoice minimal template.
 - Decide who may issue documents, how numbering is scoped, and whether issue requires manager approval. These are policy choices; a demo role selector is not authorization.
 - Confirm whether browser print-to-PDF is acceptable for the judge version or whether a dedicated renderer is required after page-break tests.
