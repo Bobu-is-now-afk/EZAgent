@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'EZAgent | 本機 AI 工作區',
-  description: '本機聊天與發票 CSV 示範；包含流程設計預覽。',
+  title: 'EZAgent | 工作區',
+  description: '本機聊天與線上受控發票示範；功能依服務狀態提供。',
   generator: 'v0.app',
   icons: {
     icon: [
