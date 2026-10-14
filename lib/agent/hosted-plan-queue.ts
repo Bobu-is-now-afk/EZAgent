@@ -1,7 +1,7 @@
 export type HostedPlanJobStatus = 'queued' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
 
 export function hostedPlanJobStatusLabel(status: HostedPlanJobStatus, position: number | null): string {
-  if (status === 'queued') return `排隊中${position ? ` · 前方位置 ${position}` : ''}`
+  if (status === 'queued') return `排隊中${position ? ` · 佇列第 ${position} 位` : ''}`
   if (status === 'running') return '處理中'
   if (status === 'cancelling') return '正在取消'
   if (status === 'completed') return '已完成'

@@ -3,8 +3,8 @@ import test from 'node:test'
 import { hostedPlanJobStatusLabel, isHostedPlanJobCancelable } from '../../lib/agent/hosted-plan-queue'
 
 test('queue status includes position and clear terminal states', () => {
-  assert.equal(hostedPlanJobStatusLabel('queued', 1), '排隊中 · 前方位置 1')
-  assert.equal(hostedPlanJobStatusLabel('queued', 2), '排隊中 · 前方位置 2')
+  assert.equal(hostedPlanJobStatusLabel('queued', 1), '排隊中 · 佇列第 1 位')
+  assert.equal(hostedPlanJobStatusLabel('queued', 2), '排隊中 · 佇列第 2 位')
   assert.equal(hostedPlanJobStatusLabel('running', null), '處理中')
   assert.equal(hostedPlanJobStatusLabel('cancelling', null), '正在取消')
   assert.equal(hostedPlanJobStatusLabel('completed', null), '已完成')
