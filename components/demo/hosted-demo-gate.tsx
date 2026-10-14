@@ -146,7 +146,7 @@ export function HostedDemoGate({ onAuthorized }: { onAuthorized: (info: HostedDe
     <h1 className="text-xl font-semibold">線上發票示範 · Mac mini</h1>
     <p className="mt-2 text-sm leading-6">此服務會把輸入的 CSV／TXT 傳到 Mac mini。只使用合成資料；目前沒有自助刪除功能，資料處理方式請先閱讀{policyPath ? <a className="font-semibold underline underline-offset-2" href={policyPath}>示範資料政策</a> : '示範資料政策（目前未提供）'}。未提供資料政策連結時不會允許開啟示範。</p>
     <DemoSafetyNotice />
-    {state.data.requestLimits && <p className="mt-3 text-xs leading-5">上限：單次請求 {Math.floor(state.data.requestLimits.maxRequestBytes / 1024)} KiB、模型同時處理 {state.data.requestLimits.maxConcurrentModelCalls} 個、每位訪客每日 {state.data.requestLimits.maxCallsPerVisitorPerUtcDay} 次。模型忙碌時不會排隊。</p>}
+    {state.data.requestLimits && <p className="mt-3 text-xs leading-5">上限：單次請求 {Math.floor(state.data.requestLimits.maxRequestBytes / 1024)} KiB、模型同時處理 {state.data.requestLimits.maxConcurrentModelCalls} 個、每位訪客每日 {state.data.requestLimits.maxCallsPerVisitorPerUtcDay} 次。計畫採 1 個執行中、最多 2 個候補的受限佇列；Run 不會自動排隊。</p>}
     {policyPath && <form onSubmit={submitAccessCode} className="mt-5 border-t border-amber-200 pt-4">
       <label htmlFor="demo-access-code" className="block text-sm font-semibold">輸入評審示範代碼</label>
       <p className="mt-1 text-xs leading-5">代碼只用來換取限時示範工作階段；不會儲存在此頁。工作階段採 HttpOnly cookie，逾時後需重新輸入。</p>

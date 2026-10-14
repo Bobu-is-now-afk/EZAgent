@@ -5,6 +5,8 @@ import { applyLogicPills, deriveLogicPills, isLogicPills, type LogicPill } from 
 import { validateWorkflow } from '@/lib/agent/validation'
 import { getSavedWorkflow } from '@/lib/yolanda-review/workflow-storage'
 import { createInvoiceAgentHandoff, type InvoiceAgentHandoff } from '@/lib/yolanda-review/workflow-agent-handoff'
+import { createHostedPlanSourceFingerprint, isValidHostedPlanSourceBinding, matchesHostedPlanSourceBinding, type HostedPlanSourceBinding, type HostedPlanSourceFingerprint } from '@/lib/agent/hosted-plan-binding'
+import { hostedPlanJobStatusLabel, isHostedPlanJobCancelable } from '@/lib/agent/hosted-plan-queue'
 import type { HostedDemoInfo } from '@/components/demo/hosted-demo-gate'
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -52,6 +54,7 @@ const API_ERROR_GUIDANCE: Record<string, string> = {
   demo_rate_limited: '已達短時間請求上限。請依 Retry-After 等候，不要連續重試。',
   demo_daily_limit: '此評審工作階段或示範服務已達每日使用上限；今天不能再建立新模型請求。',
   demo_busy: '示範計畫佇列已滿或服務忙碌；沒有建立新計畫。請等候佇列位置釋出後再試。',
+  replan_required: '目前來源與完成計畫綁定的來源不一致，或原計畫已無法使用。請使用目前來源重新建立計畫，再核對並確認。',
   demo_unavailable: '線上示範目前未開放或服務設定不完整；沒有開始新的處理。',
   demo_usage_unavailable: '示範使用量記錄目前不可用；服務已暫停新請求，請稍後再試。',
   model_missing: '本機 AI 尚未準備好。請回到上方「準備本機 AI」下載模型。',
@@ -259,6 +262,7 @@ const MAX_SOURCE_BYTES = 1024 * 1024
 const RUN_ID_STORAGE_KEY = 'ezagent:lastRunId'
 const TEMPLATE_STORAGE_KEY = 'ezagent:workflow-templates:v1'
 const HOSTED_PLAN_JOB_KEY = 'ezagent:hostedPlanJobId:v1'
+const HOSTED_PLAN_SOURCE_BINDING_KEY = 'ezagent:hostedPlanSourceBinding:v1'
 const GOAL_PLACEHOLDER = '例如：篩選港幣 10,000 元以上的發票、標記缺漏欄位並匯出 CSV'
 type HostedPlanJob = { id: string; status: 'queued' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'interrupted'; position: number | null; errorCode?: string }
 const TOOL_TITLES: Record<AgentToolId, string> = {
@@ -635,6 +639,9 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
   const [hostedPlanJob, setHostedPlanJob] = useState<HostedPlanJob | null>(null)
   const [hostedJobNotice, setHostedJobNotice] = useState<string | null>(null)
   const [isCancellingPlanJob, setIsCancellingPlanJob] = useState(false)
+  const [hostedPlanRestored, setHostedPlanRestored] = useState(false)
+  const [hostedPlanSourceBinding, setHostedPlanSourceBinding] = useState<HostedPlanSourceBinding | null>(null)
+  const [selectedHostedSourceBinding, setSelectedHostedSourceBinding] = useState<HostedPlanSourceFingerprint | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [builderHandoff, setBuilderHandoff] = useState<InvoiceAgentHandoff | null>(null)
   const [handoffError, setHandoffError] = useState<string | null>(null)
@@ -660,12 +667,20 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
   useEffect(() => {
     if (!hostedDemo?.canQueuePlan) return
     let jobId: string | null = null
-    try { jobId = window.sessionStorage.getItem(HOSTED_PLAN_JOB_KEY) } catch { /* Storage may be unavailable; job is still usable in this page. */ }
+    let binding: HostedPlanSourceBinding | null = null
+    try {
+      jobId = window.sessionStorage.getItem(HOSTED_PLAN_JOB_KEY)
+      const rawBinding = window.sessionStorage.getItem(HOSTED_PLAN_SOURCE_BINDING_KEY)
+      const parsedBinding: unknown = rawBinding ? JSON.parse(rawBinding) : null
+      if (isValidHostedPlanSourceBinding(parsedBinding)) binding = parsedBinding
+    } catch { /* Storage may be unavailable; the restored plan will fail closed without its source binding. */ }
     if (!jobId || !/^[0-9a-f-]{36}$/i.test(jobId)) return
+    setHostedPlanRestored(true)
+    setHostedPlanSourceBinding(binding)
     setHostedPlanJob({ id: jobId, status: 'queued', position: null })
     setIsPlanning(true)
     setHostedJobNotice('正在恢復此瀏覽器工作階段的計畫狀態；來源檔不會由瀏覽器儲存。')
-    void pollHostedPlanJob(jobId)
+    void pollHostedPlanJob(jobId, true)
   // Only restore once when the authenticated hosted workspace mounts.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostedDemo?.canQueuePlan])
@@ -1039,6 +1054,7 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
 
   function clearSource() {
     setSource(null)
+    setSelectedHostedSourceBinding(null)
     setSourceError(null)
     if (selectedTemplateId && plannedWorkflow) {
       setPlannerPreview(null)
@@ -1056,6 +1072,7 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
     if (runBlocksNewWork) return
     const workflow = makeTemplateWorkflow(template.workflow)
     setSource(null)
+    setSelectedHostedSourceBinding(null)
     setSourceError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
     clearPlanState()
@@ -1124,6 +1141,8 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
       if (!response.ok) throw new Error('sample_unavailable')
       const sample = await response.json()
       setSource(sample)
+      try { setSelectedHostedSourceBinding(await createHostedPlanSourceFingerprint(sample)) }
+      catch { setSelectedHostedSourceBinding(null) }
       setGoal((current) => builderHandoff?.status === 'ready' ? current : '篩選港幣 10,000 元以上的發票，標記缺漏欄位並匯出 CSV')
     } catch { setSourceError('示範資料暫時無法載入，請再試一次。') }
     finally { setIsReadingSource(false) }
@@ -1132,7 +1151,12 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
   async function selectSource(event: React.ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget
     const file = input.files?.[0]
-    if (selectedTemplateId && plannedWorkflow) {
+    if (hostedDemo && hostedPlanRestored && plannedWorkflow) {
+      setConfirmedSignature(null)
+      setPlanError(null)
+      setRunError(null)
+      idempotencyRef.current = null
+    } else if (selectedTemplateId && plannedWorkflow) {
       setPlannerPreview(null)
       setConfirmedSignature(null)
       setPlanError(null)
@@ -1142,6 +1166,7 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
       clearPlanState()
     }
     setSource(null)
+    setSelectedHostedSourceBinding(null)
     setSourceError(null)
     if (!file) return
     if (file.size > MAX_SOURCE_BYTES) {
@@ -1168,7 +1193,10 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
         input.value = ''
         return
       }
-      setSource({ name: file.name, type, content })
+      const selectedSource = { name: file.name, type, content }
+      setSource(selectedSource)
+      try { setSelectedHostedSourceBinding(await createHostedPlanSourceFingerprint(selectedSource)) }
+      catch { setSelectedHostedSourceBinding(null) }
     } catch {
       setSourceError('檔案無法以 UTF-8 解碼，請另存為 UTF-8 後重試。')
       input.value = ''
@@ -1187,11 +1215,11 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
     setIsEditingPlan(false)
     setPlannedWorkflow(workflow)
     setPlannerPreview(result.preview)
-    setHostedJobNotice(hostedDemo ? '計畫已完成。請核對內容；執行前需重新選取來源並再次確認。' : null)
+    setHostedJobNotice(hostedDemo ? '計畫已完成。請核對內容，再確認要處理的來源與步驟。' : null)
     onApiStatusChange('responded')
   }
 
-  async function pollHostedPlanJob(jobId: string) {
+  async function pollHostedPlanJob(jobId: string, restoredFromStorage = false) {
     hostedJobControllerRef.current?.abort()
     const controller = new AbortController()
     hostedJobControllerRef.current = controller
@@ -1200,8 +1228,13 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
         const response = await fetch(`/api/demo/jobs/${encodeURIComponent(jobId)}`, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
         const body: unknown = await response.json().catch(() => null)
         if (response.status === 404) {
-          try { window.sessionStorage.removeItem(HOSTED_PLAN_JOB_KEY) } catch { /* Ignore unavailable storage. */ }
+          try {
+            window.sessionStorage.removeItem(HOSTED_PLAN_JOB_KEY)
+            window.sessionStorage.removeItem(HOSTED_PLAN_SOURCE_BINDING_KEY)
+          } catch { /* Ignore unavailable storage. */ }
           setHostedPlanJob(null)
+          setHostedPlanRestored(false)
+          setHostedPlanSourceBinding(null)
           setHostedJobNotice('找不到先前的計畫工作紀錄（可能已超過保留期限）。來源檔不會由瀏覽器還原；請重新選取來源再建立計畫。')
           return
         }
@@ -1210,6 +1243,7 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
         setHostedPlanJob({ id: job.id, status: job.status, position: job.position, errorCode: job.errorCode })
         if (job.status === 'completed') {
           applyPlanResult(job.result)
+          setHostedPlanRestored(restoredFromStorage)
           return
         }
         if (['failed', 'cancelled', 'interrupted'].includes(job.status)) {
@@ -1218,7 +1252,12 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
             ? '服務重新啟動後，這個計畫工作已標記為中斷；系統不會假設它已完成。請重新選取來源後建立新計畫。'
             : `計畫工作${job.status === 'cancelled' ? '已取消' : '未完成'}（${detail}）。請檢查來源後再建立新計畫。`)
           onApiStatusChange('failed')
-          try { window.sessionStorage.removeItem(HOSTED_PLAN_JOB_KEY) } catch { /* Ignore unavailable storage. */ }
+          try {
+            window.sessionStorage.removeItem(HOSTED_PLAN_JOB_KEY)
+            window.sessionStorage.removeItem(HOSTED_PLAN_SOURCE_BINDING_KEY)
+          } catch { /* Ignore unavailable storage. */ }
+          setHostedPlanRestored(false)
+          setHostedPlanSourceBinding(null)
           return
         }
         await new Promise<void>((resolve) => window.setTimeout(resolve, hostedDemo?.pollAfterMs ?? 5_000))
@@ -1243,7 +1282,12 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
       if (job.status === 'cancelled') {
         hostedJobControllerRef.current?.abort()
         setIsPlanning(false)
-        try { window.sessionStorage.removeItem(HOSTED_PLAN_JOB_KEY) } catch { /* Ignore unavailable storage. */ }
+        try {
+          window.sessionStorage.removeItem(HOSTED_PLAN_JOB_KEY)
+          window.sessionStorage.removeItem(HOSTED_PLAN_SOURCE_BINDING_KEY)
+        } catch { /* Ignore unavailable storage. */ }
+        setHostedPlanRestored(false)
+        setHostedPlanSourceBinding(null)
       }
     } catch (error) {
       setPlanError(formatClientRequestError(error, '取消計畫工作失敗；請重新整理狀態後確認。'))
@@ -1262,10 +1306,16 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
     setRunError(null)
     setHostedPlanJob(null)
     setHostedJobNotice(null)
+    setHostedPlanRestored(false)
+    setHostedPlanSourceBinding(null)
     setPlannedWorkflow(null)
     setPlannerPreview(null)
     setConfirmedSignature(null)
     idempotencyRef.current = null
+    try {
+      window.sessionStorage.removeItem(HOSTED_PLAN_JOB_KEY)
+      window.sessionStorage.removeItem(HOSTED_PLAN_SOURCE_BINDING_KEY)
+    } catch { /* A new job can proceed; recovery will fail closed if storage is unavailable. */ }
     try {
       const response = await fetch(hostedDemo ? '/api/demo/jobs' : '/api/agent/plans', {
         method: 'POST',
@@ -1276,12 +1326,22 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
       if (!response.ok) throw new Error(formatApiError(result, response.status))
       if (hostedDemo) {
         const job = isRecord(result) && isRecord(result.job) ? result.job : null
-        if (!job || typeof job.id !== 'string' || !['queued', 'running', 'completed'].includes(String(job.status))) throw new Error('線上計畫佇列回應格式不相容；沒有顯示未驗證的工作狀態。')
+        if (!job || typeof job.id !== 'string' || !['queued', 'running', 'completed'].includes(String(job.status)) ||
+          !isValidHostedPlanSourceBinding({ jobId: job.id, planVersion: job.planVersion, sourceNameSha256: job.sourceNameSha256, sourceType: job.sourceType, sourceSha256: job.sourceSha256 })) {
+          throw new Error('線上計畫佇列回應未提供有效的伺服器來源綁定；請稍後重新建立計畫。')
+        }
+        const planSourceBinding: HostedPlanSourceBinding = { jobId: job.id, planVersion: 1, sourceNameSha256: job.sourceNameSha256 as string, sourceType: job.sourceType as 'csv' | 'text', sourceSha256: job.sourceSha256 as string }
         setHostedPlanJob({ id: job.id, status: job.status as HostedPlanJob['status'], position: typeof job.position === 'number' ? job.position : null })
+        setHostedPlanSourceBinding(planSourceBinding)
+        setHostedPlanRestored(false)
         setHostedJobNotice('計畫已進入受限佇列。此動作只建立計畫，不會開始 Run。')
-        try { window.sessionStorage.setItem(HOSTED_PLAN_JOB_KEY, job.id) } catch { setHostedJobNotice('計畫已進入佇列；瀏覽器無法保存工作 ID，請勿關閉此頁，否則可能無法恢復狀態。') }
+        try {
+          window.sessionStorage.setItem(HOSTED_PLAN_JOB_KEY, job.id)
+          if (planSourceBinding) window.sessionStorage.setItem(HOSTED_PLAN_SOURCE_BINDING_KEY, JSON.stringify(planSourceBinding))
+          else window.sessionStorage.removeItem(HOSTED_PLAN_SOURCE_BINDING_KEY)
+        } catch { setHostedJobNotice('計畫已進入佇列；瀏覽器無法完整保存工作識別與來源指紋，請勿關閉此頁，否則恢復後需重建計畫。') }
         onApiStatusChange('responded')
-        await pollHostedPlanJob(job.id)
+        await pollHostedPlanJob(job.id, false)
         return
       }
       applyPlanResult(result)
@@ -1298,7 +1358,17 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
     const workflow = builderHandoff?.status === 'ready'
       ? { ...editedWorkflow, origin: { type: 'yolanda-builder' as const, workflowId: builderHandoff.workflowId, revision: builderHandoff.revision } }
       : editedWorkflow
-    const request = { workflow, source }
+    const request = {
+      workflow,
+      source,
+      ...(hostedDemo && hostedPlanSourceBinding ? {
+        planBinding: {
+          jobId: hostedPlanSourceBinding.jobId,
+          planVersion: hostedPlanSourceBinding.planVersion,
+          sourceSha256: hostedPlanSourceBinding.sourceSha256,
+        },
+      } : {}),
+    }
     const signature = JSON.stringify(request)
     const existingKey = idempotencyRef.current?.signature === signature ? idempotencyRef.current.key : null
     const idempotencyKey = existingKey ?? crypto.randomUUID()
@@ -1474,7 +1544,8 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
   }
 
   const planningDisabled = !source || !goal.trim() || isPlanning || isReadingSource || isCreatingRun || runBlocksNewWork || Boolean(builderHandoff && builderHandoff.status !== 'ready') || Boolean(hostedDemo && (!hostedDemo.canPlan || hostedDemo.queueFull))
-  const canCreateRun = Boolean(editedWorkflow && source && isConfirmed && !isEditingPlan && !pillErrors.length && !isCreatingRun && !runBlocksNewWork && (!hostedDemo || hostedDemo.canRun))
+  const recoveredSourceMatches = matchesHostedPlanSourceBinding(hostedPlanSourceBinding, selectedHostedSourceBinding)
+  const canCreateRun = Boolean(editedWorkflow && source && isConfirmed && !isEditingPlan && !pillErrors.length && !isCreatingRun && !runBlocksNewWork && (!hostedDemo || (hostedDemo.canRun && Boolean(hostedPlanSourceBinding) && recoveredSourceMatches)))
   const previewText = plannerPreview === null ? '' : formatPreview(plannerPreview)
   const workflowForDisplay = editedWorkflow ?? runInfo?.workflow ?? null
   const runWorkflowMatches = Boolean(runInfo && workflowForDisplay && JSON.stringify(runInfo.workflow) === JSON.stringify(workflowForDisplay))
@@ -1564,7 +1635,8 @@ function MainStage({ apiStatus, onApiStatusChange, hostedDemo }: { apiStatus: Ap
         {hostedDemo && <p role="status" className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-950">{!hostedDemo.canPlan ? '示範模型目前停止；新計畫已停用。可查看既有 Run 狀態。' : hostedDemo.queueFull ? '計畫佇列已滿；目前不能提交新計畫。' : hostedDemo.status === 'busy' ? '模型正在處理工作；新計畫會進入受限佇列。' : '線上計畫會經受限佇列處理；建立計畫不會自動執行。'}</p>}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-zinc-500">先預覽計畫，確認後才會處理資料。</p><button type="button" onClick={createPlan} disabled={planningDisabled} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-zinc-700 motion-reduce:transition-none disabled:cursor-not-allowed disabled:bg-zinc-300"><Sparkles aria-hidden="true" className="size-3.5" />{isPlanning ? '計畫排隊或處理中…' : '建立計畫'}</button></div>
         {hostedJobNotice && <p role="status" className="mt-3 text-xs leading-5 text-sky-800">{hostedJobNotice}</p>}
-        {hostedPlanJob && <section aria-label="線上計畫佇列狀態" className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">計畫工作：{hostedPlanJob.status === 'queued' ? `排隊中${hostedPlanJob.position ? ` · 前方位置 ${hostedPlanJob.position}` : ''}` : hostedPlanJob.status === 'running' ? '處理中' : hostedPlanJob.status === 'cancelling' ? '正在取消' : hostedPlanJob.status === 'completed' ? '已完成' : hostedPlanJob.status === 'interrupted' ? '服務重啟後中斷' : hostedPlanJob.status === 'cancelled' ? '已取消' : '未完成'}</p><p className="mt-1 text-xs">工作 ID：{hostedPlanJob.id} · 狀態每 {Math.round((hostedDemo?.pollAfterMs ?? 5_000) / 1000)} 秒更新</p></div>{['queued', 'running', 'cancelling'].includes(hostedPlanJob.status) && <button type="button" onClick={() => void cancelHostedPlanJob()} disabled={isCancellingPlanJob || hostedPlanJob.status === 'cancelling'} className="min-h-10 rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50">{isCancellingPlanJob ? '正在取消…' : '取消計畫'}</button>}</div></section>}
+        {hostedPlanRestored && plannedWorkflow && <p role={recoveredSourceMatches ? 'status' : 'alert'} className={`mt-3 rounded-lg border p-3 text-xs leading-5 ${recoveredSourceMatches ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-300 bg-amber-50 text-amber-950'}`}>{!hostedPlanSourceBinding ? '無法驗證此恢復計畫的來源指紋；請建立新計畫後再執行。' : !selectedHostedSourceBinding ? '來源檔不會由瀏覽器還原。重新選取原始來源後，系統會比對檔名雜湊、格式與內容指紋；不一致時必須建立新計畫。' : recoveredSourceMatches ? '目前來源的檔名雜湊、格式與 SHA-256 內容指紋符合恢復計畫；請重新核對並確認後才可執行。' : '目前來源與恢復計畫的檔名雜湊、格式或內容不同；此計畫不能搭配目前來源執行。請重新建立計畫。'}</p>}
+        {hostedPlanJob && <section aria-label="線上計畫佇列狀態" className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">計畫工作：{hostedPlanJobStatusLabel(hostedPlanJob.status, hostedPlanJob.position)}</p><p className="mt-1 text-xs">工作 ID：{hostedPlanJob.id} · 狀態每 {Math.round((hostedDemo?.pollAfterMs ?? 5_000) / 1000)} 秒更新</p></div>{isHostedPlanJobCancelable(hostedPlanJob.status) && <button type="button" onClick={() => void cancelHostedPlanJob()} disabled={isCancellingPlanJob || hostedPlanJob.status === 'cancelling'} className="min-h-10 rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50">{isCancellingPlanJob ? '正在取消…' : '取消計畫'}</button>}</div></section>}
         {planError && <><ErrorNotice detail={planError} message="計畫尚未建立；已保留目前目標與來源，修正問題後可重新建立。" /><button type="button" onClick={() => void createPlan()} disabled={planningDisabled} className="mt-2 self-start rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:opacity-50">重新建立計畫</button></>}
 
         {workflowForDisplay ? <>
