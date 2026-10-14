@@ -15,12 +15,12 @@ export function proxy(request: NextRequest) {
 
   const isCapabilities = request.nextUrl.pathname === '/api/demo/capabilities'
   if (isCapabilities) return NextResponse.next()
+  if (request.nextUrl.pathname === '/api/local-ai' || request.nextUrl.pathname.startsWith('/api/local-ai/')) {
+    return Response.json({ state: 'local_only' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
+  }
 
   const config = demoConfig()
   if (!config) return demoDisabledResponse()
-  if (request.nextUrl.pathname === '/api/local-ai' || request.nextUrl.pathname.startsWith('/api/local-ai/')) {
-    return Response.json({ error: { code: 'demo_route_disabled', message: 'Local model preparation is disabled on the hosted demo.' } }, { status: 404, headers: { 'Cache-Control': 'no-store' } })
-  }
   if (request.nextUrl.pathname === '/api/chat' || request.nextUrl.pathname.startsWith('/api/chat/')) {
     return Response.json({ error: { code: 'demo_route_disabled', message: 'Hosted chat is not part of the invoice demo.' } }, { status: 404, headers: { 'Cache-Control': 'no-store' } })
   }

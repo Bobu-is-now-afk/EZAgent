@@ -127,7 +127,7 @@ test('production proxy rejects unauthenticated requests to every stateful or mod
   }
 })
 
-test('production proxy rejects forged owner headers, cross-origin requests, local model preparation, and hosted chat', (t) => {
+test('production proxy rejects forged owner headers, cross-origin requests, local model preparation, and hosted chat', async (t) => {
   useEnv(t)
   const config = demoConfig()!
   const session = issueDemoSession(config)
@@ -153,7 +153,9 @@ test('production proxy rejects forged owner headers, cross-origin requests, loca
   const localAi = new NextRequest('https://demo.example.test/api/local-ai', {
     method: 'POST', headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, cookie: `${DEMO_SESSION_COOKIE}=${session.token}` }, body: '{}',
   })
-  assert.equal((proxy(localAi) as Response).status, 404)
+  const localAiResponse = proxy(localAi) as Response
+  assert.equal(localAiResponse.status, 403)
+  assert.deepEqual(await localAiResponse.json(), { state: 'local_only' })
   const hostedChat = new NextRequest('https://demo.example.test/api/chat', {
     method: 'POST', headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, cookie: `${DEMO_SESSION_COOKIE}=${session.token}` }, body: '{}',
   })

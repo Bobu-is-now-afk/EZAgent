@@ -75,15 +75,15 @@ export function HostedDemoGate({ onAuthorized }: { onAuthorized: (info: HostedDe
         if (!capabilityResponse.ok) throw new Error('capabilities_unavailable')
         const capabilities = await capabilityResponse.json() as DemoCapabilities
         if (capabilities.version !== 1 || !['disabled', 'maintenance', 'busy', 'stopped', 'ready'].includes(capabilities.status)) throw new Error('capabilities_invalid')
-        if (!safePolicyPath(capabilities.dataPolicyUrl)) {
-          if (!cancelled) setState({ kind: 'closed', message: '示範資料政策未設定；目前不能開啟或使用線上示範。' })
-          return
-        }
         if (['disabled', 'maintenance'].includes(capabilities.status) || !capabilities.capabilities.invoicePlanQueue) {
           const message = capabilities.status === 'ready' || capabilities.status === 'busy' || capabilities.status === 'stopped'
             ? '示範服務尚未完成受限計畫佇列能力的驗收；目前不能上傳或執行。'
             : closedMessage(capabilities.status, capabilities.message)
           if (!cancelled) setState({ kind: 'closed', message })
+          return
+        }
+        if (!safePolicyPath(capabilities.dataPolicyUrl)) {
+          if (!cancelled) setState({ kind: 'closed', message: '示範資料政策未設定；目前不能開啟或使用線上示範。' })
           return
         }
 
