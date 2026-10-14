@@ -1,10 +1,12 @@
 import { requestOwnerId, unauthorizedDemoResponse } from './access-control'
+import { demoPolicyUnavailableResponse, isDemoPolicyAvailable } from './policy-readiness'
 import { acquireDemoModelSlot, demoLimitResponse, reserveDemoOperation, type DemoOperation } from './limits'
 
-export async function authorizeDemoOperation(request: Request, operation: DemoOperation): Promise<string | Response> {
+export async function authorizeDemoOperation(request: Request, operation: DemoOperation, policyReady: () => Promise<boolean> = isDemoPolicyAvailable): Promise<string | Response> {
   const ownerId = requestOwnerId(request)
   if (!ownerId) return unauthorizedDemoResponse()
   if (ownerId !== 'local') {
+    if (!(await policyReady().catch(() => false))) return demoPolicyUnavailableResponse()
     try {
       await reserveDemoOperation(ownerId, operation)
     } catch (error) {
@@ -17,6 +19,7 @@ export async function authorizeDemoOperation(request: Request, operation: DemoOp
 export async function runDemoModelOperation(request: Request, handler: () => Promise<Response>): Promise<Response> {
   const ownerId = requestOwnerId(request)
   if (!ownerId) return unauthorizedDemoResponse()
+  if (ownerId !== 'local' && !(await isDemoPolicyAvailable().catch(() => false))) return demoPolicyUnavailableResponse()
   let releaseSlot: (() => void) | null = null
   try {
     releaseSlot = acquireDemoModelSlot()

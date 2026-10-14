@@ -19,7 +19,7 @@ export const DEMO_DATA_POLICY = {
     },
     {
       heading: 'Plan queue',
-      body: 'Queued plan input and completed plan results are held in process memory and are not written to the queue metadata file. Queue metadata contains a job ID, a hashed owner identifier, status, timestamps, and a safe error code. Terminal job metadata is removed at 24 hours while the process is running and is also trimmed on restart.',
+      body: 'Queued plan input and completed plan results are held in process memory and are not written to the queue metadata file. Queue metadata contains a job ID, hashed owner identifier, status, timestamps, a plan version, the source type, SHA-256 hashes of the source contents and source name, and a safe error code. The source name itself is not stored. Terminal job metadata is removed at 24 hours while the process is running and is also trimmed on restart.',
     },
     {
       heading: 'Usage limits and logs',

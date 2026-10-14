@@ -3,8 +3,8 @@ import { localAiConfig } from '../../../../lib/local-ai/config'
 import { demoConfig } from '../../../../lib/demo/access-control'
 import { DEMO_LIMITS, isDemoModelBusy, reservePublicProbe } from '../../../../lib/demo/limits'
 import { DEMO_PLAN_QUEUE, demoPlanQueue } from '../../../../lib/demo/jobs'
-import { DEMO_DATA_POLICY_PATH, isPublishedDemoPolicy, verifyPublishedDemoPolicy } from '../../../../lib/demo/data-policy'
-import { GET as getDemoDataPolicy } from '../../../demo-data-policy/route'
+import { DEMO_DATA_POLICY_PATH, isPublishedDemoPolicy } from '../../../../lib/demo/data-policy'
+import { isDemoPolicyAvailable } from '../../../../lib/demo/policy-readiness'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ export async function GET(): Promise<Response> {
   if (!reservePublicProbe()) return Response.json({ error: { code: 'demo_rate_limited', message: 'Too many capability checks. Please wait before trying again.' } }, { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': '60' } })
   const config = demoConfig()
   const dataPolicyAvailable = Boolean(config && config.dataPolicyUrl === DEMO_DATA_POLICY_PATH && isPublishedDemoPolicy(config.dataPolicyUrl) &&
-    await getDemoDataPolicy().then(verifyPublishedDemoPolicy).catch(() => false))
+    await isDemoPolicyAvailable())
   const queue = config ? await demoPlanQueue.status().catch(() => ({ active: 0, queued: DEMO_PLAN_QUEUE.maxPending })) : { active: 0, queued: 0 }
   const base = {
     version: 1,

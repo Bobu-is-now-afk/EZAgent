@@ -9,8 +9,9 @@ import {
   validDemoOrigin,
   verifyDemoSession,
 } from './lib/demo/access-control'
+import { gateDemoApiOnPolicy } from './lib/demo/policy-readiness'
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (process.env.NODE_ENV !== 'production') return NextResponse.next()
 
   const isCapabilities = request.nextUrl.pathname === '/api/demo/capabilities'
@@ -34,6 +35,9 @@ export function proxy(request: NextRequest) {
   if (!validDemoOrigin(request, config)) {
     return Response.json({ error: { code: 'invalid_origin', message: 'Request origin is not allowed.' } }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
   }
+
+  const policyGate = await gateDemoApiOnPolicy(request.nextUrl.pathname, request.method)
+  if (policyGate) return policyGate
 
   const contentLength = Number(request.headers.get('content-length') ?? 0)
   if (!Number.isSafeInteger(contentLength) || contentLength < 0 || contentLength > 1_048_576) {

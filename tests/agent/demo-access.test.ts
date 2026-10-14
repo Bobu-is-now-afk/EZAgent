@@ -15,6 +15,9 @@ import { GET as getDemoCapabilities } from '../../app/api/demo/capabilities/rout
 import { GET as getDemoPolicy } from '../../app/demo-data-policy/route'
 import { verifyPublishedDemoPolicy } from '../../lib/demo/data-policy'
 import { matchesCompletedPlanBinding } from '../../lib/demo/plan-binding'
+import { gateDemoApiOnPolicy } from '../../lib/demo/policy-readiness'
+import { authorizeDemoOperation } from '../../lib/demo/api'
+import { createDemoSessionPostHandler } from '../../lib/demo/session-api'
 
 const validEnv = {
   NODE_ENV: 'production',
@@ -113,7 +116,7 @@ test('public capabilities are closed and non-executable before explicit release 
 test('hosted plan binding rejects stale, changed, unknown, and wrong-version plans', async () => {
   const source = { name: 'sample.csv', type: 'csv', content: 'invoice_id,amount,currency\n1,10,USD' }
   const sourceSha256 = createHash('sha256').update(source.content).digest('hex')
-  const job = { status: 'completed', planVersion: 1, sourceName: source.name, sourceType: 'csv' as const, sourceSha256 }
+  const job = { status: 'completed', planVersion: 1, sourceNameSha256: createHash('sha256').update(source.name).digest('hex'), sourceType: 'csv' as const, sourceSha256 }
   const binding = { jobId: '10000000-0000-4000-8000-000000000001', planVersion: 1, sourceSha256 }
   assert.equal(matchesCompletedPlanBinding({ job, binding, source }), true)
   assert.equal(matchesCompletedPlanBinding({ job, binding, source: { ...source, content: `${source.content}\n2,20,USD` } }), false)
@@ -130,7 +133,34 @@ test('capability data policy verification checks the served route revision and c
   assert.equal(await verifyPublishedDemoPolicy(new Response('<h1>wrong policy</h1>', { headers: { 'X-EZAgent-Policy-Revision': 'stale', 'content-type': 'text/html' } })), false)
 })
 
-test('production proxy rejects unauthenticated requests to every stateful or model API', (t) => {
+test('broken policy blocks session issuance and all hosted stateful/model API paths', async (t) => {
+  useEnv(t)
+  const brokenPolicy = async () => false
+  const issueSession = createDemoSessionPostHandler(brokenPolicy)
+  const login = await issueSession(new Request(`${validEnv.EZAGENT_DEMO_ORIGIN}/api/demo/session`, {
+    method: 'POST', headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, 'content-type': 'application/json' },
+    body: JSON.stringify({ code: validEnv.EZAGENT_DEMO_ACCESS_CODE }),
+  }))
+  assert.equal(login.status, 503)
+  assert.equal((await login.json()).error.code, 'demo_policy_unavailable')
+
+  const protectedRequests: Array<[string, string]> = [
+    ['POST', '/api/demo/session'], ['POST', '/api/demo/jobs'], ['GET', '/api/demo/jobs/job-id'], ['DELETE', '/api/demo/jobs/job-id'],
+    ['POST', '/api/agent/runs'], ['POST', '/api/agent/runs/run-id/resume'], ['DELETE', '/api/agent/runs/run-id'], ['POST', '/api/chat'],
+  ]
+  for (const [method, pathname] of protectedRequests) {
+    const blocked = await gateDemoApiOnPolicy(pathname, method, brokenPolicy)
+    assert.equal(blocked?.status, 503, `${method} ${pathname}`)
+  }
+  assert.equal(await gateDemoApiOnPolicy('/api/demo/capabilities', 'GET', brokenPolicy), null)
+  assert.equal(await gateDemoApiOnPolicy('/api/demo/session', 'DELETE', brokenPolicy), null, 'logout remains available')
+
+  const deniedRun = await authorizeDemoOperation(new Request('https://demo.example.test/api/agent/runs', { headers: { 'x-ezagent-demo-owner': '10000000-0000-4000-8000-000000000001' } }), 'run', brokenPolicy)
+  assert.ok(deniedRun instanceof Response)
+  assert.equal(deniedRun.status, 503)
+})
+
+test('production proxy rejects unauthenticated requests to every stateful or model API', async (t) => {
   useEnv(t)
   const paths: Array<[string, string]> = [
     ['POST', '/api/demo/jobs'], ['POST', '/api/agent/runs'], ['GET', '/api/agent/runs/known-run'],
@@ -145,7 +175,7 @@ test('production proxy rejects unauthenticated requests to every stateful or mod
       headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, ...(method === 'POST' ? { 'content-type': 'application/json' } : {}) },
       ...(method === 'POST' ? { body: '{}' } : {}),
     })
-    const response = proxy(request) as Response
+    const response = await proxy(request)
     assert.equal(response.status, 401, `${method} ${path} must require a visitor session`)
   }
 })
@@ -164,14 +194,14 @@ test('production proxy rejects forged owner headers, cross-origin requests, loca
     },
     body: '{}',
   })
-  const response = proxy(request) as Response
+  const response = await proxy(request)
   assert.equal(response.status, 200)
   assert.equal(response.headers.get('x-middleware-request-x-ezagent-demo-owner'), session.ownerId)
 
   const foreignOrigin = new NextRequest('https://demo.example.test/api/agent/runs', {
     method: 'POST', headers: { origin: 'https://evil.example.test', cookie: `${DEMO_SESSION_COOKIE}=${session.token}` }, body: '{}',
   })
-  assert.equal((proxy(foreignOrigin) as Response).status, 403)
+  assert.equal((await proxy(foreignOrigin)).status, 403)
 
   const localAi = new NextRequest('https://demo.example.test/api/local-ai', {
     method: 'POST', headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, cookie: `${DEMO_SESSION_COOKIE}=${session.token}` }, body: '{}',
@@ -182,23 +212,23 @@ test('production proxy rejects forged owner headers, cross-origin requests, loca
   const hostedChat = new NextRequest('https://demo.example.test/api/chat', {
     method: 'POST', headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, cookie: `${DEMO_SESSION_COOKIE}=${session.token}` }, body: '{}',
   })
-  assert.equal((proxy(hostedChat) as Response).status, 404)
+  assert.equal((await proxy(hostedChat)).status, 404)
 })
 
-test('proxy rejects declared payloads above 1 MiB before route handling', (t) => {
+test('proxy rejects declared payloads above 1 MiB before route handling', async (t) => {
   useEnv(t)
   const request = new NextRequest('https://demo.example.test/api/demo/jobs', {
     method: 'POST',
     headers: { origin: validEnv.EZAGENT_DEMO_ORIGIN, 'content-length': String(1_048_577) },
     body: '{}',
   })
-  assert.equal((proxy(request) as Response).status, 413)
+  assert.equal((await proxy(request)).status, 413)
 })
 
-test('production stop switch denies API work and anonymous capabilities remain non-executable', (t) => {
+test('production stop switch denies API work and anonymous capabilities remain non-executable', async (t) => {
   useEnv(t, { EZAGENT_DEMO_ENABLED: undefined, EZAGENT_DEMO_RELEASE_APPROVED: undefined })
   const request = new NextRequest('https://demo.example.test/api/agent/plans', { method: 'POST', body: '{}' })
-  assert.equal((proxy(request) as Response).status, 503)
+  assert.equal((await proxy(request)).status, 503)
 })
 
 test('demo usage has per-session minute and persisted UTC-day ceilings', async (t) => {
@@ -261,7 +291,7 @@ test('plan jobs expose FIFO positions, enforce the pending cap, and allow only t
   const plan = (goal: string) => ({ goal: `Filter invoices above threshold, check required fields, export CSV ${goal}`, source: { name: `${goal}.csv`, type: 'csv' as const, content: 'invoice_id,amount,currency\n1,10,USD' } })
   const first = await queue.submit('visitor-a', plan('first'), async () => { dailyReservations += 1 })
   assert.equal(first.planVersion, 1)
-  assert.equal(first.sourceName, 'first.csv')
+  assert.equal(first.sourceNameSha256, createHash('sha256').update('first.csv').digest('hex'))
   assert.equal(first.sourceType, 'csv')
   assert.equal(first.sourceSha256, createHash('sha256').update('invoice_id,amount,currency\n1,10,USD').digest('hex'))
   await waitUntil(async () => started.includes('first'))
@@ -286,6 +316,8 @@ test('plan jobs expose FIFO positions, enforce the pending cap, and allow only t
   await queue.flush()
   const persisted = await readFile(join(root, 'demo-jobs.json'), 'utf8')
   assert.equal(persisted.includes('invoice_id,amount,currency'), false)
+  assert.equal(persisted.includes('first.csv'), false)
+  assert.equal(JSON.parse(persisted).jobs[0].sourceNameSha256, createHash('sha256').update('first.csv').digest('hex'))
 })
 
 test('concurrent plan submissions cannot exceed one active worker plus the pending capacity', async (t) => {

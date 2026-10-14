@@ -13,7 +13,7 @@ export type DemoPlanJobView = {
   status: DemoJobStatus
   position: number | null
   planVersion: number
-  sourceName: string
+  sourceNameSha256: string
   sourceType: 'csv' | 'text'
   sourceSha256: string
   result?: PlanResponse
@@ -49,7 +49,7 @@ function validPersistedJob(value: unknown): value is PersistedJob {
   return typeof job.id === 'string' && /^[0-9a-f-]{36}$/.test(job.id) && job.type === 'plan' &&
     typeof job.ownerHash === 'string' && /^[a-f0-9]{64}$/.test(job.ownerHash) &&
     (job.planVersion === undefined || job.planVersion === 0 || job.planVersion === 1) &&
-    (job.sourceName === undefined || typeof job.sourceName === 'string') && (job.sourceType === undefined || job.sourceType === 'csv' || job.sourceType === 'text') &&
+    (job.sourceNameSha256 === undefined || (typeof job.sourceNameSha256 === 'string' && /^[a-f0-9]{64}$/.test(job.sourceNameSha256))) && (job.sourceType === undefined || job.sourceType === 'csv' || job.sourceType === 'text') &&
     (job.sourceSha256 === undefined || (typeof job.sourceSha256 === 'string' && /^[a-f0-9]{64}$/.test(job.sourceSha256))) &&
     ['queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'].includes(String(job.status)) &&
     (job.position === null || Number.isSafeInteger(job.position)) && typeof job.createdAt === 'string' && Number.isFinite(Date.parse(job.createdAt)) &&
@@ -171,14 +171,14 @@ export function createDemoPlanQueue(
   }
 
   function view(job: LiveJob): DemoPlanJobView {
-    const { id, status, createdAt, updatedAt, result, errorCode, planVersion, sourceName, sourceType, sourceSha256 } = job
+    const { id, status, createdAt, updatedAt, result, errorCode, planVersion, sourceNameSha256, sourceType, sourceSha256 } = job
     return {
       id,
       type: 'plan',
       status,
       position: status === 'queued' ? positionOf(job.id) : null,
       planVersion,
-      sourceName,
+      sourceNameSha256,
       sourceType,
       sourceSha256,
       ...(result ? { result } : {}),
@@ -213,12 +213,12 @@ export function createDemoPlanQueue(
       const currentTime = now()
       const retained = parsed.jobs.filter((job) => currentTime - Date.parse(job.updatedAt) <= limits.recordRetentionMs)
       for (const stored of retained) {
-        const legacy = stored.planVersion === undefined || stored.sourceSha256 === undefined || stored.sourceName === undefined || stored.sourceType === undefined
-        const old: PersistedJob = { ...stored, planVersion: legacy ? 0 : stored.planVersion, sourceName: stored.sourceName ?? '', sourceType: stored.sourceType ?? 'text', sourceSha256: stored.sourceSha256 ?? '0'.repeat(64) }
+        const legacy = stored.planVersion === undefined || stored.sourceSha256 === undefined || stored.sourceNameSha256 === undefined || stored.sourceType === undefined
+        const old: PersistedJob = { ...stored, planVersion: legacy ? 0 : stored.planVersion, sourceNameSha256: stored.sourceNameSha256 ?? '0'.repeat(64), sourceType: stored.sourceType ?? 'text', sourceSha256: stored.sourceSha256 ?? '0'.repeat(64) }
         const status: DemoJobStatus = legacy || ['queued', 'running', 'cancelling', 'completed'].includes(old.status) ? 'interrupted' : old.status
         queueState.jobs.set(old.id, { ...old, status, errorCode: status === 'interrupted' ? 'process_restarted' : old.errorCode, ownerId: '', payload: null, position: null, updatedAt: status === 'interrupted' ? new Date(currentTime).toISOString() : old.updatedAt })
       }
-      if (retained.some((job) => job.planVersion === undefined || job.sourceSha256 === undefined || ['queued', 'running', 'cancelling', 'completed'].includes(job.status)) || retained.length !== parsed.jobs.length) await persist()
+      if (retained.some((job) => job.planVersion === undefined || job.sourceNameSha256 === undefined || job.sourceSha256 === undefined || ['queued', 'running', 'cancelling', 'completed'].includes(job.status)) || retained.length !== parsed.jobs.length) await persist()
       else scheduleRetentionSweep()
     })()
     return queueState.init
@@ -343,7 +343,7 @@ export function createDemoPlanQueue(
           type: 'plan',
           ownerHash: hash(ownerId),
           planVersion: 1,
-          sourceName: parsed.value.source.name,
+          sourceNameSha256: hash(parsed.value.source.name),
           sourceType: parsed.value.source.type,
           sourceSha256: hash(parsed.value.source.content),
           ownerId,
