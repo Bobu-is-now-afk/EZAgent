@@ -1,4 +1,5 @@
 import { localAiConfig } from '../../../lib/local-ai/config'
+import { runDemoModelOperation } from '../../../lib/demo/api'
 import { NextResponse } from 'next/server'
 
 const MAX_MESSAGES = 40
@@ -13,7 +14,7 @@ function errorResponse(status: number, code: string, message: string) {
   return NextResponse.json({ error: { code, message } }, { status })
 }
 
-export async function POST(request: Request) {
+async function handleChatPost(request: Request) {
   let parsedBody: unknown
 
   try {
@@ -52,9 +53,10 @@ export async function POST(request: Request) {
 
   try {
     const { host: OLLAMA_BASE_URL, model: MODEL_NAME } = await localAiConfig()
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(120_000)])
     const modelsResponse = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
       cache: 'no-store',
-      signal: request.signal,
+      signal,
     })
 
     if (!modelsResponse.ok) {
@@ -82,7 +84,7 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: MODEL_NAME, messages, stream: true }),
       cache: 'no-store',
-      signal: request.signal,
+      signal,
     })
 
     if (!chatResponse.ok) {
@@ -107,9 +109,16 @@ export async function POST(request: Request) {
     if (request.signal.aborted) {
       return errorResponse(499, 'request_cancelled', 'The chat request was cancelled.')
     }
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      return errorResponse(504, 'chat_timeout', 'The local model did not respond before the request timed out.')
+    }
     if (error instanceof TypeError) {
       return errorResponse(503, 'ollama_unreachable', 'Could not reach the local Ollama service at 127.0.0.1:11434.')
     }
     return errorResponse(502, 'ollama_error', 'Ollama returned an unreadable response.')
   }
+}
+
+export async function POST(request: Request): Promise<Response> {
+  return runDemoModelOperation(request, () => handleChatPost(request))
 }
