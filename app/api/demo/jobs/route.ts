@@ -1,6 +1,7 @@
 import { authorizeDemoOperation } from '../../../../lib/demo/api'
 import { demoPlanQueue } from '../../../../lib/demo/jobs'
 import { demoLimitResponse, reserveDemoDailyUsage } from '../../../../lib/demo/limits'
+import { validatePlanRequest } from '../../../../lib/agent/planner'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,6 +14,9 @@ export async function POST(request: Request): Promise<Response> {
     payload = await request.json()
   } catch {
     return Response.json({ error: { code: 'invalid_json', message: 'Request body must be valid JSON.' } }, { status: 400 })
+  }
+  if (!validatePlanRequest(payload).ok) {
+    return Response.json({ error: { code: 'invalid_plan_request', message: 'Plan request is invalid.' } }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
   }
   try {
     const job = await demoPlanQueue.submit(ownerId, payload, () => ownerId === 'local' ? Promise.resolve() : reserveDemoDailyUsage(ownerId))

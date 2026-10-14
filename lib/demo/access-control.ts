@@ -1,4 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { DEMO_DATA_POLICY_PATH } from './data-policy'
 
 export const DEMO_SESSION_COOKIE = 'ezagent_demo_session'
 export const DEMO_OWNER_HEADER = 'x-ezagent-demo-owner'
@@ -18,7 +19,7 @@ export function demoConfig(env: NodeJS.ProcessEnv = process.env): DemoConfig | n
   const sessionSecret = env.EZAGENT_SESSION_SECRET
   const dataPolicyUrl = env.EZAGENT_DEMO_DATA_POLICY_URL
   if (!origin || !accessCode || !sessionSecret || !dataPolicyUrl || accessCode.length < 20 || sessionSecret.length < 32 ||
-      !/^\/[\x21-\x7e]+$/.test(dataPolicyUrl) || dataPolicyUrl.startsWith('//') || /[?#\\]/.test(dataPolicyUrl) || dataPolicyUrl.split('/').some((part) => part === '.' || part === '..')) return null
+      dataPolicyUrl !== DEMO_DATA_POLICY_PATH) return null
   try {
     const parsed = new URL(origin)
     if (parsed.protocol !== 'https:' || parsed.origin !== origin || parsed.pathname !== '/' || parsed.search || parsed.hash) return null

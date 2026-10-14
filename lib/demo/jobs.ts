@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
-import { planWorkflow, PlannerError, type PlanResponse } from '../agent/planner'
+import { planWorkflow, PlannerError, validatePlanRequest, type PlanResponse } from '../agent/planner'
 
 export const DEMO_PLAN_QUEUE = Object.freeze({ maxConcurrent: 1, maxPending: 2, queueTimeoutMs: 5 * 60_000, jobTimeoutMs: 120_000, recordRetentionMs: 24 * 60 * 60_000 })
 export type DemoQueueLimits = { maxConcurrent: number; maxPending: number; queueTimeoutMs: number; jobTimeoutMs: number; recordRetentionMs: number }
@@ -12,6 +12,10 @@ export type DemoPlanJobView = {
   type: 'plan'
   status: DemoJobStatus
   position: number | null
+  planVersion: number
+  sourceName: string
+  sourceType: 'csv' | 'text'
+  sourceSha256: string
   result?: PlanResponse
   errorCode?: string
   createdAt: string
@@ -44,6 +48,9 @@ function validPersistedJob(value: unknown): value is PersistedJob {
   const job = value as Record<string, unknown>
   return typeof job.id === 'string' && /^[0-9a-f-]{36}$/.test(job.id) && job.type === 'plan' &&
     typeof job.ownerHash === 'string' && /^[a-f0-9]{64}$/.test(job.ownerHash) &&
+    (job.planVersion === undefined || job.planVersion === 0 || job.planVersion === 1) &&
+    (job.sourceName === undefined || typeof job.sourceName === 'string') && (job.sourceType === undefined || job.sourceType === 'csv' || job.sourceType === 'text') &&
+    (job.sourceSha256 === undefined || (typeof job.sourceSha256 === 'string' && /^[a-f0-9]{64}$/.test(job.sourceSha256))) &&
     ['queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'].includes(String(job.status)) &&
     (job.position === null || Number.isSafeInteger(job.position)) && typeof job.createdAt === 'string' && Number.isFinite(Date.parse(job.createdAt)) &&
     typeof job.updatedAt === 'string' && Number.isFinite(Date.parse(job.updatedAt)) &&
@@ -164,12 +171,16 @@ export function createDemoPlanQueue(
   }
 
   function view(job: LiveJob): DemoPlanJobView {
-    const { id, status, createdAt, updatedAt, result, errorCode } = job
+    const { id, status, createdAt, updatedAt, result, errorCode, planVersion, sourceName, sourceType, sourceSha256 } = job
     return {
       id,
       type: 'plan',
       status,
       position: status === 'queued' ? positionOf(job.id) : null,
+      planVersion,
+      sourceName,
+      sourceType,
+      sourceSha256,
       ...(result ? { result } : {}),
       ...(errorCode ? { errorCode } : {}),
       createdAt,
@@ -201,11 +212,13 @@ export function createDemoPlanQueue(
       }
       const currentTime = now()
       const retained = parsed.jobs.filter((job) => currentTime - Date.parse(job.updatedAt) <= limits.recordRetentionMs)
-      for (const old of retained) {
-        const status: DemoJobStatus = ['queued', 'running', 'cancelling', 'completed'].includes(old.status) ? 'interrupted' : old.status
+      for (const stored of retained) {
+        const legacy = stored.planVersion === undefined || stored.sourceSha256 === undefined || stored.sourceName === undefined || stored.sourceType === undefined
+        const old: PersistedJob = { ...stored, planVersion: legacy ? 0 : stored.planVersion, sourceName: stored.sourceName ?? '', sourceType: stored.sourceType ?? 'text', sourceSha256: stored.sourceSha256 ?? '0'.repeat(64) }
+        const status: DemoJobStatus = legacy || ['queued', 'running', 'cancelling', 'completed'].includes(old.status) ? 'interrupted' : old.status
         queueState.jobs.set(old.id, { ...old, status, errorCode: status === 'interrupted' ? 'process_restarted' : old.errorCode, ownerId: '', payload: null, position: null, updatedAt: status === 'interrupted' ? new Date(currentTime).toISOString() : old.updatedAt })
       }
-      if (retained.some((job) => ['queued', 'running', 'cancelling', 'completed'].includes(job.status)) || retained.length !== parsed.jobs.length) await persist()
+      if (retained.some((job) => job.planVersion === undefined || job.sourceSha256 === undefined || ['queued', 'running', 'cancelling', 'completed'].includes(job.status)) || retained.length !== parsed.jobs.length) await persist()
       else scheduleRetentionSweep()
     })()
     return queueState.init
@@ -316,6 +329,8 @@ export function createDemoPlanQueue(
 
   return {
     async submit(ownerId: string, payload: unknown, beforeAccept?: () => Promise<void>): Promise<DemoPlanJobView> {
+      const parsed = validatePlanRequest(payload)
+      if (!parsed.ok) throw new Error('invalid_plan_request')
       await initialize()
       return withAdmission(async () => {
         if (queueState.storageFailed) throw new Error('demo_job_storage_failed')
@@ -327,6 +342,10 @@ export function createDemoPlanQueue(
           id: randomUUID(),
           type: 'plan',
           ownerHash: hash(ownerId),
+          planVersion: 1,
+          sourceName: parsed.value.source.name,
+          sourceType: parsed.value.source.type,
+          sourceSha256: hash(parsed.value.source.content),
           ownerId,
           status: 'queued',
           position: waiting + 1,

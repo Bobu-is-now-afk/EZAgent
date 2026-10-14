@@ -105,6 +105,8 @@ export type Run = {
   id: string
   /** Owner is server-issued; older local snapshots omit it and default to `local`. */
   ownerId?: string
+  /** Hosted demo plan/source binding; absent on local runs and older snapshots. */
+  planBinding?: { jobId: string; planVersion: 1; sourceSha256: string }
   workflowVersion: number
   status: RunStatus
   limits: RunLimits

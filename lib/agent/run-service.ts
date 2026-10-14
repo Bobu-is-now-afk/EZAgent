@@ -337,10 +337,19 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
 
     async createRun(input: unknown, ownerId = 'local'): Promise<{ run: Run; created: boolean }> {
       if (!/^[a-zA-Z0-9_-]{1,80}$/.test(ownerId)) throw safeError('invalid_owner', 'Run owner is invalid.')
-      if (!isRecord(input) || !hasOnlyKeys(input, ['workflow', 'source', 'idempotencyKey']) ||
+      if (!isRecord(input) || !hasOnlyKeys(input, ['workflow', 'source', 'idempotencyKey', 'planBinding']) ||
           !isRecord(input.workflow) || !isRecord(input.source) || typeof input.idempotencyKey !== 'string' ||
           input.idempotencyKey.trim().length === 0 || input.idempotencyKey.length > 512) {
         throw safeError('invalid_request', 'Run request must contain a workflow, source, and idempotency key.')
+      }
+      let planBinding: Run['planBinding']
+      if (input.planBinding !== undefined) {
+        if (!isRecord(input.planBinding) || !hasOnlyKeys(input.planBinding, ['jobId', 'planVersion', 'sourceSha256']) ||
+            typeof input.planBinding.jobId !== 'string' || !/^[0-9a-f-]{36}$/.test(input.planBinding.jobId) || input.planBinding.planVersion !== 1 ||
+            typeof input.planBinding.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(input.planBinding.sourceSha256)) {
+          throw safeError('invalid_request', 'Hosted plan binding is invalid.')
+        }
+        planBinding = { jobId: input.planBinding.jobId, planVersion: 1, sourceSha256: input.planBinding.sourceSha256 }
       }
       const source = input.source
       if (typeof source.name !== 'string' || (source.type !== 'csv' && source.type !== 'text') || typeof source.content !== 'string') {
@@ -350,7 +359,10 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
       if (!validation.ok) throw new RunServiceError('invalid_workflow', 'Run workflow failed invoice demo validation.', 400, validation.issues)
       const workflow = validation.value
       const validatedSource = source as InvoiceSource
-      const fingerprint = sha256(JSON.stringify({ ownerId, workflow, source: validatedSource }))
+      if (planBinding && sha256(validatedSource.content) !== planBinding.sourceSha256) {
+        throw safeError('replan_required', 'Source changed; create a new plan for this exact source.', 409)
+      }
+      const fingerprint = sha256(JSON.stringify({ ownerId, workflow, source: validatedSource, planBinding }))
       const scopedIdempotencyKey = sha256(`${ownerId}:${input.idempotencyKey}`)
       const idempotencyHash = sha256(scopedIdempotencyKey)
       const store = await getStore()
@@ -374,6 +386,7 @@ export function createAgentRunService(root = resolve(process.cwd(), '.ezagent'))
         const run: Run = {
           id: randomUUID(),
           ownerId,
+          ...(planBinding ? { planBinding } : {}),
           workflowVersion: 1,
           status: 'running',
           limits: { ...DEFAULT_RUN_LIMITS },

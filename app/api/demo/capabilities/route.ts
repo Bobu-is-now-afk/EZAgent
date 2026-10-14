@@ -3,6 +3,8 @@ import { localAiConfig } from '../../../../lib/local-ai/config'
 import { demoConfig } from '../../../../lib/demo/access-control'
 import { DEMO_LIMITS, isDemoModelBusy, reservePublicProbe } from '../../../../lib/demo/limits'
 import { DEMO_PLAN_QUEUE, demoPlanQueue } from '../../../../lib/demo/jobs'
+import { DEMO_DATA_POLICY_PATH, isPublishedDemoPolicy, verifyPublishedDemoPolicy } from '../../../../lib/demo/data-policy'
+import { GET as getDemoDataPolicy } from '../../../demo-data-policy/route'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,11 +12,14 @@ export const dynamic = 'force-dynamic'
 export async function GET(): Promise<Response> {
   if (!reservePublicProbe()) return Response.json({ error: { code: 'demo_rate_limited', message: 'Too many capability checks. Please wait before trying again.' } }, { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': '60' } })
   const config = demoConfig()
+  const dataPolicyAvailable = Boolean(config && config.dataPolicyUrl === DEMO_DATA_POLICY_PATH && isPublishedDemoPolicy(config.dataPolicyUrl) &&
+    await getDemoDataPolicy().then(verifyPublishedDemoPolicy).catch(() => false))
   const queue = config ? await demoPlanQueue.status().catch(() => ({ active: 0, queued: DEMO_PLAN_QUEUE.maxPending })) : { active: 0, queued: 0 }
   const base = {
     version: 1,
     session: { endpoint: '/api/demo/session', method: 'POST', cookie: 'ezagent_demo_session', httpOnly: true, sameSite: 'Strict' },
     dataPolicyUrl: config?.dataPolicyUrl ?? null,
+    dataPolicyAvailable,
     requestLimits: {
       maxRequestBytes: DEMO_LIMITS.maxRequestBytes,
       maxRequestsPerSessionPerMinute: DEMO_LIMITS.maxSessionRequestsPerMinute,
@@ -43,6 +48,10 @@ export async function GET(): Promise<Response> {
 
   if (process.env.EZAGENT_DEMO_MAINTENANCE === '1') {
     return Response.json({ ...base, status: 'maintenance', message: 'The hosted demo is temporarily unavailable.' }, { headers: { 'Cache-Control': 'no-store' } })
+  }
+
+  if (!dataPolicyAvailable) {
+    return Response.json({ ...base, status: 'stopped', message: 'The required demo data notice is unavailable.', capabilities: { chat: false, invoicePlan: false, invoicePlanQueue: false, invoiceRun: false, localModelSetup: false } }, { headers: { 'Cache-Control': 'no-store' } })
   }
 
   try {

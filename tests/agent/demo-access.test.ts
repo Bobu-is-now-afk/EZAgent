@@ -12,6 +12,9 @@ import { createDemoPlanQueue, DEMO_PLAN_QUEUE } from '../../lib/demo/jobs'
 import { proxy } from '../../proxy'
 import { GET as getDemoSession, POST as postDemoSession, DELETE as deleteDemoSession } from '../../app/api/demo/session/route'
 import { GET as getDemoCapabilities } from '../../app/api/demo/capabilities/route'
+import { GET as getDemoPolicy } from '../../app/demo-data-policy/route'
+import { verifyPublishedDemoPolicy } from '../../lib/demo/data-policy'
+import { matchesCompletedPlanBinding } from '../../lib/demo/plan-binding'
 
 const validEnv = {
   NODE_ENV: 'production',
@@ -105,6 +108,26 @@ test('public capabilities are closed and non-executable before explicit release 
   assert.equal(body.capabilities.invoicePlanQueue, false)
   assert.equal(body.capabilities.invoiceRun, false)
   assert.equal(body.capabilities.chat, false)
+})
+
+test('hosted plan binding rejects stale, changed, unknown, and wrong-version plans', async () => {
+  const source = { name: 'sample.csv', type: 'csv', content: 'invoice_id,amount,currency\n1,10,USD' }
+  const sourceSha256 = createHash('sha256').update(source.content).digest('hex')
+  const job = { status: 'completed', planVersion: 1, sourceName: source.name, sourceType: 'csv' as const, sourceSha256 }
+  const binding = { jobId: '10000000-0000-4000-8000-000000000001', planVersion: 1, sourceSha256 }
+  assert.equal(matchesCompletedPlanBinding({ job, binding, source }), true)
+  assert.equal(matchesCompletedPlanBinding({ job, binding, source: { ...source, content: `${source.content}\n2,20,USD` } }), false)
+  assert.equal(matchesCompletedPlanBinding({ job, binding, source: { ...source, name: 'other.csv' } }), false)
+  assert.equal(matchesCompletedPlanBinding({ job, binding: { ...binding, planVersion: 2 }, source }), false)
+  assert.equal(matchesCompletedPlanBinding({ job: { ...job, status: 'interrupted' }, binding, source }), false)
+  assert.equal(matchesCompletedPlanBinding({ job: null, binding, source }), false)
+})
+
+test('capability data policy verification checks the served route revision and complete notice body', async () => {
+  const response = await getDemoPolicy()
+  assert.equal(await verifyPublishedDemoPolicy(response), true)
+  assert.equal(await verifyPublishedDemoPolicy(new Response('missing policy', { status: 404 })), false)
+  assert.equal(await verifyPublishedDemoPolicy(new Response('<h1>wrong policy</h1>', { headers: { 'X-EZAgent-Policy-Revision': 'stale', 'content-type': 'text/html' } })), false)
 })
 
 test('production proxy rejects unauthenticated requests to every stateful or model API', (t) => {
@@ -226,7 +249,7 @@ test('plan jobs expose FIFO positions, enforce the pending cap, and allow only t
   const resolvers = new Map<string, () => void>()
   let dailyReservations = 0
   const queue = createDemoPlanQueue(root, async (payload, signal) => {
-    const key = String(payload)
+    const key = String((payload as { source: { name: string } }).source.name).replace(/\.csv$/, '')
     started.push(key)
     await new Promise<void>((resolve, reject) => {
       resolvers.set(key, resolve)
@@ -235,14 +258,19 @@ test('plan jobs expose FIFO positions, enforce the pending cap, and allow only t
     return { workflow: { goal: key }, preview: { source: { rowCount: 0 }, stepCount: 5 } } as never
   })
 
-  const first = await queue.submit('visitor-a', 'first', async () => { dailyReservations += 1 })
+  const plan = (goal: string) => ({ goal: `Filter invoices above threshold, check required fields, export CSV ${goal}`, source: { name: `${goal}.csv`, type: 'csv' as const, content: 'invoice_id,amount,currency\n1,10,USD' } })
+  const first = await queue.submit('visitor-a', plan('first'), async () => { dailyReservations += 1 })
+  assert.equal(first.planVersion, 1)
+  assert.equal(first.sourceName, 'first.csv')
+  assert.equal(first.sourceType, 'csv')
+  assert.equal(first.sourceSha256, createHash('sha256').update('invoice_id,amount,currency\n1,10,USD').digest('hex'))
   await waitUntil(async () => started.includes('first'))
-  const second = await queue.submit('visitor-b', 'second', async () => { dailyReservations += 1 })
-  const third = await queue.submit('visitor-c', 'third', async () => { dailyReservations += 1 })
+  const second = await queue.submit('visitor-b', plan('second'), async () => { dailyReservations += 1 })
+  const third = await queue.submit('visitor-c', plan('third'), async () => { dailyReservations += 1 })
   assert.equal(second.status, 'queued')
   assert.equal(second.position, 1)
   assert.equal(third.position, 2)
-  await assert.rejects(queue.submit('visitor-d', 'fourth', async () => { dailyReservations += 1 }), /demo_queue_full/)
+  await assert.rejects(queue.submit('visitor-d', plan('fourth'), async () => { dailyReservations += 1 }), /demo_queue_full/)
   assert.equal(dailyReservations, 3, 'a rejected full-queue request must not consume daily plan quota')
   assert.equal(await queue.get(second.id, 'visitor-a'), null)
   assert.equal(await queue.cancel(second.id, 'visitor-a'), null)
@@ -257,9 +285,7 @@ test('plan jobs expose FIFO positions, enforce the pending cap, and allow only t
   assert.equal((await queue.get(first.id, 'visitor-a'))?.status, 'cancelled')
   await queue.flush()
   const persisted = await readFile(join(root, 'demo-jobs.json'), 'utf8')
-  assert.equal(persisted.includes('first'), false)
-  assert.equal(persisted.includes('second'), false)
-  assert.equal(persisted.includes('third'), false)
+  assert.equal(persisted.includes('invoice_id,amount,currency'), false)
 })
 
 test('concurrent plan submissions cannot exceed one active worker plus the pending capacity', async (t) => {
@@ -268,7 +294,7 @@ test('concurrent plan submissions cannot exceed one active worker plus the pendi
   const queue = createDemoPlanQueue(root, async (_payload, signal) => new Promise((_resolve, reject) => {
     signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
   }))
-  const submissions = await Promise.allSettled(Array.from({ length: 12 }, (_, index) => queue.submit(`admission-${index}`, { index })))
+  const submissions = await Promise.allSettled(Array.from({ length: 12 }, (_, index) => queue.submit(`admission-${index}`, { goal: `Filter invoices above threshold, check required fields, export CSV ${index}`, source: { name: `${index}.csv`, type: 'csv', content: 'invoice_id,amount,currency\n1,10,USD' } })))
   const accepted = submissions.flatMap((submission) => submission.status === 'fulfilled' ? [submission.value] : [])
   const rejected = submissions.filter((submission) => submission.status === 'rejected')
   assert.equal(accepted.length + rejected.length, 12)
@@ -312,9 +338,10 @@ test('plan queue marks queued and running jobs interrupted after restart and exp
   }
   const quickLimits = { ...DEMO_PLAN_QUEUE, maxPending: 1, queueTimeoutMs: 100, jobTimeoutMs: 10_000 }
   const queue = createDemoPlanQueue(timeoutRoot, planner, () => currentTime, quickLimits)
-  const active = await queue.submit('owner-1', 'active')
+  const plan = (name: string) => ({ goal: `Filter invoices above threshold, check required fields, export CSV ${name}`, source: { name: `${name}.csv`, type: 'csv' as const, content: 'invoice_id,amount,currency\n1,10,USD' } })
+  const active = await queue.submit('owner-1', plan('active'))
   await waitUntil(async () => (await queue.get(active.id, 'owner-1'))?.status === 'running')
-  const waiting = await queue.submit('owner-2', 'waiting')
+  const waiting = await queue.submit('owner-2', plan('waiting'))
   currentTime += 101
   release()
   await waitUntil(async () => (await queue.get(waiting.id, 'owner-2'))?.status === 'failed')
@@ -328,7 +355,7 @@ test('plan queue reports planner timeouts as failed instead of completed or canc
   const queue = createDemoPlanQueue(root, async (_payload, signal) => new Promise((_resolve, reject) => {
     signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
   }), Date.now, { ...DEMO_PLAN_QUEUE, jobTimeoutMs: 20 })
-  const job = await queue.submit('timeout-owner', { prompt: 'test' })
+  const job = await queue.submit('timeout-owner', { goal: 'Filter invoices above threshold, check required fields, export CSV', source: { name: 'timeout.csv', type: 'csv', content: 'invoice_id,amount,currency\n1,10,USD' } })
   await waitUntil(async () => (await queue.get(job.id, 'timeout-owner'))?.status === 'failed')
   const failed = await queue.get(job.id, 'timeout-owner')
   assert.equal(failed?.errorCode, 'planner_timeout')
@@ -348,14 +375,14 @@ test('plan queue clears its running lock when the running-state snapshot cannot 
     if (writes === 2) throw new Error('injected_storage_failure')
     await writeFile(pathname, contents, { mode: 0o600 })
   })
-  const accepted = await queue.submit('storage-owner', { prompt: 'test' })
+  const accepted = await queue.submit('storage-owner', { goal: 'Filter invoices above threshold, check required fields, export CSV', source: { name: 'storage.csv', type: 'csv', content: 'invoice_id,amount,currency\n1,10,USD' } })
   await waitUntil(async () => (await queue.get(accepted.id, 'storage-owner'))?.status === 'failed')
   await queue.flush()
   const failed = await queue.get(accepted.id, 'storage-owner')
   assert.equal(failed?.errorCode, 'demo_job_storage_failed')
   assert.equal(plannerCalls, 0)
   assert.deepEqual(await queue.status(), { active: 0, queued: 0 })
-  await assert.rejects(queue.submit('storage-owner', { prompt: 'retry' }), /demo_job_storage_failed/)
+  await assert.rejects(queue.submit('storage-owner', { goal: 'Filter invoices above threshold, check required fields, export CSV', source: { name: 'retry.csv', type: 'csv', content: 'invoice_id,amount,currency\n1,10,USD' } }), /demo_job_storage_failed/)
 })
 
 test('job metadata is pruned at the retention boundary during a long-lived process', async (t) => {
@@ -363,7 +390,7 @@ test('job metadata is pruned at the retention boundary during a long-lived proce
   t.after(() => rm(root, { recursive: true, force: true }))
   let currentTime = Date.now()
   const queue = createDemoPlanQueue(root, async () => ({ workflow: {}, preview: {} }) as never, () => currentTime, { ...DEMO_PLAN_QUEUE, recordRetentionMs: 100 })
-  const job = await queue.submit('retention-owner', { prompt: 'test' })
+  const job = await queue.submit('retention-owner', { goal: 'Filter invoices above threshold, check required fields, export CSV', source: { name: 'retention.csv', type: 'csv', content: 'invoice_id,amount,currency\n1,10,USD' } })
   await waitUntil(async () => (await queue.get(job.id, 'retention-owner'))?.status === 'completed')
   await queue.flush()
   currentTime += 101
