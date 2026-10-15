@@ -6,6 +6,7 @@ import { Bot, FileText, MessageCircle, Sparkles } from 'lucide-react'
 import { LocalAiSetup } from '@/components/local-ai-setup'
 
 const GUIDE_STORAGE_KEY = 'ezagent:first-use-guide:v1:handled'
+const DOCUMENTS_HOME_ENABLED = process.env.NEXT_PUBLIC_DOCUMENTS_HOME_ENABLED === '1'
 
 const COPY = {
   'zh-Hant': {
@@ -15,8 +16,9 @@ const COPY = {
     chatFirst: '先體驗對話', skip: '跳過，直接體驗工具',
     chat: '本機 AI 對話', chatDescription: '使用準備好的本機模型問問題、草擬文字。', chatAction: '開始對話',
     builder: '設計工作流程', builderDescription: '把重複工作的要求整理成可復用規則。', featured: '推薦', builderAction: '建立工作流程',
+    documents: '建立客戶文件', documentsDescription: '從訂單建立報價單、發票或收據，逐欄確認後產生合成範例。', documentsAction: '開啟文件工作台',
     preset: '試用預設發票工具', presetDescription: '使用合成資料建立計畫、核對後再執行整理示範。', invoiceAction: '開始發票示範',
-    boundary: '發票示範僅支援 CSV／TXT。配置、儲存或預演不代表已執行業務工作。',
+    boundary: '文件工作台只在本機建立草稿與合成範例，不會寄送文件或發起付款。發票示範僅支援 CSV／TXT。',
     language: '語言',
   },
   en: {
@@ -26,8 +28,9 @@ const COPY = {
     chatFirst: 'Try chat first', skip: 'Skip to tools',
     chat: 'Local AI chat', chatDescription: 'Ask questions and draft text with your prepared local model.', chatAction: 'Start a chat',
     builder: 'Design a workflow', builderDescription: 'Turn repetitive work requirements into reusable rules.', featured: 'Featured', builderAction: 'Create a workflow',
+    documents: 'Create customer documents', documentsDescription: 'Build a quote, invoice, or receipt from an order, review each field, then create a sample.', documentsAction: 'Open document workbench',
     preset: 'Try the invoice demo', presetDescription: 'Build a plan with synthetic data, review it, then run the demo.', invoiceAction: 'Start invoice demo',
-    boundary: 'The invoice demo supports CSV/TXT only. Configuring, saving, or previewing a workflow does not mean business work has run.',
+    boundary: 'The document workbench creates local drafts and synthetic samples only. It does not send documents or initiate payments. The invoice demo supports CSV/TXT only.',
     language: 'Language',
   },
 } as const
@@ -85,6 +88,9 @@ export default function Page() {
         <Link href="/yolanda-builder" className={`${cardClass} border-zinc-400 ring-1 ring-zinc-200`}>
           <span className="flex items-start justify-between"><span className="flex size-10 items-center justify-center rounded-lg bg-zinc-950 text-white"><Sparkles aria-hidden="true" className="size-[19px]" /></span><span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">{c.featured}</span></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.builder}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.builderDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.builderAction} <span aria-hidden="true">→</span></span>
         </Link>
+        {DOCUMENTS_HOME_ENABLED && <Link href="/documents" className={cardClass}>
+          <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><FileText aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.documents}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.documentsDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.documentsAction} <span aria-hidden="true">→</span></span>
+        </Link>}
         <Link href="/invoice-demo" className={cardClass}>
           <span className="flex size-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white"><FileText aria-hidden="true" className="size-[19px]" /></span><h2 className="mt-4 text-[17px] font-semibold tracking-[-0.025em]">{c.preset}</h2><p className="mt-1 text-[13px] leading-5 text-zinc-500">{c.presetDescription}</p><span className="mt-auto pt-3 text-xs font-semibold text-zinc-800">{c.invoiceAction} <span aria-hidden="true">→</span></span>
         </Link>
