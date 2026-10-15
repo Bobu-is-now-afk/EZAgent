@@ -15,6 +15,7 @@ Phase 3 needs a controlled, synthetic-only hosted demo path. The prior local app
 ### Feature gate and session
 
 - Keep the hosted document mode disabled unless `EZAGENT_HOSTED_DOCUMENTS_ENABLED=1` and every required session, policy, and limits setting validates. Missing, malformed, or insecure configuration returns a generic unavailable response and never falls back to a shared/local owner.
+- Resolve deployment mode independently through `EZAGENT_DEPLOYMENT_MODE=local|hosted`. Invalid values fail closed. When unset, only development/test resolve to local; production resolves to hosted regardless of the legacy local-app marker. Hosted mode with the hosted feature flag off or invalid remains unavailable and can never invoke the legacy local guard. The packaged app sets `local` explicitly.
 - Admit demo sessions with a pre-provisioned list of distinct invite IDs and access tokens held only in the process environment. Require the current policy version and explicit policy acknowledgement on the server. Sign opaque session claims with a separate environment-only HMAC secret of at least 32 bytes. Compare fixed-length token digests in constant time. Do not log, persist, echo, or include token or signing-secret values in errors.
 - Set an `HttpOnly`, `Secure`, `SameSite=Strict`, path-scoped cookie with a finite expiry. Require matching Origin on mutations and reject cross-site requests. A distinct pre-provisioned invite creates an anonymous demo workspace; it is not an identity provider and does not establish a person's name or company role.
 - Require one exact HTTPS `EZAGENT_DOCUMENTS_ALLOWED_ORIGIN`; do not accept wildcards or infer a trusted client address from `X-Forwarded-For`/`X-Real-IP`. Hosted mode accepts only HTTPS request URLs. A future reverse-proxy integration must provide a separately reviewed trusted-proxy adapter before use.
@@ -25,6 +26,7 @@ Hosted mode requires these values; any missing/invalid value leaves the feature 
 | Setting | Contract |
 |---|---|
 | `EZAGENT_HOSTED_DOCUMENTS_ENABLED` | Must equal `1`; absent means off. |
+| `EZAGENT_DEPLOYMENT_MODE` | Independent startup mode: `local` or `hosted`; invalid values fail closed. Production without this setting defaults to hosted. |
 | `EZAGENT_DOCUMENTS_ACCESS_TOKENS_JSON` | Environment-only JSON array of at most 10 unique `{id, token}` entries. IDs are stable non-secret labels; each token is at least 32 bytes. Each judge gets a distinct token. |
 | `EZAGENT_DOCUMENTS_SESSION_SECRET` | Separate environment-only HMAC secret; at least 32 bytes. |
 | `EZAGENT_DOCUMENTS_ALLOWED_ORIGIN` | One exact `https://` origin; no path, wildcard, or comma-separated list. |
@@ -56,7 +58,7 @@ Body (64 KiB), URL (2 KiB), per-owner record counts and snapshot-size limits are
 ### Data policy
 
 - Provide one canonical local policy definition used by both `/data-policy` and the server gate. If it is unavailable or its configured version does not match, hosted document mode fails closed.
-- State that this demo accepts synthetic data only; browser data is processed on the Mac mini and persisted in the owner's host-side namespace. State the exact document records and counters stored, the 64 KiB/request and suggestion caps, local Ollama behavior, and the current retention/deletion behavior.
+- State that this demo accepts synthetic data only; browser data is processed on the Mac mini and persisted in the owner's host-side namespace. State the exact document records and counters stored, the 64 KiB/request and suggestion caps, local Ollama behavior, and the current retention/deletion behavior. A still-configured invite can sign back into its existing owner workspace; there is no separate account recovery flow.
 - No automatic retention deletion is introduced in this phase. Expired/revoked sessions cannot access their old namespace; data remains until the operator clears that namespace. The policy must say so and must not promise backup, log, or incident guarantees the application does not implement.
 
 ## Options considered

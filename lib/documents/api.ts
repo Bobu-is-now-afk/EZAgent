@@ -5,6 +5,7 @@ import { readHostedDocumentConfig } from './hosted-config'
 import { HostedControlError } from './hosted-control'
 import { resolveHostedRequest } from './hosted-session'
 import { createDocumentStore, createHostedOwnerStore } from './store'
+import { readDocumentRuntimeMode } from './runtime-mode'
 
 export const MAX_DOCUMENT_REQUEST_BYTES = 64 * 1024
 
@@ -61,7 +62,8 @@ export async function readDocumentJson(request: Request, maxBytes = MAX_DOCUMENT
 }
 
 export function localDocumentsGuard(request: Request, mutation = false): Response | null {
-  if (process.env.EZAGENT_HOSTED_DOCUMENTS_ENABLED === '1') return responseError('hosted_session_required', 'A hosted demo session is required.', 401)
+  if (readDocumentRuntimeMode() !== 'local') return responseError('hosted_documents_unavailable', 'Hosted document access is unavailable.', 503)
+  if (readHostedDocumentConfig().mode !== 'disabled') return responseError('hosted_documents_unavailable', 'Hosted document access is unavailable.', 503)
   if (!isLocalRequest(request, mutation)) return responseError('local_only', 'Document APIs are available only from the local app.', 403)
   if (process.env.EZAGENT_DOCUMENTS_ENABLED !== '1') return responseError('documents_disabled', 'The document workbench is disabled for this server.', 503)
   return null
@@ -79,15 +81,19 @@ export async function documentStoreForContext(context: DocumentApiContext) {
 
 export async function handleDocumentApi<T>(request: Request, operation: (context: DocumentApiContext) => Promise<T>, mutation = false): Promise<Response> {
   if (Buffer.byteLength(request.url, 'utf8') > 2 * 1024) return responseError('url_too_large', 'Request URL exceeds the document API limit.', 414)
+  const runtimeMode = readDocumentRuntimeMode()
+  if (runtimeMode === 'invalid') return responseError('hosted_documents_unavailable', 'Document access is unavailable.', 503)
   const configResult = readHostedDocumentConfig()
   let context: DocumentApiContext
   if (configResult.mode === 'invalid') return responseError('hosted_documents_unavailable', 'Hosted document access is unavailable.', 503)
-  if (configResult.mode === 'enabled') {
+  if (runtimeMode === 'hosted') {
+    if (configResult.mode !== 'enabled') return responseError('hosted_documents_unavailable', 'Hosted document access is unavailable.', 503)
     const hosted = await resolveHostedRequest(request, mutation)
     if (hosted.mode === 'unavailable') return hosted.response
     if (hosted.mode !== 'authenticated') return responseError('hosted_session_required', 'A hosted demo session is required.', 401)
     context = { hosted: true, ownerId: hosted.session.ownerId, config: hosted.config }
   } else {
+    if (configResult.mode !== 'disabled') return responseError('hosted_documents_unavailable', 'Hosted document access is unavailable.', 503)
     const denied = localDocumentsGuard(request, mutation)
     if (denied) return denied
     context = { hosted: false }

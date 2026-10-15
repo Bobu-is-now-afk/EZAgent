@@ -1,5 +1,6 @@
 import { connection } from 'next/server'
 import { DocumentWorkbench } from '@/components/documents/document-workbench'
+import { readDocumentRuntimeMode } from '@/lib/documents/runtime-mode'
 import './documents.css'
 
 export const metadata = {
@@ -11,7 +12,7 @@ export default async function DocumentsPage() {
   await connection()
   return <DocumentWorkbench
     localAppMode={process.env.EZAGENT_LOCAL_APP_MODE === '1'}
-    hostedMode={process.env.EZAGENT_HOSTED_DOCUMENTS_ENABLED === '1'}
+    hostedMode={readDocumentRuntimeMode() !== 'local'}
     policyVersion={process.env.EZAGENT_DOCUMENTS_POLICY_VERSION ?? ''}
   />
 }

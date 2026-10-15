@@ -10,6 +10,7 @@ import { DOCUMENT_POLICY_VERSION, documentPolicyAvailable } from '../../lib/docu
 import { createDocumentStore, emptyHostedControlState } from '../../lib/documents/store'
 import { signHostedSession, verifyHostedSessionToken, hostedSessionCookie, isHostedSessionLogin } from '../../lib/documents/hosted-session'
 import { documentStoreForContext, handleDocumentApi, readDocumentJson, MAX_DOCUMENT_REQUEST_BYTES, DocumentApiError } from '../../lib/documents/api'
+import { readDocumentRuntimeMode } from '../../lib/documents/runtime-mode'
 
 const invites = [
   { id: 'judge-a', token: 'a'.repeat(40) },
@@ -19,6 +20,7 @@ const invites = [
 function hostedEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   return {
     NODE_ENV: 'test',
+    EZAGENT_DEPLOYMENT_MODE: 'hosted',
     EZAGENT_HOSTED_DOCUMENTS_ENABLED: '1',
     EZAGENT_DOCUMENTS_ACCESS_TOKENS_JSON: JSON.stringify(invites),
     EZAGENT_DOCUMENTS_SESSION_SECRET: 'test-only-session-secret-'.repeat(2),
@@ -62,6 +64,14 @@ test('hosted documents are default-off and invalid session, origin, policy, or l
   assert.equal(readHostedDocumentConfig(hostedEnv({ EZAGENT_HOSTED_DOCUMENTS_ENABLED: 'true' })).mode, 'invalid')
 })
 
+test('deployment mode is independent of the hosted feature flag and defaults production to hosted', () => {
+  assert.equal(readDocumentRuntimeMode(hostedEnv()), 'hosted')
+  assert.equal(readDocumentRuntimeMode(hostedEnv({ EZAGENT_DEPLOYMENT_MODE: 'local' })), 'local')
+  assert.equal(readDocumentRuntimeMode(hostedEnv({ EZAGENT_DEPLOYMENT_MODE: 'typo' })), 'invalid')
+  assert.equal(readDocumentRuntimeMode(hostedEnv({ EZAGENT_DEPLOYMENT_MODE: undefined, NODE_ENV: 'production' })), 'hosted')
+  assert.equal(readDocumentRuntimeMode(hostedEnv({ EZAGENT_DEPLOYMENT_MODE: undefined, NODE_ENV: 'production', EZAGENT_LOCAL_APP_MODE: '1' })), 'hosted')
+})
+
 test('hosted origin checks require exact HTTPS host and reject client owner selectors', () => {
   const hosted = config()
   const request = (url: string, headers: Record<string, string> = {}) => new Request(url, { headers: { host: new URL(url).host, ...headers } })
@@ -80,6 +90,7 @@ test('hosted API never falls back to local storage when session or policy config
     'EZAGENT_DOCUMENTS_MAX_OWNERS', 'EZAGENT_DOCUMENTS_REQUESTS_PER_MINUTE', 'EZAGENT_DOCUMENTS_GLOBAL_REQUESTS_PER_MINUTE',
     'EZAGENT_DOCUMENTS_DAILY_SUGGESTIONS', 'EZAGENT_DOCUMENTS_MAX_ACTIVE_SUGGESTIONS', 'EZAGENT_DOCUMENTS_MAX_QUEUE',
     'EZAGENT_DOCUMENTS_MAX_QUEUE_WAIT_MS', 'EZAGENT_DOCUMENTS_SUGGESTION_TIMEOUT_MS', 'EZAGENT_DOCUMENTS_ENABLED',
+    'EZAGENT_DEPLOYMENT_MODE', 'EZAGENT_LOCAL_APP_MODE',
   ]
   const previous = new Map(keys.map((key) => [key, process.env[key]]))
   t.after(() => { for (const key of keys) { const value = previous.get(key); if (value === undefined) delete process.env[key]; else process.env[key] = value } })
@@ -94,6 +105,28 @@ test('hosted API never falls back to local storage when session or policy config
   const unavailable = await handleDocumentApi(new Request('https://demo.example.test/api/documents/orders', { headers: { host: 'demo.example.test' } }), async () => { called = true; return {} })
   assert.equal(unavailable.status, 503)
   assert.equal(called, false)
+})
+
+test('hosted stop switch never exposes the legacy local API to forged localhost headers', async (t) => {
+  const keys = [
+    'EZAGENT_DEPLOYMENT_MODE', 'EZAGENT_HOSTED_DOCUMENTS_ENABLED', 'EZAGENT_LOCAL_APP_MODE', 'EZAGENT_DOCUMENTS_ENABLED',
+  ]
+  const previous = new Map(keys.map((key) => [key, process.env[key]]))
+  t.after(() => { for (const key of keys) { const value = previous.get(key); if (value === undefined) delete process.env[key]; else process.env[key] = value } })
+  let called = false
+  for (const flag of ['0', undefined]) {
+    process.env.EZAGENT_DEPLOYMENT_MODE = 'hosted'
+    if (flag === undefined) delete process.env.EZAGENT_HOSTED_DOCUMENTS_ENABLED
+    else process.env.EZAGENT_HOSTED_DOCUMENTS_ENABLED = flag
+    process.env.EZAGENT_LOCAL_APP_MODE = '1'
+    process.env.EZAGENT_DOCUMENTS_ENABLED = '1'
+    const forgedLocalRequest = new Request('http://localhost:3000/api/documents/orders', {
+      headers: { host: 'localhost:3000', origin: 'http://localhost:3000' },
+    })
+    const response = await handleDocumentApi(forgedLocalRequest, async () => { called = true; return { legacyData: true } })
+    assert.equal(response.status, 503)
+    assert.equal(called, false)
+  }
 })
 
 test('document JSON reader enforces its byte limit while streaming the request body', async () => {
@@ -166,6 +199,9 @@ test('invite reuse resumes one durable owner, rotates its session, and logout re
   assert.equal(await validateOwnerSession(second, Date.now() + 2, provider), true)
   await revokeOwnerSession(second, Date.now() + 3, provider)
   assert.equal(await validateOwnerSession(second, Date.now() + 4, provider), false)
+  const resumed = await issueOwnerSession('judge-a', hosted, second.expiresAt + 1, provider)
+  assert.equal(resumed.ownerId, second.ownerId)
+  assert.equal(await validateOwnerSession(resumed, second.expiresAt + 2, provider), true)
   await assert.rejects(authorizeOwnerSessionAndRecordRequest(second, { ...hosted, invites: [hosted.invites[1]] }, Date.now() + 5, provider),
     (error: unknown) => error instanceof HostedControlError && error.code === 'invalid_session')
   const state = await store.readHostedControl()
