@@ -8,7 +8,7 @@ import { readHostedDocumentConfig, hostedRequestOriginAllowed, type HostedDocume
 import { withHostedSuggestionSlot, issueOwnerSession, recordHostedRequest, validateOwnerSession, revokeOwnerSession, authorizeOwnerSessionAndRecordRequest, HostedControlError } from '../../lib/documents/hosted-control'
 import { DOCUMENT_POLICY_VERSION, documentPolicyAvailable } from '../../lib/documents/policy'
 import { createDocumentStore, emptyHostedControlState } from '../../lib/documents/store'
-import { signHostedSession, verifyHostedSessionToken, hostedSessionCookie, isHostedSessionLogin } from '../../lib/documents/hosted-session'
+import { createHostedSessionResponse, getHostedSessionResponse, revokeHostedSessionResponse, signHostedSession, verifyHostedSessionToken, hostedSessionCookie, isHostedSessionLogin, DOCUMENT_SESSION_COOKIE } from '../../lib/documents/hosted-session'
 import { documentStoreForContext, handleDocumentApi, readDocumentJson, MAX_DOCUMENT_REQUEST_BYTES, DocumentApiError } from '../../lib/documents/api'
 import { readDocumentRuntimeMode } from '../../lib/documents/runtime-mode'
 
@@ -105,6 +105,47 @@ test('hosted API never falls back to local storage when session or policy config
   const unavailable = await handleDocumentApi(new Request('https://demo.example.test/api/documents/orders', { headers: { host: 'demo.example.test' } }), async () => { called = true; return {} })
   assert.equal(unavailable.status, 503)
   assert.equal(called, false)
+})
+
+test('session endpoints require explicit hosted deployment mode even when hosted credentials are valid', async (t) => {
+  const keys = Object.keys(hostedEnv())
+  const previous = new Map(keys.map((key) => [key, process.env[key]]))
+  const previousCwd = process.cwd()
+  const root = await mkdtemp(path.join(tmpdir(), 'ezagent-hosted-session-boundary-'))
+  const testStore = await createDocumentStore(path.join(root, 'hosted-control'))
+  t.after(async () => {
+    process.chdir(previousCwd)
+    await rm(root, { recursive: true, force: true })
+    for (const key of keys) {
+      const value = previous.get(key)
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+  process.chdir(root)
+  Object.assign(process.env, hostedEnv())
+  const hostedConfig = config()
+  const existingSession = await issueOwnerSession('judge-a', hostedConfig, Date.now(), async () => testStore)
+  const token = signHostedSession(existingSession, hostedConfig.sessionSecret)
+  const sessionRequest = (method: 'GET' | 'POST' | 'DELETE') => new Request('https://demo.example.test/api/documents/session', {
+    method,
+    headers: {
+      host: 'demo.example.test', origin: 'https://demo.example.test',
+      ...(method !== 'POST' ? { cookie: `${DOCUMENT_SESSION_COOKIE}=${token}` } : { 'content-type': 'application/json' }),
+    },
+    ...(method === 'POST' ? { body: JSON.stringify({ inviteId: 'judge-a', accessToken: 'a'.repeat(40), policyVersion: DOCUMENT_POLICY_VERSION, policyAccepted: true }) } : {}),
+  })
+  for (const mode of ['local', 'invalid']) {
+    process.env.EZAGENT_DEPLOYMENT_MODE = mode
+    assert.equal((await createHostedSessionResponse(sessionRequest('POST'))).status, 503, `${mode} POST must not issue a session`)
+    assert.equal((await getHostedSessionResponse(sessionRequest('GET'))).status, 503, `${mode} GET must not expose hosted session state`)
+    assert.equal((await revokeHostedSessionResponse(sessionRequest('DELETE'))).status, 503, `${mode} DELETE must not revoke hosted sessions`)
+    assert.equal(await validateOwnerSession(existingSession, Date.now(), async () => testStore), true, `${mode} must preserve the existing hosted session`)
+    const control = await testStore.readHostedControl()
+    assert.equal(control.inviteOwners.length, 1)
+    assert.equal(control.sessions.length, 1)
+    assert.equal(control.requestWindow.globalCount, 0)
+  }
 })
 
 test('hosted stop switch never exposes the legacy local API to forged localhost headers', async (t) => {

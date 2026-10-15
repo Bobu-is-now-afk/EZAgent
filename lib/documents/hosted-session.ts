@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { HostedDocumentConfig } from './hosted-config'
 import { inviteTokenMatches, hostedRequestOriginAllowed, readHostedDocumentConfig } from './hosted-config'
 import { authorizeOwnerSessionAndRecordRequest, recordHostedRequest, issueOwnerSession, revokeOwnerSession, validateOwnerSession, type HostedControlError } from './hosted-control'
+import { readDocumentRuntimeMode } from './runtime-mode'
 import { isRecord } from './validation'
 
 export const DOCUMENT_SESSION_COOKIE = 'ezagent_docs_session'
@@ -114,6 +115,7 @@ export function hostedModeStatus(): 'disabled' | 'invalid' | 'enabled' {
 }
 
 export async function resolveHostedRequest(request: Request, mutation = false, countRequest = true): Promise<HostedRequestResolution> {
+  if (readDocumentRuntimeMode() !== 'hosted') return { mode: 'unavailable', response: unavailable() }
   const result = readHostedDocumentConfig()
   if (result.mode === 'disabled') return { mode: 'disabled' }
   if (result.mode === 'invalid') return { mode: 'unavailable', response: unavailable() }
@@ -141,6 +143,7 @@ async function isCurrentOwnerSession(session: HostedSessionClaims): Promise<bool
 }
 
 export async function createHostedSessionResponse(request: Request): Promise<Response> {
+  if (readDocumentRuntimeMode() !== 'hosted') return unavailable()
   const result = readHostedDocumentConfig()
   if (result.mode !== 'enabled') return unavailable()
   const { config } = result
@@ -177,6 +180,7 @@ export async function getHostedSessionResponse(request: Request): Promise<Respon
 }
 
 export async function revokeHostedSessionResponse(request: Request): Promise<Response> {
+  if (readDocumentRuntimeMode() !== 'hosted') return unavailable()
   const resolution = await resolveHostedRequest(request, true, false)
   if (resolution.mode === 'unavailable') {
     const configured = readHostedDocumentConfig()
