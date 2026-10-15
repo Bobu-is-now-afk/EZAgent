@@ -9,5 +9,9 @@ export const metadata = {
 
 export default async function DocumentsPage() {
   await connection()
-  return <DocumentWorkbench localAppMode={process.env.EZAGENT_LOCAL_APP_MODE === '1'} />
+  return <DocumentWorkbench
+    localAppMode={process.env.EZAGENT_LOCAL_APP_MODE === '1'}
+    hostedMode={process.env.EZAGENT_HOSTED_DOCUMENTS_ENABLED === '1'}
+    policyVersion={process.env.EZAGENT_DOCUMENTS_POLICY_VERSION ?? ''}
+  />
 }

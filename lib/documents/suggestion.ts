@@ -6,6 +6,7 @@ import { isRecord } from './validation'
 
 const MAX_DESCRIPTION_LENGTH = 2_000
 const MAX_MODEL_OUTPUT_LENGTH = 8_192
+const MODEL_CONTEXT_TOKENS = 2_048
 const SUGGESTION_TIMEOUT_MS = 30_000
 const suggestionState = globalThis as typeof globalThis & { __ezagentDocumentSuggestionBusy?: boolean }
 const PROTECTED_CLAIM = /\b(?:HKD|TWD|USD|EUR|GBP|JPY|CNY|RMB|price|cost|fee|amount|payment|payable|paid|bank|account|tax|vat|invoice\s*(?:number|no\.?))\b|[$€£¥￥₹]|[0-9０-９]+|港幣|台幣|新台幣|美元|人民幣|金額|金额|付款|收款|支付|匯款|汇款|轉帳|转账|銀行|银行|帳戶|账户|戶口|稅額|税额/i
@@ -133,7 +134,7 @@ export function createSuggestionService(deps: SuggestionDeps = {}) {
             stream: false,
             think: false,
             format: suggestionSchema,
-            options: { temperature: 0, num_predict: 512 },
+            options: { temperature: 0, num_predict: 512, num_ctx: MODEL_CONTEXT_TOKENS },
             messages: [
               { role: 'system', content: 'Return only schema-valid candidate wording for item descriptions or general terms. Do not decide or output buyer identity, quantity, price, currency, tax, payment status, payment amount, bank details, or dates. Leave missing facts to a human. Use only the supplied source description. Every sourceExcerpt must be an exact substring of it.' },
               { role: 'user', content: description },
