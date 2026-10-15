@@ -26,7 +26,7 @@ function bootstrap(args: string[], prepare = false) {
         if (failure) controller.enqueue(encoder.encode(JSON.stringify({ state: failure }) + '\n'))
         controller.close()
       }
-      child = spawn(process.platform === 'win32' ? 'python' : 'python3', [path.join(process.cwd(), 'scripts/bootstrap_local.py'), '--json', ...args], { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
+      child = spawn(process.execPath, [path.join(process.cwd(), 'scripts/bootstrap_ui.mjs'), ...args], { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
       child.stdout?.setEncoding('utf8')
       child.stdout?.on('data', (chunk: string) => {
         if (finished || cancelled) return

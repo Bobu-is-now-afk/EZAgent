@@ -11,5 +11,5 @@ node_modules/.bin/tsc --noEmit false --incremental false --strict --skipLibCheck
   tests/local-ai/*.test.ts tests/yolanda-review/*.test.ts tests/documents/*.test.ts
 NODE_PATH="$PWD/node_modules" node --test "$check_root"/tests/agent/*.test.js \
   "$check_root"/tests/local-ai/*.test.js "$check_root"/tests/yolanda-review/*.test.js \
-  "$check_root"/tests/documents/*.test.js
+  "$check_root"/tests/documents/*.test.js "$PWD/tests/local-ai/bootstrap-ui.test.mjs"
 git diff --check
