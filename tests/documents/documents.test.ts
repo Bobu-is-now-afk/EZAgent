@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { computeDocumentTotals, formatMinorUnits, parseMinorUnits } from '../../lib/documents/money'
@@ -178,4 +178,11 @@ test('separate local processes serialize order writes, sample numbering, idempot
   await runDocumentChild('clear', root)
   assert.equal((await store.listOrders()).length, 0)
   assert.equal((await store.listSamples()).length, 0)
+})
+
+test('store recovers a lock left by a dead writer process', async (t) => {
+  const { root, store } = await storeFor(t)
+  await writeFile(path.join(root, '.snapshot.lock'), JSON.stringify({ pid: 2_000_000_000, token: 'dead-process', createdAt: Date.now() }), { mode: 0o600 })
+  const order = await store.createOrder(valid(parseOrderWrite(orderInput(), false)).input)
+  assert.equal((await store.getOrder(order.id)).order.revision, 1)
 })
