@@ -12,6 +12,7 @@ const TYPES: Array<{ id: DocumentType; label: string }> = [
   { id: 'invoice', label: '發票／付款通知' },
   { id: 'receipt', label: '收據' },
 ]
+const MAX_ORDER_ITEMS = 40
 
 type OrderForm = { buyer: Order['buyer']; items: OrderItem[]; currency: string | null; agreedDate: string | null; termsText: string | null }
 const blankOrder = (): OrderForm => ({
@@ -19,7 +20,11 @@ const blankOrder = (): OrderForm => ({
 })
 
 function createId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16)
+    return (character === 'x' ? random : (random & 0x3) | 0x8).toString(16)
+  })
 }
 
 function typeName(type: DocumentType) { return TYPES.find((item) => item.id === type)?.label ?? '文件' }
@@ -61,9 +66,12 @@ function populatedReviewPaths(draft: Draft): string[] {
 function isPopulatedPath(draft: Draft, path: string) { return populatedReviewPaths(draft).includes(path) }
 
 function reviewFieldLabel(path: string) {
-  if (path.startsWith('buyer.')) return `買方／${path.slice(6)}`
+  if (path.startsWith('buyer.')) return ({ name: '買方名稱', address: '買方地址', contact: '買方聯絡方式' } as Record<string, string>)[path.slice(6)] ?? '買方資料'
   const item = /^items\[(\d+)\]\.(.+)$/.exec(path)
-  if (item) return `項目 ${Number(item[1]) + 1}／${item[2]}`
+  if (item) {
+    const itemLabels: Record<string, string> = { name: '項目名稱', description: '項目描述', quantity: '數量', unitPriceMinor: '單價' }
+    return `項目 ${Number(item[1]) + 1} · ${itemLabels[item[2]] ?? '項目資料'}`
+  }
   const labels: Record<string, string> = { currency: '幣別', termsText: '條款', issueDate: '開立日期', dueDate: '付款期限', validUntil: '有效期限', paymentDate: '收款日期', paymentAmountMinor: '實收金額', paymentMethod: '收款方式', taxMode: '稅務方式', taxRateBasisPoints: '稅率' }
   return labels[path] ?? path
 }
@@ -79,7 +87,8 @@ function reviewFieldValue(draft: Draft, path: string): string {
   }
   if (path.startsWith('buyer.')) return String(draft.buyer[path.slice(6) as keyof Draft['buyer']] ?? '—')
   if (path === 'paymentAmountMinor') return formatMoney(draft.paymentAmountMinor, draft.currency)
-  if (path === 'taxRateBasisPoints') return `${(draft.taxRateBasisPoints ?? 0) / 100}%`
+  if (path === 'taxRateBasisPoints') return `${((draft.taxRateBasisPoints ?? 0) / 100).toLocaleString('zh-HK')}%`
+  if (path === 'taxMode') return ({ none: '不計稅', included: '稅額內含', excluded: '另加稅額' } as Record<string, string>)[String(draft.taxMode)] ?? '未設定'
   return String(draft[path as keyof Draft] ?? '—')
 }
 
@@ -409,7 +418,7 @@ function OrdersHome(props: OrdersHomeProps) {
     {props.orderForm && <form className="order-form" onSubmit={(event) => void props.saveOrder(event)}>
       <div className="form-title"><strong>{props.editingOrderId ? '編輯訂單' : '新增合成訂單'}</strong><button type="button" className="icon-button" aria-label="關閉訂單表單" onClick={() => { props.setOrderForm(null); props.setEditingOrderId(null) }}><X size={16} /></button></div>
       <div className="field-grid"><label className="field wide"><span>買方名稱</span><input required value={props.orderForm.buyer.name ?? ''} onChange={(event) => props.setOrderForm({ ...props.orderForm!, buyer: { ...props.orderForm!.buyer, name: event.target.value } })} /></label><label className="field wide"><span>買方地址 <small>選填</small></span><input value={props.orderForm.buyer.address ?? ''} onChange={(event) => props.setOrderForm({ ...props.orderForm!, buyer: { ...props.orderForm!.buyer, address: event.target.value } })} /></label><label className="field"><span>聯絡方式 <small>選填</small></span><input value={props.orderForm.buyer.contact ?? ''} onChange={(event) => props.setOrderForm({ ...props.orderForm!, buyer: { ...props.orderForm!.buyer, contact: event.target.value } })} /></label><label className="field"><span>幣別 <small>HKD 或 TWD</small></span><select required value={props.orderForm.currency ?? ''} onChange={(event) => { const currency = event.target.value || null; if (currency !== props.orderForm?.currency && props.orderForm?.items.some((item) => item.unitPriceMinor != null)) { if (!window.confirm('變更幣別會清除所有已輸入單價。確認後需重新輸入金額。')) return; props.setOrderForm({ ...props.orderForm!, currency, items: props.orderForm!.items.map((item) => ({ ...item, unitPriceMinor: null })) }); setPriceText({}); return }; props.setOrderForm({ ...props.orderForm!, currency }) }}><option value="">選擇幣別</option><option value="HKD">HKD</option><option value="TWD">TWD</option></select></label><label className="field"><span>約定日期 <small>選填</small></span><input type="date" value={props.orderForm.agreedDate ?? ''} onChange={(event) => props.setOrderForm({ ...props.orderForm!, agreedDate: event.target.value || null })} /></label></div>
-      <div className="line-form-heading"><span>工作項目</span><button type="button" className="text-button" onClick={() => props.setOrderForm({ ...props.orderForm!, items: [...props.orderForm!.items, { id: createId(), name: '', description: '', quantity: null, unitPriceMinor: null }] })}><Plus size={14} />新增項目</button></div>
+      <div className="line-form-heading"><span>工作項目 <small>最多 {MAX_ORDER_ITEMS} 項</small></span><button type="button" className="text-button" disabled={props.orderForm.items.length >= MAX_ORDER_ITEMS} onClick={() => props.setOrderForm({ ...props.orderForm!, items: [...props.orderForm!.items, { id: createId(), name: '', description: '', quantity: null, unitPriceMinor: null }] })}><Plus size={14} />新增項目</button></div>
       {props.orderForm.items.map((item, index) => <div className="order-line-form" key={item.id}><label className="field line-description"><span>項目名稱／描述</span><input required value={item.name || item.description || ''} onChange={(event) => patchOrderItem(index, { name: event.target.value, description: event.target.value })} /></label><label className="field"><span>數量</span><input type="number" min="1" max="1000000" step="1" value={item.quantity ?? ''} onChange={(event) => patchOrderItem(index, { quantity: event.target.value ? Number(event.target.value) : null })} /></label><label className="field"><span>單價</span><input inputMode="decimal" placeholder="留白代表未知" value={priceText[item.id] ?? moneyInput(item.unitPriceMinor)} onChange={(event) => setPriceText((values) => ({ ...values, [item.id]: event.target.value }))} onBlur={() => { try { const minor = moneyFromInput(priceText[item.id] ?? moneyInput(item.unitPriceMinor), props.orderForm?.currency); patchOrderItem(index, { unitPriceMinor: minor }); setPriceText((values) => ({ ...values, [item.id]: moneyInput(minor) })) } catch (reason) { props.setError(reason instanceof Error ? reason.message : '金額格式不正確。') } }} /></label>{(props.orderForm?.items.length ?? 0) > 1 && <button className="icon-button remove-line" type="button" aria-label={`移除項目 ${index + 1}`} onClick={() => props.setOrderForm({ ...props.orderForm!, items: props.orderForm!.items.filter((_, idx) => idx !== index) })}><Trash2 size={15} /></button>}</div>)}
       <label className="field"><span>約定條款 <small>選填</small></span><textarea rows={2} value={props.orderForm.termsText ?? ''} onChange={(event) => props.setOrderForm({ ...props.orderForm!, termsText: event.target.value })} /></label>
       <div className="form-actions"><button type="button" className="secondary-button" onClick={() => { props.setOrderForm(null); props.setEditingOrderId(null) }}>取消</button><button type="submit" className="primary-button" disabled={props.busy}>{props.busy ? '儲存中…' : '儲存訂單'}</button></div>
@@ -502,7 +511,7 @@ function DraftEditor(props: DraftEditorProps) {
           <div className="draft-item-fields"><label className="field"><span>數量 {fieldTag(`items[${index}].quantity`)}</span><input type="number" min="1" max="1000000" step="1" value={item.quantity ?? ''} {...inputProps()} onChange={(event) => updateItem(index, { quantity: event.target.value ? Number(event.target.value) : null })} /></label><label className="field"><span>單價 {fieldTag(`items[${index}].unitPriceMinor`)}</span><input inputMode="decimal" placeholder="未知" value={moneyText[`item-${item.id}`] ?? moneyInput(item.unitPriceMinor)} {...inputProps()} onChange={(event) => setMoneyText((values) => ({ ...values, [`item-${item.id}`]: event.target.value }))} onBlur={() => { const key = `item-${item.id}`; parseMoney(moneyText[key] ?? moneyInput(item.unitPriceMinor), (minor) => { updateItem(index, { unitPriceMinor: minor }); setMoneyText((values) => ({ ...values, [key]: moneyInput(minor) })) }) }} /></label><div className="line-total"><span>小計</span><strong>{formatMoney(lineTotal(item), draft.currency)}</strong></div></div>
         </div>)}
         {!draft.items.length && <p className="no-items">尚未加入工作項目。</p>}
-        {!readOnly && <button type="button" className="text-button add-draft-item" onClick={() => updateDraft('items', [...draft.items, { id: createId(), name: '', description: '', quantity: null, unitPriceMinor: null }])}><Plus size={14} />新增項目</button>}
+        {!readOnly && <button type="button" className="text-button add-draft-item" disabled={draft.items.length >= MAX_ORDER_ITEMS} onClick={() => updateDraft('items', [...draft.items, { id: createId(), name: '', description: '', quantity: null, unitPriceMinor: null }])}><Plus size={14} />新增項目</button>}
       </div>
       <div className="field-grid tax-fields"><label className="field"><span>稅務方式 {fieldTag('taxMode')}</span><select value={draft.taxMode ?? ''} {...inputProps()} onChange={(event) => changeTaxMode(event.target.value)}><option value="">未設定</option><option value="none">不計稅</option><option value="included">稅額內含</option><option value="excluded">另加稅額</option></select></label>{draft.taxMode && draft.taxMode !== 'none' && <label className="field"><span>稅率 (%) {fieldTag('taxRateBasisPoints')}</span><input type="text" inputMode="decimal" placeholder="例如 5 或 5.25" value={rateText ?? (draft.taxRateBasisPoints == null ? '' : (draft.taxRateBasisPoints / 100).toFixed(2).replace(/\.00$/, ''))} {...inputProps()} onChange={(event) => setRateText(event.target.value)} onBlur={() => { try { const value = basisPointsFromInput(rateText ?? ''); updateDraft('taxRateBasisPoints', value); setRateText(value == null ? '' : String(value / 100)) } catch (reason) { props.onError(reason instanceof Error ? reason.message : '稅率格式不正確。') } }} /></label>}</div></section>
 
@@ -511,11 +520,10 @@ function DraftEditor(props: DraftEditorProps) {
       {!readOnly && <div className="review-card"><div><strong>{props.draftDirty ? '草稿有未儲存的修改' : '逐欄確認此版本'}</strong><p>{!props.completeForReview ? '補齊買方、幣別、項目數量與價格並明確設定稅務。收據還需人手確認收款日期、方式及實收金額。' : props.draftDirty ? '先儲存目前內容；儲存後的草稿才能進入覆核。' : '逐項確認已填欄位，並檢查右側紙面預覽及合計。任何修改都會清除覆核。'}</p></div>
         {reviewValues.length > 0 && <div className="field-checklist">{reviewValues.map((entry) => <label className="review-check-row" key={entry.path}><input type="checkbox" checked={props.reviewCheckedPaths.includes(entry.path)} disabled={props.busy || props.draftDirty || draft.status === 'reviewed'} onChange={(event) => props.setReviewCheckedPaths(event.target.checked ? [...props.reviewCheckedPaths, entry.path] : props.reviewCheckedPaths.filter((path) => path !== entry.path))} /><span><strong>{reviewFieldLabel(entry.path)}</strong><small>{entry.value} · {sourceLabel(entry.source)}</small></span></label>)}</div>}
         <label className="preview-confirm"><input type="checkbox" checked={props.previewChecked} disabled={props.busy || props.draftDirty || draft.status === 'reviewed'} onChange={(event) => props.setPreviewChecked(event.target.checked)} /><span>我已檢查右側文件預覽與合計</span></label>
-        <button type="button" className="secondary-button" onClick={() => void props.reviewDraft()} disabled={props.busy || !props.completeForReview || props.draftDirty || !allFieldsConfirmed || !props.previewChecked || draft.status === 'reviewed'}><Check size={14} />{draft.status === 'reviewed' ? '已覆核此版本' : '覆核已儲存版本'}</button>{draft.status === 'reviewed' && <button type="button" className="sample-button" onClick={props.createSample} disabled={props.busy}>Create sample document <ChevronRight size={15} /></button>}</div>}
+        <button type="button" className="secondary-button" onClick={() => void props.reviewDraft()} disabled={props.busy || !props.completeForReview || props.draftDirty || !allFieldsConfirmed || !props.previewChecked || draft.status === 'reviewed'}><Check size={14} />{draft.status === 'reviewed' ? '已覆核此版本' : '覆核已儲存版本'}</button>{draft.status === 'reviewed' && <button type="button" className="sample-button" onClick={props.createSample} disabled={props.busy}>建立範例文件 <ChevronRight size={15} /></button>}</div>}
     </section>
 
     <aside className="preview-column" aria-label="文件紙面預覽"><div className="preview-heading"><div><p className="eyebrow">精確草稿預覽</p><h3>{typeName(draft.type)}</h3></div>{isSample && <button className="primary-button print-action" onClick={() => window.print()}><Printer size={14} />列印</button>}<div className="preview-size">A4</div></div><PaperPreview draft={draft} totals={props.totals} sample={isSample} sampleNumber={props.sample?.sampleNumber ?? draft.sampleNumber} /><div className="preview-note"><span className="preview-pin" />只有已儲存並逐欄覆核的版本可建立範例文件。</div></aside></div>
-    {isSample && <style jsx global>{`@media print { body * { visibility: hidden !important; } .paper-preview, .paper-preview * { visibility: visible !important; } .paper-preview { position: absolute !important; left: 0 !important; top: 0 !important; width: 210mm !important; min-height: 297mm !important; margin: 0 !important; box-shadow: none !important; } }`}</style>}
   </div>
 }
 
