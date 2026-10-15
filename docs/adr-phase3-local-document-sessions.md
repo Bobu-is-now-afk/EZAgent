@@ -15,8 +15,8 @@ Phase 3 needs a controlled, synthetic-only hosted demo path. The prior local app
 ### Feature gate and session
 
 - Keep the hosted document mode disabled unless `EZAGENT_HOSTED_DOCUMENTS_ENABLED=1` and every required session, policy, and limits setting validates. Missing, malformed, or insecure configuration returns a generic unavailable response and never falls back to a shared/local owner.
-- Admit demo sessions with a pre-shared access token held only in the process environment. Sign opaque session claims with a separate environment-only HMAC secret of at least 32 bytes. Compare access tokens in constant time. Do not log, persist, echo, or include either secret in errors.
-- Set an `HttpOnly`, `Secure`, `SameSite=Strict`, path-scoped cookie with a finite expiry. Require matching Origin on mutations and reject cross-site requests. The shared invite code creates an anonymous demo workspace; it is not an identity provider and does not establish a person's name or company role.
+- Admit demo sessions with a pre-provisioned list of distinct invite IDs and access tokens held only in the process environment. Sign opaque session claims with a separate environment-only HMAC secret of at least 32 bytes. Compare fixed-length token digests in constant time. Do not log, persist, echo, or include token or signing-secret values in errors.
+- Set an `HttpOnly`, `Secure`, `SameSite=Strict`, path-scoped cookie with a finite expiry. Require matching Origin on mutations and reject cross-site requests. A distinct pre-provisioned invite creates an anonymous demo workspace; it is not an identity provider and does not establish a person's name or company role.
 - Require one exact HTTPS `EZAGENT_DOCUMENTS_ALLOWED_ORIGIN`; do not accept wildcards or infer a trusted client address from `X-Forwarded-For`/`X-Real-IP`. Hosted mode accepts only HTTPS request URLs. A future reverse-proxy integration must provide a separately reviewed trusted-proxy adapter before use.
 - Derive owner ID only from a validated signed session. Ignore and reject owner IDs supplied by a body, query, or custom header.
 
@@ -25,7 +25,7 @@ Hosted mode requires these values; any missing/invalid value leaves the feature 
 | Setting | Contract |
 |---|---|
 | `EZAGENT_HOSTED_DOCUMENTS_ENABLED` | Must equal `1`; absent means off. |
-| `EZAGENT_DOCUMENTS_ACCESS_TOKEN` | Environment-only invite token; at least 32 bytes. |
+| `EZAGENT_DOCUMENTS_ACCESS_TOKENS_JSON` | Environment-only JSON array of at most 10 unique `{id, token}` entries. IDs are stable non-secret labels; each token is at least 32 bytes. Each judge gets a distinct token. |
 | `EZAGENT_DOCUMENTS_SESSION_SECRET` | Separate environment-only HMAC secret; at least 32 bytes. |
 | `EZAGENT_DOCUMENTS_ALLOWED_ORIGIN` | One exact `https://` origin; no path, wildcard, or comma-separated list. |
 | `EZAGENT_DOCUMENTS_POLICY_VERSION` | Must equal the bundled policy version `2026-10-15-v1`. |
@@ -44,10 +44,12 @@ Body (64 KiB), URL (2 KiB), per-owner record counts and snapshot-size limits are
 ### Isolation and resource controls
 
 - Keep local app documents in the existing local path. Store hosted demo data in an owner-specific namespace under `.ezagent/documents/owners/<server-issued-owner-id>/`; never migrate or expose legacy ownerless records. A session clear affects only its own namespace and preserves its sample sequence.
+- Persist a mapping from configured invite ID to server-issued owner ID in the durable control registry. Re-authentication with the same invite resumes the same owner, so cookie expiry, revocation and retries cannot reset rate or daily caps. A new invite ID consumes one of the finite owner slots; owner slots are not recycled automatically. Session logout revokes that session nonce but does not clear its documents or free its owner slot.
 - Route every hosted list, read, create, update, review, suggestion, sample, export and clear operation through the same authenticated owner context.
 - Preserve the 64 KiB body and add a 2 KiB URL ceiling. Require explicit finite settings before enabling hosted mode: at most 10 active owners, 30 requests per owner per minute, 20 suggestions per owner per UTC day, one active model request globally, at most two queued suggestions, 15-second maximum queue wait, and the existing 30-second model timeout. Keep the current 250 orders, 250 drafts, 1,000 suggestions, 1,000 samples and 10 MiB snapshot limit as per-owner hard caps. Validate integer ranges and reject values above these code maxima.
 - Persist rate, daily-cap and global admission state under the existing cross-process file-lock discipline. Admission is atomic across local processes. Queue wait is bounded; client disconnect/cancel releases its queue slot and aborts its model request; restart recovery treats unfinished suggestions as incomplete and releases stale admission leases without reporting success.
 - If a durable admission-state write fails, reject the request. Never fall back to a process-only counter.
+- If hosted mode is enabled, every document endpoint—including requests whose Host claims `localhost`—uses hosted HTTPS/session/policy checks and owner storage. It must never fall back to the old local namespace. When hosted mode is disabled, preserve the existing local-app guard and path.
 - Do not claim per-IP rate limiting: the current request API has no trusted peer-address source, and client forwarding headers are spoofable. Per-owner and global admission limits are enforceable now; per-IP protection requires a trusted proxy adapter and is a later deployment prerequisite.
 - Retain the current suggestion input/output character ceilings and set the local model context ceiling explicitly; the model remains on loopback. Do not add a network model or third-party endpoint.
 
@@ -67,9 +69,10 @@ Body (64 KiB), URL (2 KiB), per-owner record counts and snapshot-size limits are
 
 ## Consequences and limits
 
-- Phase 3 sessions isolate anonymous demo workspaces; they do not authenticate a real person or organization. Do not use real customer documents or claim production readiness.
+- Phase 3 sessions isolate anonymous demo workspaces through distinct pre-provisioned bearer invites; they do not authenticate a real person or organization. Reusing one invite deliberately reopens the same workspace. Do not use real customer documents or claim production readiness.
 - The limits are conservative code ceilings, not Mac mini capacity findings. Public/demo concurrency remains unapproved until Phase 3 load testing on the target host.
-- Session signing-key rotation invalidates active cookies. The access token and signing secret must be configured out of band and are never written to files or Git.
+- Session signing-key rotation invalidates active cookies. Invite tokens and signing secret must be configured out of band and are never written to files or Git.
+- Owner slots are durable and are not reclaimed when a session expires or is revoked. Invite IDs must be distinct for distinct demo owners. There is no in-app owner-registry purge in this phase.
 - Old local ownerless records remain in the local namespace and are not copied or assigned to hosted owners.
 - The current store is one JSON snapshot per owner with a 10 MiB hard ceiling. Owner namespaces bound cross-tenant access but do not provide database-scale write throughput; actual target-host concurrency remains a later measured gate.
 
@@ -82,6 +85,7 @@ Body (64 KiB), URL (2 KiB), per-owner record counts and snapshot-size limits are
 ## Verification plan
 
 - Verify disabled-by-default and missing/invalid policy, access-token, signing-secret and limit settings fail closed.
+- Verify local-host spoof headers cannot make a hosted-mode request fall through to the legacy local namespace; verify repeating one invite resumes one owner and a new invite cannot reset existing quotas.
 - Verify token/session tampering, expiry, cookie flags, Origin/CSRF checks, owner substitution and cross-owner CRUD/clear/export denial.
 - Verify 64 KiB boundary, rate and daily caps, global concurrency, queue ceiling/wait, cancellation, timeout, lock/write failure and restart behavior across separate processes.
 - Verify the policy route and the API gate use the same version and text, and test policy-unavailable behavior.
