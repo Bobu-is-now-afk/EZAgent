@@ -1,5 +1,4 @@
-import { DocumentApiError, handleDocumentApi, readDocumentJson } from '../../../../../../lib/documents/api'
-import { createDocumentStore } from '../../../../../../lib/documents/store'
+import { documentStoreForContext, DocumentApiError, handleDocumentApi, readDocumentJson } from '../../../../../../lib/documents/api'
 import { isRecord } from '../../../../../../lib/documents/validation'
 
 export const runtime = 'nodejs'
@@ -8,7 +7,7 @@ export const dynamic = 'force-dynamic'
 type Context = { params: Promise<{ id: string }> }
 
 export function POST(request: Request, context: Context) {
-  return handleDocumentApi(request, async () => {
+  return handleDocumentApi(request, async (apiContext) => {
     const { id } = await context.params
     const body = await readDocumentJson(request)
     const idempotencyKey = request.headers.get('idempotency-key')
@@ -18,7 +17,7 @@ export function POST(request: Request, context: Context) {
         body.confirm !== 'CREATE SAMPLE' || !idempotencyKey || !/^[A-Za-z0-9._:-]{16,128}$/.test(idempotencyKey)) {
       throw new DocumentApiError('confirmation_required', 'Confirm sample creation with the reviewed revision and an idempotency key.', 400)
     }
-    const result = await (await createDocumentStore()).createSample(id, body.revision as number, body.reviewDigest, idempotencyKey)
+    const result = await (await documentStoreForContext(apiContext)).createSample(id, body.revision as number, body.reviewDigest, idempotencyKey)
     return { sample: result.value, created: result.created === true }
   }, true)
 }

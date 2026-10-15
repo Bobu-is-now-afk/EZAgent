@@ -121,6 +121,15 @@ export type SampleIdempotency = {
   sampleId: string
 }
 
+export type HostedControlState = {
+  inviteOwners: Array<{ inviteId: string; ownerId: string; createdAt: number }>
+  sessions: Array<{ nonce: string; ownerId: string; expiresAt: number; revokedAt: number | null }>
+  requestWindow: { minute: number; globalCount: number; byOwner: Record<string, number> }
+  dailySuggestions: { dayUTC: string; byOwner: Record<string, number> }
+  activeSuggestions: Array<{ id: string; ownerId: string; pid: number; startedAt: number }>
+  queuedSuggestions: Array<{ id: string; ownerId: string; pid: number; enqueuedAt: number }>
+}
+
 export type DocumentStoreState = {
   schemaVersion: 1
   orders: OrderRecord[]
@@ -129,6 +138,7 @@ export type DocumentStoreState = {
   samples: DocumentSample[]
   sampleSequence: number
   sampleIdempotency: Record<string, SampleIdempotency>
+  hostedControl?: HostedControlState
 }
 
 export type OrderInput = {

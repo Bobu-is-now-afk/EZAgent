@@ -140,7 +140,7 @@ function sourceLabel(value: FieldProvenance | undefined) {
   return value.confirmed ? '你已確認' : '待你確認'
 }
 
-export function DocumentWorkbench({ localAppMode = false }: { localAppMode?: boolean }) {
+export function DocumentWorkbench({ localAppMode = false, hostedMode = false, policyVersion = '' }: { localAppMode?: boolean; hostedMode?: boolean; policyVersion?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [samples, setSamples] = useState<SampleDocument[]>([])
@@ -162,6 +162,10 @@ export function DocumentWorkbench({ localAppMode = false }: { localAppMode?: boo
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mobilePane, setMobilePane] = useState<'edit' | 'preview'>('edit')
+  const [hostedAuthenticated, setHostedAuthenticated] = useState(!hostedMode)
+  const [hostedChecking, setHostedChecking] = useState(hostedMode)
+  const [inviteId, setInviteId] = useState('')
+  const [accessToken, setAccessToken] = useState('')
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -180,7 +184,43 @@ export function DocumentWorkbench({ localAppMode = false }: { localAppMode?: boo
     } finally { setLoading(false) }
   }, [localAppMode])
 
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    if (!hostedMode) return
+    let active = true
+    void documentsRequest('/api/documents/session').then(() => {
+      if (active) setHostedAuthenticated(true)
+    }).catch(() => {
+      if (active) setHostedAuthenticated(false)
+    }).finally(() => {
+      if (active) setHostedChecking(false)
+    })
+    return () => { active = false }
+  }, [hostedMode])
+
+  useEffect(() => { if (hostedAuthenticated) void refresh() }, [refresh, hostedAuthenticated])
+
+  async function signInHosted(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setBusy(true); setError('')
+    try {
+      await documentsRequest('/api/documents/session', { method: 'POST', body: JSON.stringify({ inviteId, accessToken, policyVersion, policyAccepted: true }) })
+      setAccessToken('')
+      setHostedAuthenticated(true)
+    } catch (reason) {
+      setAccessToken('')
+      setError(reason instanceof ApiRequestError && reason.code === 'hosted_session_required' ? '邀請資料無效，或目前無法建立示範工作區。' : documentErrorMessage(reason, false, '目前無法登入示範工作區。'))
+    } finally { setBusy(false) }
+  }
+
+  async function signOutHosted() {
+    setBusy(true)
+    try { await documentsRequest('/api/documents/session', { method: 'DELETE' }) }
+    catch { /* Local UI still locks even if the network response is lost. */ }
+    finally {
+      setOrders([]); setDrafts([]); setSamples([]); setActiveDraft(null); setActiveSample(null)
+      setHostedAuthenticated(false); setBusy(false)
+    }
+  }
 
   const totals = useMemo(() => activeDraft ? computeTotals(activeDraft) : null, [activeDraft])
   const [draftDirty, setDraftDirty] = useState(false)
@@ -372,11 +412,28 @@ export function DocumentWorkbench({ localAppMode = false }: { localAppMode?: boo
     finally { setBusy(false) }
   }
 
+  if (hostedMode && hostedChecking) return <main className="documents-shell min-h-screen"><section className="api-off-state"><div className="empty-stamp">示範</div><h1>正在確認工作階段</h1><p>文件資料尚未載入。</p></section></main>
+
+  if (hostedMode && !hostedAuthenticated) return <main className="documents-shell min-h-screen">
+    <header className="documents-topbar"><Link className="brand-link" href="/" aria-label="回到 EZAgent 首頁"><span className="brand-mark">E</span><span>EZAgent</span></Link><div className="topbar-center">受控文件示範</div><div className="topbar-actions"><Link href="/data-policy" className="quiet-button">資料政策</Link><Link href="/" className="quiet-button top-home"><ArrowLeft size={15} aria-hidden="true" />首頁</Link></div></header>
+    <section className="api-off-state hosted-login-card"><div className="empty-stamp">合成資料</div><h1>登入示範工作區</h1><p>請使用主辦方提供的邀請 ID 與存取碼。存取碼只用於建立受控工作階段，不會寫入文件資料。</p>
+      <p className="muted-copy">只輸入合成測試資料；禁止輸入真實客戶、員工、財務或機密資料。AI 文字建議只會送到此主機的 Ollama loopback 服務。登出或工作階段到期不會刪除已儲存資料。</p>
+      <form onSubmit={(event) => void signInHosted(event)} className="hosted-login-form">
+        <label className="field"><span>邀請 ID</span><input autoComplete="off" required maxLength={64} value={inviteId} onChange={(event) => setInviteId(event.target.value)} /></label>
+        <label className="field"><span>存取碼</span><input type="password" autoComplete="off" required minLength={32} maxLength={256} value={accessToken} onChange={(event) => setAccessToken(event.target.value)} /></label>
+        <label className="preview-confirm"><input type="checkbox" required /><span>我已閱讀並同意 <Link href="/data-policy">合成資料政策</Link>，只會使用合成資料。</span></label>
+        {error && <p role="alert" className="form-error">{error}</p>}
+        <button className="primary-button" type="submit" disabled={busy || !policyVersion}>{busy ? '登入中…' : '登入示範工作區'}</button>
+        {!policyVersion && <p role="alert" className="form-error">資料政策設定無效，登入功能已停用。</p>}
+      </form>
+    </section>
+  </main>
+
   return <main className="documents-shell min-h-screen">
     <header className="documents-topbar">
       <Link className="brand-link" href="/" aria-label="回到 EZAgent 首頁"><span className="brand-mark">E</span><span>EZAgent</span></Link>
-      <div className="topbar-center"><span className="status-dot" />本機文件工作台 <span className="topbar-divider">/</span> 合成資料</div>
-      <div className="topbar-actions"><button type="button" className="quiet-button" onClick={() => void refresh()} disabled={busy || loading}>重新整理</button><Link href="/" className="quiet-button top-home"><ArrowLeft size={15} aria-hidden="true" /> 首頁</Link></div>
+      <div className="topbar-center"><span className="status-dot" />{hostedMode ? '受控示範工作階段' : '本機文件工作台'} <span className="topbar-divider">/</span> 合成資料</div>
+      <div className="topbar-actions"><button type="button" className="quiet-button" onClick={() => void refresh()} disabled={busy || loading}>重新整理</button>{hostedMode && <button type="button" className="quiet-button" onClick={() => void signOutHosted()} disabled={busy}>登出</button>}<Link href={hostedMode ? '/data-policy' : '/'} className="quiet-button top-home">{hostedMode ? '資料政策' : <><ArrowLeft size={15} aria-hidden="true" /> 首頁</>}</Link></div>
     </header>
 
     <div className="workbench-frame">

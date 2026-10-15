@@ -5,6 +5,7 @@ import type {
   DocumentDraft,
   DocumentSample,
   DocumentStoreState,
+  HostedControlState,
   DraftSuggestion,
   FieldProvenance,
   OrderRecord,
@@ -195,8 +196,41 @@ function emptyState(): DocumentStoreState {
   return { schemaVersion: 1, orders: [], drafts: [], suggestions: [], samples: [], sampleSequence: 0, sampleIdempotency: {} }
 }
 
+export function emptyHostedControlState(now = Date.now()): HostedControlState {
+  return {
+    inviteOwners: [], sessions: [],
+    requestWindow: { minute: Math.floor(now / 60_000), globalCount: 0, byOwner: {} },
+    dailySuggestions: { dayUTC: new Date(now).toISOString().slice(0, 10), byOwner: {} },
+    activeSuggestions: [], queuedSuggestions: [],
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isHostedControlState(value: unknown): value is HostedControlState {
+  if (!isRecord(value) || !Array.isArray(value.inviteOwners) || value.inviteOwners.length > 10 ||
+      !Array.isArray(value.sessions) || value.sessions.length > 10 || !isRecord(value.requestWindow) ||
+      !Number.isSafeInteger(value.requestWindow.minute) || !Number.isSafeInteger(value.requestWindow.globalCount) ||
+      (value.requestWindow.globalCount as number) < 0 || !isRecord(value.requestWindow.byOwner) ||
+      !isRecord(value.dailySuggestions) || typeof value.dailySuggestions.dayUTC !== 'string' ||
+      !isRecord(value.dailySuggestions.byOwner) || !Array.isArray(value.activeSuggestions) || value.activeSuggestions.length > 1 ||
+      !Array.isArray(value.queuedSuggestions) || value.queuedSuggestions.length > 2) return false
+  if (!value.inviteOwners.every((item) => isRecord(item) && typeof item.inviteId === 'string' &&
+      /^[a-zA-Z0-9_-]{1,64}$/.test(item.inviteId) && isUuid(item.ownerId) && Number.isSafeInteger(item.createdAt))) return false
+  if (!value.sessions.every((item) => isRecord(item) && isUuid(item.nonce) && isUuid(item.ownerId) &&
+      Number.isSafeInteger(item.expiresAt) && (item.revokedAt === null || Number.isSafeInteger(item.revokedAt)))) return false
+  const isOwnerCounts = (counts: Record<string, unknown>) => Object.entries(counts).length <= 10 &&
+    Object.entries(counts).every(([owner, count]) => isUuid(owner) && Number.isSafeInteger(count) && (count as number) >= 0)
+  if (!isOwnerCounts(value.requestWindow.byOwner) || !isOwnerCounts(value.dailySuggestions.byOwner)) return false
+  const isLease = (item: unknown) => isRecord(item) && isUuid(item.id) && isUuid(item.ownerId) &&
+    Number.isSafeInteger(item.pid) && (item.pid as number) > 0 && Number.isSafeInteger(item.startedAt ?? item.enqueuedAt)
+  return value.activeSuggestions.every(isLease) && value.queuedSuggestions.every(isLease)
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 function isDate(value: unknown): value is string {
@@ -274,6 +308,7 @@ function isState(value: unknown): value is DocumentStoreState {
   if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.orders) || !Array.isArray(value.drafts) ||
       !Array.isArray(value.suggestions) || !Array.isArray(value.samples) || !Number.isSafeInteger(value.sampleSequence) ||
       (value.sampleSequence as number) < 0 || !isRecord(value.sampleIdempotency)) return false
+  if ('hostedControl' in value && !isHostedControlState(value.hostedControl)) return false
   if (value.orders.length > MAX_ORDERS || value.drafts.length > MAX_DRAFTS || value.suggestions.length > MAX_SUGGESTIONS || value.samples.length > MAX_SAMPLES) return false
   if (!value.orders.every((record) => isRecord(record) && typeof record.id === 'string' && Number.isSafeInteger(record.currentRevision) &&
       Array.isArray(record.revisions) && record.revisions.length > 0 && record.revisions.length <= MAX_REVISIONS &&
@@ -796,6 +831,29 @@ export class DocumentStore {
     })
   }
 
+  async readHostedControl(): Promise<HostedControlState> {
+    return withWriter(this.root, async () => {
+      const state = await this.requireState()
+      const control = state.hostedControl ?? emptyHostedControlState()
+      if (!state.hostedControl) {
+        state.hostedControl = control
+        await this.writeState(state)
+      }
+      return structuredClone(control)
+    })
+  }
+
+  async updateHostedControl<T>(update: (control: HostedControlState) => Promise<T> | T): Promise<T> {
+    return withWriter(this.root, async () => {
+      const state = await this.requireState()
+      const control = state.hostedControl ?? emptyHostedControlState()
+      const result = await update(control)
+      state.hostedControl = control
+      await this.writeState(state)
+      return result
+    })
+  }
+
   private async requireState(): Promise<DocumentStoreState> {
     try {
       await mkdir(this.root, { recursive: true, mode: 0o700 })
@@ -858,4 +916,13 @@ export async function createDocumentStore(root?: string): Promise<DocumentStore>
   const store = new DocumentStore(root)
   await store.initialize()
   return store
+}
+
+export async function createHostedControlStore(): Promise<DocumentStore> {
+  return createDocumentStore(resolve(process.cwd(), '.ezagent', 'documents', 'hosted-control'))
+}
+
+export async function createHostedOwnerStore(ownerId: string): Promise<DocumentStore> {
+  if (!isUuid(ownerId)) fail('invalid_owner', 'Document owner is invalid.', 500)
+  return createDocumentStore(resolve(process.cwd(), '.ezagent', 'documents', 'owners', ownerId))
 }

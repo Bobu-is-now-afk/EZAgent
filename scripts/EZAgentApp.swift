@@ -96,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "PORT": "3210",
             "NEXT_TELEMETRY_DISABLED": "1",
             "EZAGENT_LOCAL_APP_MODE": "1",
+            "EZAGENT_DEPLOYMENT_MODE": "local",
             "EZAGENT_DOCUMENTS_ENABLED": "1",
             "EZAGENT_APP_HEALTH_TOKEN": healthToken,
         ]

@@ -1,9 +1,8 @@
-import { handleDocumentApi } from '../../../../lib/documents/api'
-import { createDocumentStore } from '../../../../lib/documents/store'
+import { documentStoreForContext, handleDocumentApi } from '../../../../lib/documents/api'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export function GET(request: Request) {
-  return handleDocumentApi(request, async () => ({ samples: await (await createDocumentStore()).listSamples() }))
+  return handleDocumentApi(request, async (apiContext) => ({ samples: await (await documentStoreForContext(apiContext)).listSamples() }))
 }
