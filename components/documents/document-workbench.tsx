@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Check, ChevronRight, FilePlus2, FileText, LoaderCircle, Plus, Printer, ShieldCheck, Trash2, X } from 'lucide-react'
+import { LocalAiSetup } from '@/components/local-ai-setup'
 import {
   ApiRequestError, basisPointsFromInput, computeTotals, decimalFromMinor, documentsRequest, Draft, DraftSuggestion, DocumentType, FieldProvenance, formatMoney, lineTotal, moneyFromInput, moneyInput, Order, OrderItem, SampleDocument,
 } from '@/lib/documents/ui-contract'
@@ -28,6 +29,20 @@ function createId() {
 }
 
 function typeName(type: DocumentType) { return TYPES.find((item) => item.id === type)?.label ?? '文件' }
+
+function documentErrorMessage(reason: unknown, localAppMode: boolean, fallback: string) {
+  if (reason instanceof ApiRequestError) {
+    if (reason.code === 'documents_disabled') return localAppMode
+      ? '文件工作台目前未啟用。請關閉並重新開啟 App；若仍無法載入，請聯絡提供此 App 的人。'
+      : '文件工作台目前未啟用。請檢查本機開發伺服器設定後重新整理。'
+    if (reason.code === 'local_only') return '請在執行此文件工作台的這部電腦上重新開啟 App，再試一次。'
+    if (['unsafe_storage_lock', 'unsafe_storage_path', 'unsafe_storage_file', 'stale_storage_lock', 'stale_lock_recovery', 'store_io'].includes(reason.code ?? '')) return '本機文件資料目前無法安全讀取或儲存。請重新開啟 App 後再試；請勿自行刪除或移動資料夾。若仍發生，請聯絡支援。'
+  }
+  if (reason instanceof TypeError) return localAppMode
+    ? '無法連接本機文件服務。請關閉並重新開啟 App，再按「重新整理」；文件資料不會因此清除。'
+    : '無法連接本機文件服務。請確認開發伺服器仍在執行，再試一次。'
+  return reason instanceof Error ? reason.message : fallback
+}
 
 function toDraftPatch(draft: Draft) {
   return {
@@ -125,7 +140,7 @@ function sourceLabel(value: FieldProvenance | undefined) {
   return value.confirmed ? '你已確認' : '待你確認'
 }
 
-export function DocumentWorkbench() {
+export function DocumentWorkbench({ localAppMode = false }: { localAppMode?: boolean }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [samples, setSamples] = useState<SampleDocument[]>([])
@@ -161,9 +176,9 @@ export function DocumentWorkbench() {
       setDrafts(draftData.drafts)
       setSamples(sampleData.samples)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '無法載入文件工作台。')
+      setError(documentErrorMessage(reason, localAppMode, '無法載入文件工作台。'))
     } finally { setLoading(false) }
-  }, [])
+  }, [localAppMode])
 
   useEffect(() => { void refresh() }, [refresh])
 
@@ -187,7 +202,7 @@ export function DocumentWorkbench() {
         method: 'POST', body: JSON.stringify({ type: typeOverride, sourceOrder: sourceOrder ? { id: sourceOrder.id, revision: sourceOrder.revision } : null }),
       })
       setActiveSample(null); setActiveDraft(result.draft); setDraftDirty(false); setReviewCheckedPaths([]); setPreviewChecked(false); setMode('draft'); setMobilePane('edit'); setMessage('草稿已建立。補齊資料並儲存後，即可預覽與覆核。'); await refresh()
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '無法建立草稿。') }
+    } catch (reason) { setError(documentErrorMessage(reason, localAppMode, '無法建立草稿。')) }
     finally { setBusy(false) }
   }
 
@@ -201,7 +216,7 @@ export function DocumentWorkbench() {
       const saved = result.order
       setOrders((current) => editingOrderId ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current])
       setOrderForm(null); setEditingOrderId(null); setMessage(editingOrderId ? '訂單新版本已儲存。既有草稿仍保留原訂單版本。' : '合成訂單已儲存。')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '無法儲存訂單。') }
+    } catch (reason) { setError(documentErrorMessage(reason, localAppMode, '無法儲存訂單。')) }
     finally { setBusy(false) }
   }
 
@@ -216,7 +231,7 @@ export function DocumentWorkbench() {
       }
       const response = await documentsRequest<{ suggestion: DraftSuggestion }>('/api/documents/suggestions', { method: 'POST', body: JSON.stringify({ draftId: target.id, expectedRevision: target.revision, description: customText }) })
       setSuggestion(response.suggestion); setSelectedSuggestionFields([]); setSuggestionApplied(false); setMessage('建議只包含文字欄位；數量、金額、買方及付款資料仍須你提供。')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '目前無法取得文字建議。') }
+    } catch (reason) { setError(documentErrorMessage(reason, localAppMode, '目前無法取得文字建議。')) }
     finally { setBusy(false) }
   }
 
@@ -226,7 +241,7 @@ export function DocumentWorkbench() {
     try {
       const response = await documentsRequest<{ draft: Draft }>(`/api/documents/drafts/${encodeURIComponent(customDraft.id)}/apply-suggestion`, { method: 'POST', body: JSON.stringify({ expectedRevision: customDraft.revision, suggestionId: suggestion.id, fieldIndexes: selectedSuggestionFields }) })
       setActiveSample(null); setActiveDraft(response.draft); setCustomDraft(response.draft); setDraftDirty(false); setReviewCheckedPaths([]); setPreviewChecked(false); setSuggestionApplied(true); setMode('draft'); setMobilePane('edit'); setMessage('已套用選取的文字建議。財務欄位維持空白。'); await refresh()
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '無法套用文字建議。') }
+    } catch (reason) { setError(documentErrorMessage(reason, localAppMode, '無法套用文字建議。')) }
     finally { setBusy(false) }
   }
 
@@ -276,7 +291,7 @@ export function DocumentWorkbench() {
       const saved = await documentsRequest<{ draft: Draft; totals: Draft['totals'] }>(`/api/documents/drafts/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ expectedRevision: revision, ...toDraftPatch(activeDraft) }) })
       const draft = { ...saved.draft, totals: saved.totals }
       setActiveDraft(draft); setDraftDirty(false); setReviewCheckedPaths([]); setPreviewChecked(false); setDrafts((rows) => [draft, ...rows.filter((row) => row.id !== draft.id)]); setMessage(`草稿第 ${draft.revision} 版已儲存；請重新檢查這個版本。`)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '無法儲存草稿。') }
+    } catch (reason) { setError(documentErrorMessage(reason, localAppMode, '無法儲存草稿。')) }
     finally { setBusy(false) }
   }
 
@@ -294,7 +309,7 @@ export function DocumentWorkbench() {
         setError('來源訂單已有新版本。草稿保留原資料；請查看差異並從最新版建立新草稿。')
         await openDraft(activeDraft)
         setError('來源訂單已有新版本。草稿保留原資料；請查看差異並從最新版建立新草稿。')
-      } else setError(reason instanceof Error ? reason.message : '無法覆核這個版本。')
+      } else setError(documentErrorMessage(reason, localAppMode, '無法覆核這個版本。'))
     }
     finally { setBusy(false) }
   }
@@ -314,7 +329,7 @@ export function DocumentWorkbench() {
         setError('來源訂單已有新版本。這份草稿仍保留原資料，無法建立範例；請查看差異並從最新版建立新草稿。')
         await openDraft(activeDraft)
         setError('來源訂單已有新版本。這份草稿仍保留原資料，無法建立範例；請查看差異並從最新版建立新草稿。')
-      } else setError(reason instanceof Error ? reason.message : '無法建立範例文件。')
+      } else setError(documentErrorMessage(reason, localAppMode, '無法建立範例文件。'))
     }
     finally { setBusy(false) }
   }
@@ -325,7 +340,7 @@ export function DocumentWorkbench() {
     try {
       await documentsRequest(`/api/documents/drafts/${encodeURIComponent(draft.id)}`, { method: 'DELETE', body: JSON.stringify({ confirm: true, expectedRevision: draft.revision }) })
       setDrafts((rows) => rows.filter((row) => row.id !== draft.id)); if (activeDraft?.id === draft.id) { setActiveDraft(null); setActiveSample(null); setMode('orders') }; setMessage('草稿已刪除。')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '無法刪除草稿。') }
+    } catch (reason) { setError(documentErrorMessage(reason, localAppMode, '無法刪除草稿。')) }
     finally { setBusy(false) }
   }
 
@@ -335,7 +350,7 @@ export function DocumentWorkbench() {
     try {
       await documentsRequest('/api/documents/clear-data', { method: 'DELETE', body: JSON.stringify({ confirm: true }) })
       setOrders([]); setDrafts([]); setSamples([]); setActiveDraft(null); setActiveSample(null); setDraftDirty(false); setMode('orders'); setMessage('合成工作台資料已清除；範例編號序列已保留，舊匯出檔不會刪除。')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '無法清除合成資料。') }
+    } catch (reason) { setError(documentErrorMessage(reason, localAppMode, '無法清除合成資料。')) }
     finally { setBusy(false) }
   }
 
@@ -353,7 +368,7 @@ export function DocumentWorkbench() {
         setSourceDiff({ original: oldResult.order, current: latestResult.order })
       }
     }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '無法開啟草稿。') }
+    catch (reason) { setError(documentErrorMessage(reason, localAppMode, '無法開啟草稿。')) }
     finally { setBusy(false) }
   }
 
@@ -376,13 +391,13 @@ export function DocumentWorkbench() {
           {samples.map((sample) => <button type="button" className="sample-row" key={sample.id} onClick={() => { setActiveSample(sample); setActiveDraft({ ...sample.snapshot, status: 'sample_created', sampleNumber: sample.sampleNumber, totals: sample.totals }); setSourceDiff(null); setDraftDirty(false); setMode('draft'); setMessage(`範例 ${sample.sampleNumber} 為唯讀快照。列印前請確認 SAMPLE 標記。`) }}><span className="sample-mark">S</span><span><strong>{sample.sampleNumber}</strong><small>{typeName(sample.type)}</small></span></button>)}
           {!samples.length && <p className="rail-empty">建立範例後會顯示在這裡</p>}
         </div>
-        <div className="rail-bottom"><div className="data-note"><ShieldCheck size={15} /><span>開發版資料保存在專案的 .ezagent/documents/，直到你明確刪除。清除會移除訂單、草稿及範例，保留編號序列；已下載檔案不會刪除。</span></div><button type="button" className="clear-link" onClick={() => void clearDemoData()} disabled={busy}>清除合成資料</button></div>
+        <div className="rail-bottom"><div className="data-note"><ShieldCheck size={15} /><span>{localAppMode ? '封裝版資料保存在此使用者的 App Support，直到你清除合成資料。移除 App 不會刪除此資料；重新安裝後可能仍會保留。清除會移除訂單、草稿及範例，不刪除已匯出的檔案，編號序列會保留。' : '開發版資料保存在專案的 .ezagent/documents/，直到你清除合成資料。清除會移除訂單、草稿及範例，不刪除已匯出的檔案，編號序列會保留。'}</span></div>{localAppMode && <details className="mt-2 text-xs text-zinc-500"><summary className="cursor-pointer">查看封裝版資料位置與恢復方式</summary><p className="mt-1 break-all">~/Library/Application Support/CantoNet/EZAgent/Runtime/.ezagent/documents/</p><p className="mt-1">App 關閉後再開啟可重新載入資料。若資料無法讀取，請勿自行刪除資料夾，聯絡支援協助。</p></details>}<button type="button" className="clear-link" onClick={() => void clearDemoData()} disabled={busy}>清除合成資料</button></div>
       </aside>
 
       <section className="workbench-main" aria-label="文件工作區">
         {(error || message) && <div className={`notice ${error ? 'notice-error' : 'notice-success'}`} role={error ? 'alert' : 'status'}><span>{error || message}</span>{error && <button type="button" aria-label="關閉錯誤訊息" onClick={() => setError('')}><X size={16} /></button>}</div>}
         {loading && <div className="loading-state"><LoaderCircle className="spin" size={18} />載入訂單與草稿…</div>}
-        {!loading && error && !orders.length && !drafts.length && <div className="api-off-state"><div className="empty-stamp">本機</div><h2>文件工作台尚未就緒</h2><p>{error}</p><p className="muted-copy">文件 API 預設停用。請在本機開發設定中啟用後重新整理；此畫面不會把資料改存到瀏覽器。</p><button className="primary-button" onClick={() => void refresh()}>再試一次</button></div>}
+        {!loading && error && !orders.length && !drafts.length && <div className="api-off-state"><div className="empty-stamp">本機</div><h2>文件工作台尚未就緒</h2><p>{error}</p><p className="muted-copy">資料只會寫入本機文件儲存區，不會改存到瀏覽器。你可以重新整理重試；若在封裝版持續失敗，請聯絡支援。</p><button className="primary-button" onClick={() => void refresh()}>重新整理</button></div>}
 
         {!loading && mode === 'orders' && <OrdersHome orders={orders} drafts={drafts} samples={samples} docType={docType} setDocType={setDocType} orderForm={orderForm} setOrderForm={setOrderForm} editingOrderId={editingOrderId} setEditingOrderId={setEditingOrderId} saveOrder={saveOrder} createDraft={createDraft} busy={busy} setMessage={setMessage} setError={setError} setActiveDraft={setActiveDraft} setMode={setMode} />}
         {!loading && mode === 'custom' && <CustomHome docType={docType} setDocType={setDocType} text={customText} setText={setCustomText} suggestion={suggestion} selectedFields={selectedSuggestionFields} setSelectedFields={setSelectedSuggestionFields} askSuggestion={askSuggestion} applySuggestion={applySuggestion} busy={busy} applied={suggestionApplied} onBack={() => setMode('orders')} />}
@@ -412,7 +427,7 @@ function OrdersHome(props: OrdersHomeProps) {
   }
   return <div className="home-view">
     <div className="page-heading"><div><p className="eyebrow">建立客戶文件</p><h2>從一筆工作開始</h2><p>選擇合成訂單，或描述自訂工作。未知的資料會保持空白，直到你補上。</p></div><span className="synthetic-pill"><span />僅限合成資料</span></div>
-    <div className="path-switcher"><button type="button" className="path-choice active" onClick={() => props.setMode('orders')}><span className="path-glyph">01</span><span><strong>從訂單建立</strong><small>使用已確認的買方與項目資料</small></span><ChevronRight size={17} /></button><button type="button" className="path-choice" onClick={() => props.setMode('custom')}><span className="path-glyph custom-glyph">✳</span><span><strong>描述自訂工作</strong><small>取得受限制的文字建議</small></span><ChevronRight size={17} /></button></div>
+    <div className="path-switcher"><button type="button" className="path-choice active" onClick={() => props.setMode('orders')}><span className="path-glyph">01</span><span><strong>從訂單建立</strong><small>使用已確認的買方與項目資料，不需要 AI 模型</small></span><ChevronRight size={17} /></button><button type="button" className="path-choice" onClick={() => props.setMode('custom')}><span className="path-glyph custom-glyph">✳</span><span><strong>描述自訂工作</strong><small>準備本機 AI 後取得文字建議</small></span><ChevronRight size={17} /></button></div>
     <div className="section-heading"><div><h3>合成訂單</h3><p>手動輸入的示範資料；修改後會建立新版本。</p></div><button type="button" className="outline-button" onClick={() => { props.setEditingOrderId(null); props.setOrderForm(blankOrder()) }}><Plus size={15} />新增訂單</button></div>
 
     {props.orderForm && <form className="order-form" onSubmit={(event) => void props.saveOrder(event)}>
@@ -438,6 +453,7 @@ type CustomHomeProps = { docType: DocumentType; setDocType: (type: DocumentType)
 function CustomHome({ docType, setDocType, text, setText, suggestion, selectedFields, setSelectedFields, askSuggestion, applySuggestion, busy, applied, onBack }: CustomHomeProps) {
   return <div className="custom-view"><button type="button" className="back-link" onClick={onBack}><ArrowLeft size={15} />回到訂單清單</button><div className="page-heading compact-heading"><div><p className="eyebrow">自訂工作</p><h2>用幾句話描述需求</h2><p>本機 AI 只提出文字建議。買方、幣別、數量、價格、稅務及付款資料不會由 AI 補齊。</p></div><span className="synthetic-pill"><span />本機 AI 建議</span></div>
     <div className="custom-compose"><label className="field"><span>想製作哪一種文件？</span><select value={docType} onChange={(event) => setDocType(event.target.value as DocumentType)}>{TYPES.map((type) => <option value={type.id} key={type.id}>{type.label}</option>)}</select></label><label className="field"><span>工作描述</span><textarea rows={6} placeholder="例如：為兩天的工作坊製作報價單，包含場地與教材準備。" value={text} onChange={(event) => setText(event.target.value)} /><small>避免輸入真實客戶或付款資料。建議只用合成內容。</small></label><button className="primary-button" type="button" onClick={() => void askSuggestion()} disabled={busy || !text.trim()}>{busy ? '整理文字建議…' : '取得文字建議'}</button></div>
+    <LocalAiSetup compact showDemoLink={false} />
     {suggestion && <section className="suggestion-panel"><div className="suggestion-title"><div><p className="eyebrow">草稿建議</p><h3>逐項選擇要套用的文字</h3></div><span className="ai-tag">AI 建議</span></div>{suggestion.fields.map((field, index) => <label className="suggestion-item selectable-suggestion" key={`${index}-${field.path}-${field.value}`}><input type="checkbox" checked={selectedFields.includes(index)} onChange={(event) => setSelectedFields(event.target.checked ? [...selectedFields, index] : selectedFields.filter((item) => item !== index))} /><span className="suggestion-copy"><strong>{field.path === 'termsText' ? '條款文字' : '項目描述'}</strong><p>{field.value}</p><blockquote>來源：「{field.sourceExcerpt}」</blockquote></span><span className="pending-tag">{selectedFields.includes(index) ? '將套用' : '尚未套用'}</span></label>)}<div className="missing-fields"><strong>仍需你提供</strong><div>{(suggestion.missingFields.length ? suggestion.missingFields : ['買方名稱', '幣別', '數量與價格']).map((field) => <span key={field}>{field}</span>)}</div><p>未選取的建議不會進入草稿。數量、金額、稅務、買方及付款資料不由 AI 補齊。</p></div><button type="button" className="primary-button" onClick={() => void applySuggestion()} disabled={busy || selectedFields.length === 0}>{busy ? '套用中…' : '確認所選文字並套用'}</button>{applied && <p className="applied-note" role="status">已套用並開啟草稿。所有金額欄位仍為空白。</p>}</section>}
   </div>
 }
