@@ -51,6 +51,7 @@ For a Next.js App Router website, copy:
 
 - `examples/vercel-next/lib/model-client.js` to the website's `lib/model-client.js`.
 - `examples/vercel-next/app/api/model/route.js` to its `app/api/model/route.js`.
+- `examples/vercel-next/app/api/demo-agent/route.js` to its `app/api/demo-agent/route.js` only if the team wants the bounded agent demonstration. It is an invented HKD quotation draft: one model-selected catalogue item, one deterministic price calculation, and a fixed explanation. It does not create orders, files, invoices, payments or approvals. Replace the catalogue only after the business rules and data source are reviewed.
 
 In Vercel, add `MODEL_API_URL` and Sensitive `MODEL_API_KEY` under the project's environment variables, select the intended environment, then redeploy. The frontend calls its own origin only:
 
@@ -62,6 +63,26 @@ const response = await fetch('/api/model', {
 })
 const { answer } = await response.json()
 ```
+
+For the optional demo agent, the frontend calls the same website origin:
+
+```js
+const response = await fetch('/api/demo-agent', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ request: 'I need one design session.' }),
+})
+const { draft, explanation } = await response.json()
+// Show draft.status === 'draft_only' and the explicit demoOnly label.
+```
+
+For `422 draft_not_understood`, keep the user's text and ask them to name design, print or consultation; do not create an empty quotation. This may happen if the model does not return the expected tool call. The agent still uses one model call and never executes an unknown tool.
+
+Both website routes check browser `Origin` when present, cap request bodies, and avoid returning the gateway key. This is a **public demo endpoint**, not a user login or durable per-visitor quota. The Mac gateway provides the hard shared limit of 12 accepted model calls per minute, one active call, and a 45-second model timeout. The optional agent uses one model call; concurrent judges may get `429`. **Public website release is blocked until the owner approves and verifies a site-level access or edge rate control.** In-memory Vercel Function counters and `Origin` checks alone do not stop scripted traffic or Vercel invocation costs. The team should test the chosen control with allowed judge traffic and excess requests before publishing. Show a short “Busy, retry in a moment” message for `429` and a “Demo temporarily unavailable” message for `503`.
+
+### Framework-neutral contract
+
+For any other website backend, implement server-side `POST /api/model` accepting `{ "prompt": "..." }` (max 2,000 characters). Read `MODEL_API_URL` and `MODEL_API_KEY` **only in server runtime**, then send `POST` to the exact HTTPS `MODEL_API_URL` with `Authorization: Bearer <MODEL_API_KEY>` and JSON `{ "model": "qwen3.5:9b", "messages": [{ "role": "user", "content": prompt }], "stream": false, "max_tokens": 512 }`. Return only `{ "answer": "..." }` to the browser, without forwarding upstream headers or errors. Set a 50-second timeout and no-store caching. The browser calls its own `/api/model`, never the Mac hostname. The agent variant keeps the tool catalogue and state machine on the website backend, accepts only validated model tool arguments, and caps itself at one model call.
 
 If the website already has an agent backend, import `callModel` there. It accepts `messages`, `tools`, and `tool_choice` and returns the model's OpenAI-compatible response. The backend must validate tool calls, execute only its approved tools, cap agent steps, and send tool results back in a subsequent `callModel` request. Replacing the model URL alone will not repair broken orchestration or tool permissions. If the site is static HTML, it still needs a Vercel Function or other server-side endpoint to keep the key out of browser code.
 

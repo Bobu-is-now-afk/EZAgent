@@ -30,21 +30,74 @@ function validMessages(messages) {
   return messages.every((message) => {
     if (!message || typeof message !== 'object' || Array.isArray(message)) return false
     if (!['system', 'developer', 'user', 'assistant', 'tool'].includes(message.role)) return false
+    if (message.tool_calls !== undefined && (message.role !== 'assistant' ||
+        !Array.isArray(message.tool_calls) || message.tool_calls.length < 1 || message.tool_calls.length > 8 ||
+        !message.tool_calls.every((call) => validToolCall(call)))) return false
     const hasText = typeof message.content === 'string' && message.content.length <= 8_000
     const hasToolCalls = message.role === 'assistant' && message.content === null &&
-      Array.isArray(message.tool_calls) && message.tool_calls.length <= 8
+      Array.isArray(message.tool_calls)
     if (!hasText && !hasToolCalls) return false
     if (message.role === 'tool' && (typeof message.tool_call_id !== 'string' || message.tool_call_id.length > 128)) return false
     return true
   })
 }
 
+function validName(value) {
+  return typeof value === 'string' && /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(value)
+}
+
+function validToolCall(call) {
+  return call && typeof call === 'object' && !Array.isArray(call) &&
+    typeof call.id === 'string' && call.id.length > 0 && call.id.length <= 128 &&
+    call.type === 'function' && call.function && typeof call.function === 'object' &&
+    validName(call.function.name) &&
+    (typeof call.function.arguments === 'string' && call.function.arguments.length <= 8_000 ||
+      call.function.arguments && typeof call.function.arguments === 'object' && !Array.isArray(call.function.arguments) &&
+      JSON.stringify(call.function.arguments).length <= 8_000)
+}
+
+function validTools(tools) {
+  if (!Array.isArray(tools) || tools.length < 1 || tools.length > 8) return false
+  const names = new Set()
+  for (const tool of tools) {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool) || tool.type !== 'function' ||
+        !tool.function || typeof tool.function !== 'object' || Array.isArray(tool.function) ||
+        !validName(tool.function.name) || names.has(tool.function.name) ||
+        typeof tool.function.description !== 'string' || tool.function.description.length > 1_000 ||
+        !tool.function.parameters || typeof tool.function.parameters !== 'object' ||
+        Array.isArray(tool.function.parameters) || tool.function.parameters.type !== 'object' ||
+        JSON.stringify(tool.function.parameters).length > 8_000) return false
+    names.add(tool.function.name)
+  }
+  return true
+}
+
+function validToolChoice(choice, tools) {
+  if (choice === undefined) return true
+  if (!tools) return false
+  if (['auto', 'none', 'required'].includes(choice)) return true
+  return choice && typeof choice === 'object' && !Array.isArray(choice) &&
+    choice.type === 'function' && choice.function && typeof choice.function === 'object' &&
+    validName(choice.function.name) && tools.some((tool) => tool.function.name === choice.function.name)
+}
+
+function validResponseFormat(format) {
+  if (format === undefined) return true
+  return format && typeof format === 'object' && !Array.isArray(format) &&
+    ['text', 'json_object'].includes(format.type) && Object.keys(format).length === 1
+}
+
 function validRequest(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return false
+  if (Object.keys(body).some((field) => ![
+    'model', 'messages', 'stream', 'tools', 'tool_choice', 'response_format',
+    'temperature', 'max_tokens', 'max_completion_tokens',
+  ].includes(field))) return false
   if (body.model !== undefined && body.model !== MODEL) return false
   if (body.stream !== undefined && body.stream !== false) return false
   if (!validMessages(body.messages)) return false
-  if (body.tools !== undefined && (!Array.isArray(body.tools) || body.tools.length > 8)) return false
+  if (body.tools !== undefined && !validTools(body.tools)) return false
+  if (!validToolChoice(body.tool_choice, body.tools) || !validResponseFormat(body.response_format)) return false
   if (body.temperature !== undefined &&
       (!Number.isFinite(body.temperature) || body.temperature < 0 || body.temperature > 2)) return false
   for (const field of ['max_tokens', 'max_completion_tokens']) {
@@ -93,6 +146,22 @@ function loopbackOllamaUrl(value) {
     throw new Error('MODEL_GATEWAY_OLLAMA_URL must be a loopback HTTP origin')
   }
   return url.origin
+}
+
+export async function checkOllamaModel({ ollamaUrl = 'http://127.0.0.1:11434', fetchImpl = fetch } = {}) {
+  const origin = loopbackOllamaUrl(ollamaUrl)
+  let response
+  try {
+    response = await fetchImpl(`${origin}/api/tags`, { signal: AbortSignal.timeout(3_000) })
+  } catch {
+    throw new Error('Loopback Ollama is unreachable; start Ollama before the gateway')
+  }
+  if (!response.ok) throw new Error('Loopback Ollama model check failed')
+  const payload = await response.json()
+  if (!Array.isArray(payload.models) || !payload.models.some((model) => model.name === MODEL)) {
+    throw new Error('qwen3.5:9b is not installed in loopback Ollama')
+  }
+  return true
 }
 
 export function createGateway({ apiKey, ollamaUrl = 'http://127.0.0.1:11434', fetchImpl = fetch,
@@ -210,6 +279,7 @@ if (process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]) {
     apiKey: process.env.MODEL_GATEWAY_API_KEY,
     ollamaUrl: process.env.MODEL_GATEWAY_OLLAMA_URL,
   })
+  await checkOllamaModel({ ollamaUrl: process.env.MODEL_GATEWAY_OLLAMA_URL })
   server.listen(port, '127.0.0.1', () => {
     process.stdout.write(`model gateway listening on 127.0.0.1:${port}\n`)
   })

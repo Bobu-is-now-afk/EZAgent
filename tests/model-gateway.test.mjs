@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { test } from 'node:test'
-import { createGateway } from '../scripts/model_gateway.mjs'
+import { checkOllamaModel, createGateway } from '../scripts/model_gateway.mjs'
 
 const KEY = 'test-only-secret-0123456789abcdef-0123456789'
 
@@ -84,4 +84,61 @@ test('limits the number of model calls per minute', async () => {
     }
     assert.equal((await chat(base)).status, 429)
   })
+})
+
+test('validates tool definitions, tool choice, and response format before forwarding', async () => {
+  const tools = [{ type: 'function', function: {
+    name: 'lookup_order', description: 'Look up one order',
+    parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  } }]
+  let forwarded
+  await withGateway({ fetchImpl: async (_url, options) => {
+    forwarded = JSON.parse(options.body)
+    return Response.json({ choices: [] })
+  } }, async (base) => {
+    const messages = [{ role: 'user', content: 'Find order 1' }]
+    assert.equal((await chat(base, { messages, tools, tool_choice: 'auto', response_format: { type: 'json_object' } })).status, 200)
+    assert.equal(forwarded.tools[0].function.name, 'lookup_order')
+    assert.equal(forwarded.response_format.type, 'json_object')
+    for (const bad of [
+      { tools: [{ type: 'function', function: { name: 'bad name', parameters: { type: 'object' } } }] },
+      { tools: [...tools, ...tools] },
+      { tools, tool_choice: { type: 'function', function: { name: 'unknown' } } },
+      { tool_choice: 'auto' },
+      { response_format: { type: 'json_schema', json_schema: {} } },
+      { temperature: 0.2, prompt: 'unknown top-level field' },
+    ]) {
+      assert.equal((await chat(base, { messages, ...bad })).status, 400)
+    }
+  })
+})
+
+test('allows a bounded assistant tool call and rejects malformed calls', async () => {
+  let forwarded
+  await withGateway({ fetchImpl: async (_url, options) => {
+    forwarded = JSON.parse(options.body)
+    return Response.json({ choices: [] })
+  } }, async (base) => {
+    const call = { id: 'call_1', type: 'function', function: { name: 'lookup_order', arguments: '{"id":"1"}' } }
+    const messages = [{ role: 'assistant', content: null, tool_calls: [call] },
+      { role: 'tool', tool_call_id: 'call_1', content: '{"status":"found"}' }]
+    assert.equal((await chat(base, { messages })).status, 200)
+    assert.equal(forwarded.messages[0].tool_calls[0].id, 'call_1')
+    assert.equal((await chat(base, { messages: [{ role: 'assistant', content: null,
+      tool_calls: [{ ...call, function: { name: 'bad name', arguments: '{}' } }] }] })).status, 400)
+    assert.equal((await chat(base, { messages: [{ role: 'assistant', content: 'text',
+      tool_calls: [{ ...call, function: { name: 'bad name', arguments: '{}' } }] }] })).status, 400)
+  })
+})
+
+test('preflight checks the installed model on loopback Ollama', async () => {
+  let seen
+  assert.equal(await checkOllamaModel({ fetchImpl: async (url) => {
+    seen = url
+    return Response.json({ models: [{ name: 'qwen3.5:9b' }] })
+  } }), true)
+  assert.equal(seen, 'http://127.0.0.1:11434/api/tags')
+  await assert.rejects(checkOllamaModel({ fetchImpl: async () => Response.json({ models: [] }) }), /not installed/)
+  await assert.rejects(checkOllamaModel({ fetchImpl: async () => { throw new Error('offline') } }), /unreachable/)
+  await assert.rejects(checkOllamaModel({ ollamaUrl: 'http://example.com' }), /loopback/)
 })

@@ -5,6 +5,10 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 
 export async function POST(request) {
+  const origin = request.headers.get('origin')
+  if (origin && origin !== new URL(request.url).origin) {
+    return Response.json({ error: 'invalid_origin' }, { status: 403 })
+  }
   if (Number(request.headers.get('content-length')) > 4_096) {
     return Response.json({ error: 'request_too_large' }, { status: 413 })
   }
