@@ -27,13 +27,147 @@ type Registry = { queues: Map<string, Promise<void>> }
 const globalWithRegistry = globalThis as typeof globalThis & { __ezagentDocumentStoreRegistryV1?: Registry }
 const registry = globalWithRegistry.__ezagentDocumentStoreRegistryV1 ??= { queues: new Map() }
 
+type LockOwner = { pid: number; token: string; createdAt: number }
+const LOCK_WAIT_MS = 15_000
+const LOCK_POLL_MS = 25
+const LOCK_INITIALIZE_GRACE_MS = 1_000
+
+function lockPath(root: string): string {
+  return resolve(root, '.snapshot.lock')
+}
+
+function recoveryLockPath(root: string): string {
+  return resolve(root, '.snapshot.lock-recovery')
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+async function readLockOwner(path: string): Promise<{ owner: LockOwner | null; modifiedAt: number } | null> {
+  try {
+    const info = await lstat(path)
+    if (!info.isFile() || info.isSymbolicLink()) fail('unsafe_storage_lock', 'Document storage lock is not a regular file.', 500)
+    if (info.size > 1024) fail('corrupt_storage_lock', 'Document storage lock is invalid.', 500)
+    let owner: LockOwner | null = null
+    try {
+      const parsed: unknown = JSON.parse(await readFile(path, 'utf8'))
+      if (isRecord(parsed) && Number.isSafeInteger(parsed.pid) && typeof parsed.token === 'string' && Number.isSafeInteger(parsed.createdAt)) {
+        owner = { pid: parsed.pid as number, token: parsed.token, createdAt: parsed.createdAt as number }
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error
+    }
+    return { owner, modifiedAt: info.mtimeMs }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    if (error instanceof DocumentStoreError) throw error
+    fail('store_io', 'Document storage lock could not be read.', 500)
+  }
+}
+
+async function releaseOwnedLock(path: string, handle: Awaited<ReturnType<typeof open>>, token: string): Promise<void> {
+  try {
+    const current = await readLockOwner(path)
+    if (current?.owner?.token === token && current.owner.pid === process.pid) await unlink(path)
+  } finally {
+    await handle.close().catch(() => undefined)
+  }
+}
+
+async function removeDeadLock(root: string, path: string): Promise<boolean> {
+  const observed = await readLockOwner(path)
+  if (!observed) return true
+  if (!observed.owner && Date.now() - observed.modifiedAt <= LOCK_INITIALIZE_GRACE_MS) return false
+  if (observed.owner && processIsAlive(observed.owner.pid)) return false
+
+  let recoveryHandle: Awaited<ReturnType<typeof open>>
+  const recoveryToken = randomUUID()
+  try {
+    recoveryHandle = await open(recoveryLockPath(root), 'wx', 0o600)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      const recovery = await readLockOwner(recoveryLockPath(root))
+      if (recovery && ((recovery.owner && !processIsAlive(recovery.owner.pid)) ||
+          (!recovery.owner && Date.now() - recovery.modifiedAt > LOCK_INITIALIZE_GRACE_MS))) {
+        fail('stale_lock_recovery', 'A previous storage lock recovery was interrupted; manual local recovery is required.', 503)
+      }
+      return false
+    }
+    fail('store_io', 'Document storage lock recovery could not start.', 500)
+  }
+  try {
+    await recoveryHandle.writeFile(JSON.stringify({ pid: process.pid, token: recoveryToken, createdAt: Date.now() }), 'utf8')
+    await recoveryHandle.sync()
+  } catch {
+    await unlink(recoveryLockPath(root)).catch(() => undefined)
+    await recoveryHandle.close().catch(() => undefined)
+    fail('store_io', 'Document storage lock recovery could not start.', 500)
+  }
+
+  try {
+    const current = await readLockOwner(path)
+    const sameDeadOwner = observed.owner && current?.owner?.token === observed.owner.token && !processIsAlive(current.owner.pid)
+    const sameAbandonedInitialization = !observed.owner && current && !current.owner &&
+      current.modifiedAt === observed.modifiedAt && Date.now() - current.modifiedAt > LOCK_INITIALIZE_GRACE_MS
+    if (sameDeadOwner || sameAbandonedInitialization) {
+      await unlink(path).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error })
+      return true
+    }
+    return current === null
+  } finally {
+    try {
+      const recovery = await readLockOwner(recoveryLockPath(root))
+      if (recovery?.owner?.token === recoveryToken && recovery.owner.pid === process.pid) await unlink(recoveryLockPath(root))
+    } finally {
+      await recoveryHandle.close().catch(() => undefined)
+    }
+  }
+}
+
+async function acquireFileLock(root: string): Promise<() => Promise<void>> {
+  const path = lockPath(root)
+  const deadline = Date.now() + LOCK_WAIT_MS
+  while (Date.now() < deadline) {
+    const token = randomUUID()
+    let handle: Awaited<ReturnType<typeof open>>
+    try {
+      handle = await open(path, 'wx', 0o600)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') fail('store_io', 'Document storage lock could not be acquired.', 500)
+      await removeDeadLock(root, path)
+      await new Promise((resolveWait) => setTimeout(resolveWait, LOCK_POLL_MS))
+      continue
+    }
+    try {
+      await handle.writeFile(JSON.stringify({ pid: process.pid, token, createdAt: Date.now() }), 'utf8')
+      await handle.sync()
+      return () => releaseOwnedLock(path, handle, token)
+    } catch {
+      await unlink(path).catch(() => undefined)
+      await handle.close().catch(() => undefined)
+      fail('store_io', 'Document storage lock could not be initialized.', 500)
+    }
+  }
+  fail('store_busy', 'Document data is busy in another local process. Retry shortly.', 503)
+}
+
 function withWriter<T>(root: string, operation: () => Promise<T>): Promise<T> {
   const previous = registry.queues.get(root) ?? Promise.resolve()
   let release: () => void = () => undefined
   const gate = new Promise<void>((resolveGate) => { release = resolveGate })
   const queued = previous.then(() => gate)
   registry.queues.set(root, queued)
-  return previous.then(operation).finally(() => {
+  return previous.then(async () => {
+    await mkdir(root, { recursive: true, mode: 0o700 })
+    const unlock = await acquireFileLock(root)
+    try { return await operation() } finally { await unlock() }
+  }).finally(() => {
     release()
     if (registry.queues.get(root) === queued) registry.queues.delete(root)
   })

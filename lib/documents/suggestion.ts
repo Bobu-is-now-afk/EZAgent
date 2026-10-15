@@ -8,6 +8,7 @@ const MAX_DESCRIPTION_LENGTH = 2_000
 const MAX_MODEL_OUTPUT_LENGTH = 8_192
 const SUGGESTION_TIMEOUT_MS = 30_000
 const suggestionState = globalThis as typeof globalThis & { __ezagentDocumentSuggestionBusy?: boolean }
+const PROTECTED_CLAIM = /\b(?:HKD|TWD|USD|EUR|GBP|JPY|CNY|RMB|price|cost|fee|amount|payment|payable|paid|bank|account|tax|vat|invoice\s*(?:number|no\.?))\b|[$€£¥￥₹]|[0-9０-９]+|港幣|台幣|新台幣|美元|人民幣|金額|金额|付款|收款|支付|匯款|汇款|轉帳|转账|銀行|银行|帳戶|账户|戶口|稅額|税额/i
 
 type LocalModelConfig = { model: string; host: string }
 type SuggestionDeps = {
@@ -61,6 +62,8 @@ export function validateSuggestionFields(value: unknown, description: string): S
     const excerpt = raw.sourceExcerpt.trim()
     if (!text || text.length > 500 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) ||
         !excerpt || excerpt.length > 240 || !description.includes(excerpt)) return null
+    const protectedClaims = text.match(new RegExp(PROTECTED_CLAIM.source, 'gi')) ?? []
+    if (protectedClaims.some((claim) => !excerpt.toLocaleLowerCase().includes(claim.toLocaleLowerCase()))) return null
     if (raw.path === 'termsText') {
       if (hasTerms) return null
       hasTerms = true

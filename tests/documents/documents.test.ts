@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -11,7 +12,7 @@ import { parseDraftPatch, parseOrderWrite, reviewableFieldPaths } from '../../li
 async function storeFor(t: test.TestContext) {
   const root = await mkdtemp(path.join(tmpdir(), 'ezagent-documents-test-'))
   t.after(async () => rm(root, { recursive: true, force: true }))
-  return createDocumentStore(root)
+  return { root, store: await createDocumentStore(root) }
 }
 
 function orderInput(overrides: Record<string, unknown> = {}) {
@@ -27,6 +28,33 @@ function orderInput(overrides: Record<string, unknown> = {}) {
 function valid<T>(value: T | null): T {
   assert.ok(value)
   return value
+}
+
+function runDocumentChild(mode: 'order' | 'sample' | 'clear', root: string, args: string[] = []): Promise<void> {
+  const storeModule = path.resolve(__dirname, '../../lib/documents/store.js')
+  const validationModule = path.resolve(__dirname, '../../lib/documents/validation.js')
+  const childSource = `
+    const { createDocumentStore } = require(${JSON.stringify(storeModule)});
+    const { parseOrderWrite } = require(${JSON.stringify(validationModule)});
+    (async () => {
+      const store = await createDocumentStore(process.argv[1]);
+      const mode = process.argv[2];
+      if (mode === 'order') {
+        const parsed = parseOrderWrite(${JSON.stringify(orderInput())}, false);
+        if (!parsed) throw new Error('invalid synthetic test input');
+        await store.createOrder(parsed.input);
+      } else if (mode === 'sample') {
+        await store.createSample(process.argv[3], Number(process.argv[4]), process.argv[5], process.argv[6]);
+      } else if (mode === 'clear') {
+        await store.clearData();
+      }
+    })().catch((error) => { process.stderr.write(String(error)); process.exitCode = 1; });
+  `
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(process.execPath, ['-e', childSource, root, mode, ...args], { stdio: 'ignore' })
+    child.once('error', rejectRun)
+    child.once('exit', (code) => code === 0 ? resolveRun() : rejectRun(new Error(`document child exited with ${code}`)))
+  })
 }
 
 test('money parser and totals reject unsupported or inexact values', () => {
@@ -65,10 +93,11 @@ test('write validators enforce the documented currency, quantity, and suggestion
     { fields: [{ path: 'termsText', value: 'Net 30', sourceExcerpt: 'not in source' }] },
     { fields: [{ path: 'termsText', value: 'Net 30', sourceExcerpt: 'source' }], extra: true },
   ]) assert.equal(validateSuggestionFields(proposal, 'source'), null)
+  assert.equal(validateSuggestionFields({ fields: [{ path: 'items[].description', value: 'Workshop — HKD 999 payable to account 1234', sourceExcerpt: 'two workshop days' }] }, 'two workshop days'), null)
 })
 
 test('order revisions remain immutable and referenced order deletion archives', async (t) => {
-  const store = await storeFor(t)
+  const { store } = await storeFor(t)
   const input = valid(parseOrderWrite(orderInput(), false)).input
   const order = await store.createOrder(input)
   const draft = await store.createDraft('invoice', { id: order.id, revision: 1 })
@@ -83,7 +112,7 @@ test('order revisions remain immutable and referenced order deletion archives', 
 })
 
 test('draft provenance survives unchanged fields, review is exact, samples are idempotent, and clear keeps sequence', async (t) => {
-  const store = await storeFor(t)
+  const { store } = await storeFor(t)
   const order = await store.createOrder(valid(parseOrderWrite(orderInput(), false)).input)
   const draft = await store.createDraft('invoice', { id: order.id, revision: 1 })
   const parsedPatch = valid(parseDraftPatch({
@@ -112,4 +141,40 @@ test('draft provenance survives unchanged fields, review is exact, samples are i
   const secondReview = await store.reviewDraft(completed.id, completed.revision, reviewableFieldPaths(completed))
   const secondSample = await store.createSample(completed.id, completed.revision, secondReview.digest, 'test-idempotency-key-0002')
   assert.notEqual(secondSample.value.sampleNumber, sample1.value.sampleNumber)
+})
+
+test('separate local processes serialize order writes, sample numbering, idempotency, and clear', async (t) => {
+  const { root, store } = await storeFor(t)
+  const orderWrites = Array.from({ length: 12 }, () => runDocumentChild('order', root))
+  await Promise.all(orderWrites)
+  const orders = await store.listOrders()
+  assert.equal(orders.length, 12)
+
+  const reviewed = []
+  for (const order of orders) {
+    const draft = await store.createDraft('invoice', { id: order.id, revision: 1 })
+    const patch = valid(parseDraftPatch({ expectedRevision: 1, issueDate: '2026-10-15', taxMode: 'none' }, draft.currency))
+    const updated = await store.patchDraft(draft.id, patch.expectedRevision, patch.patch)
+    const review = await store.reviewDraft(updated.id, updated.revision, reviewableFieldPaths(updated))
+    reviewed.push({ id: updated.id, revision: updated.revision, digest: review.digest })
+  }
+  const sampleWrites = reviewed.map((draft, index) => runDocumentChild('sample', root, [
+    draft.id, String(draft.revision), draft.digest, `race-sample-key-${String(index).padStart(4, '0')}`,
+  ]))
+  await Promise.all(sampleWrites)
+  const samples = await store.listSamples()
+  assert.equal(samples.length, 12)
+  assert.equal(new Set(samples.map((sample) => sample.sampleNumber)).size, 12)
+
+  const first = reviewed[0]
+  const firstKey = 'race-sample-key-0000'
+  await Promise.all([
+    runDocumentChild('sample', root, [first.id, String(first.revision), first.digest, firstKey]),
+    runDocumentChild('sample', root, [first.id, String(first.revision), first.digest, firstKey]),
+  ])
+  assert.equal((await store.listSamples()).length, 12)
+
+  await runDocumentChild('clear', root)
+  assert.equal((await store.listOrders()).length, 0)
+  assert.equal((await store.listSamples()).length, 0)
 })
