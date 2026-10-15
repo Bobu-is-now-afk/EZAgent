@@ -36,7 +36,12 @@ if [[ "$PNPM_VERSION" != "12.3.4" ]]; then
   exit 2
 fi
 
-BUILD_TMP="$(mktemp -d "$ROOT/.macos-build.XXXXXX")"
+BUILD_TMP="/tmp/cantonet-ezagent-macos-arm64-build"
+if [[ -e "$BUILD_TMP" ]]; then
+  echo "[ERROR] Build temp path already exists; inspect it before retrying: $BUILD_TMP"
+  exit 2
+fi
+mkdir -p "$BUILD_TMP"
 trap 'rm -rf "$BUILD_TMP"' EXIT
 export SOURCE_DATE_EPOCH="$(git -C "$ROOT" show -s --format=%ct HEAD)"
 export TZ=UTC
@@ -164,7 +169,7 @@ cp "$ROOT/docs/macos-first-run.svg" "$BUILD_TMP/payload/FIRST-RUN.svg"
 touch -t 198001010000 "$APP/Contents/Info.plist" "$APP/Contents/MacOS/EZAgent"
 codesign --force --deep --sign - --options runtime --timestamp=none "$APP"
 find "$BUILD_TMP/payload" -exec touch -t 198001010000 {} +
-ditto -c -k --sequesterRsrc --keepParent "$BUILD_TMP/payload" "$OUTPUT_DIR/EZAgent-$VERSION-macos-arm64.zip"
+ditto -c -k --norsrc --noextattr --keepParent "$BUILD_TMP/payload" "$OUTPUT_DIR/EZAgent-$VERSION-macos-arm64.zip"
 if ! "$NODE_BIN" - "$OUTPUT_DIR/EZAgent-$VERSION-macos-arm64.zip" "$VERSION" <<'NODE'
 const { execFileSync } = require('node:child_process')
 const archive = process.argv[2]
