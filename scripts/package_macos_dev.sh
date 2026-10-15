@@ -11,7 +11,7 @@ MACOS_VERSION="$(sw_vers -productVersion)"
 NODE_VERSION="$(node --version)"
 SOURCE_REVISION="$(git -C "$ROOT" rev-parse --verify HEAD)"
 BUILD_ID="ezagent-${VERSION}-${SOURCE_REVISION}"
-MINIMUM_MACOS_VERSION="${EZAGENT_MINIMUM_MACOS_VERSION:-$SDK_VERSION}"
+MINIMUM_MACOS_VERSION="$SDK_VERSION"
 
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-dev\.[0-9]+)?$ || ! "$BUILD_NUMBER" =~ ^[0-9]+(\.[0-9]+)*$ || ! "$MINIMUM_MACOS_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
   echo "[ERROR] Version, build number, or minimum macOS version has an invalid format."
