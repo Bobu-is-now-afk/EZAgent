@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUTPUT_DIR="${EZAGENT_OUTPUT_DIR:-$ROOT/outputs/phase2/macos-arm64}"
-VERSION="${EZAGENT_DEV_VERSION:-0.2.0-dev.1}"
-BUILD_NUMBER="${EZAGENT_BUILD_NUMBER:-20261015.1}"
+VERSION="${EZAGENT_DEV_VERSION:-0.2.0-dev.2}"
+BUILD_NUMBER="${EZAGENT_BUILD_NUMBER:-20261015.2}"
 NODE_BIN="$(node -p 'process.execPath')"
 SDK_VERSION="$(xcrun --show-sdk-version)"
 MACOS_VERSION="$(sw_vers -productVersion)"
@@ -159,6 +159,7 @@ Documents are stored at ~/Library/Application Support/CantoNet/EZAgent/Runtime/.
 
 This preview was built on Apple silicon with existing project dependencies in offline/frozen mode. It has not been validated under a separate clean macOS account. Build inputs and source commit are listed in EZAgent-$VERSION.app/Contents/Resources/BUILD-INFO.txt. Rebuild with EZAGENT_DEV_VERSION=$VERSION EZAGENT_BUILD_NUMBER=$BUILD_NUMBER ./scripts/package_macos_dev.sh. The build host needs Node.js, Corepack with cached pnpm 12.3.4, Swift/Xcode Command Line Tools, and all locked packages available in its local pnpm store.
 EOF
+cp "$ROOT/docs/macos-first-run.svg" "$BUILD_TMP/payload/FIRST-RUN.svg"
 
 touch -t 198001010000 "$APP/Contents/Info.plist" "$APP/Contents/MacOS/EZAgent"
 codesign --force --deep --sign - --options runtime --timestamp=none "$APP"
