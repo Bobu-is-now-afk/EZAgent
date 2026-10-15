@@ -169,7 +169,7 @@ if ! "$NODE_BIN" - "$OUTPUT_DIR/EZAgent-$VERSION-macos-arm64.zip" "$VERSION" <<'
 const { execFileSync } = require('node:child_process')
 const archive = process.argv[2]
 const version = process.argv[3]
-const entries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8' }).split(/\r?\n/)
+const entries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split(/\r?\n/)
 const expected = `payload/EZAgent-${version}.app/Contents/Resources/RuntimeTemplate/server.js`
 if (!entries.includes(expected)) process.exit(1)
 NODE
