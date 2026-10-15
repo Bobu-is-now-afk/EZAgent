@@ -622,7 +622,7 @@ function ApprovalPreview({ draft, total }: { draft: Draft; total: number | null 
     <p className="mt-3 text-xs font-semibold text-zinc-600">預計狀態 · 靜態示意，不代表即時身分或決策</p>
     <div className="mt-2 grid gap-2 sm:grid-cols-3">
       <div className="rounded-lg border border-zinc-200 bg-white p-3"><strong>身分不可用</strong><p className="mt-1 text-xs leading-5 text-zinc-600">尚未連接可信身分提供者；正式核准入口維持停用，本畫面不驗證身分或角色。</p></div>
-      <div className="rounded-lg border border-zinc-200 bg-white p-3"><strong>{sourceChanged ? '來源訂單已更新' : '內容版次已變更'}</strong><p className="mt-1 text-xs leading-5 text-zinc-600">{sourceChanged ? `此草稿仍綁定第 ${draft.sourceOrder?.revision} 版，來源目前為第 ${draft.sourceOrderCurrentRevision} 版；建立合成範例會被阻止。` : '未來核准必須綁定同一來源、草稿版次、條款、合計與輸出版本；改動後需重新覆核。'} 正式核准失效檢查尚未實作。</p></div>
+      <div className="rounded-lg border border-zinc-200 bg-white p-3"><strong>{sourceChanged ? '來源訂單已更新' : '內容版次已變更'}</strong><p className="mt-1 text-xs leading-5 text-zinc-600">{sourceChanged ? `此草稿仍綁定第 ${draft.sourceOrder?.revision} 版，來源目前為第 ${draft.sourceOrderCurrentRevision} 版；建立合成範例會被阻止。` : '未來提案需綁定可信組織、核准政策版次、來源訂單摘要、已覆核草稿版次與摘要、合計摘要及正式輸出摘要；任一內容變更都須重新覆核。'} 正式核准失效檢查尚未實作。</p></div>
       <div className="rounded-lg border border-zinc-200 bg-white p-3"><strong>核准遭拒</strong><p className="mt-1 text-xs leading-5 text-zinc-600">拒絕原因與後續流程尚未實作；目前沒有核准或拒絕決策被記錄。</p></div>
     </div>
     <p className="mt-3 text-xs leading-5 text-zinc-600">管理者核准規則仍待產品負責人決定。這些欄位是提案中的 UI 契約，不是授權邊界；目前沒有角色切換、正式核准、出單、寄送或付款操作。</p>
