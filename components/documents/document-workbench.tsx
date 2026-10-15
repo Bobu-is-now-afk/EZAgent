@@ -633,7 +633,7 @@ function ApprovalPreview({ draft, total }: { draft: Draft; total: number | null 
       <div><dt className="text-xs text-zinc-500">來源訂單版次</dt><dd className="mt-0.5 font-medium">{source}</dd></div>
       <div><dt className="text-xs text-zinc-500">條款</dt><dd className="mt-0.5 whitespace-pre-wrap font-medium">{draft.termsText?.trim() || '未設定（空白）'}</dd></div>
       <div><dt className="text-xs text-zinc-500">本版合計</dt><dd className="mt-0.5 font-medium">{formatMoney(total, draft.currency)}</dd></div>
-      <div><dt className="text-xs text-zinc-500">正式輸出版本</dt><dd className="mt-0.5 font-medium">尚未產生；本頁紙面預覽不是正式輸出摘要</dd></div>
+      <div><dt className="text-xs text-zinc-500">正式輸出摘要</dt><dd className="mt-0.5 font-medium">尚未產生；本頁紙面預覽不是正式輸出摘要</dd></div>
     </dl>
     <p className="mt-3 text-xs font-semibold text-zinc-600">預計狀態 · 靜態示意，不代表即時身分或決策</p>
     <div className="mt-2 grid gap-2 sm:grid-cols-3">
