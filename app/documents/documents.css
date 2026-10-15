@@ -283,6 +283,8 @@
   .documents-topbar,.workbench-rail,.draft-toolbar,.draft-form-column,.preview-heading,.preview-note { display: none !important; }
   .preview-column { position: static !important; width: 186mm !important; max-width: 186mm !important; margin: 0 !important; padding: 0 !important; }
   .paper-preview { position: relative !important; width: 100% !important; max-width: 100% !important; min-height: 0 !important; height: auto !important; margin: 0 !important; padding: 6mm !important; overflow: visible !important; border: 0 !important; box-shadow: none !important; }
+  .paper-sample .sample-watermark { position: fixed !important; top: 50% !important; left: 50% !important; width: max-content !important; max-width: 100% !important; color: rgba(37,119,96,.2) !important; font-size: 34px !important; white-space: nowrap !important; transform: translate(-50%,-50%) rotate(-27deg) !important; }
+  .paper-sample .sample-watermark::after { content: ' / NOT FOR PAYMENT'; }
   .paper-table tr,.paper-meta,.paper-totals,.paper-payment { break-inside: avoid; page-break-inside: avoid; }
   .paper-inner { min-height: 0 !important; }
 }
