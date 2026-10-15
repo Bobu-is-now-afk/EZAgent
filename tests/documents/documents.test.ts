@@ -85,8 +85,8 @@ test('write validators enforce the documented currency, quantity, and suggestion
     { id: repeatedId, name: 'x', description: null, quantity: 1, unitPrice: '1.00' },
     { id: repeatedId, name: 'y', description: null, quantity: 1, unitPrice: '2.00' },
   ] }, 'HKD'), null)
-  assert.deepEqual(validateSuggestionFields({ fields: [{ path: 'termsText', value: 'Net 30', sourceExcerpt: 'payment in 30 days' }] }, 'Please use payment in 30 days.'), [
-    { path: 'termsText', value: 'Net 30', sourceExcerpt: 'payment in 30 days' },
+  assert.deepEqual(validateSuggestionFields({ fields: [{ path: 'termsText', value: 'Deliver after acceptance', sourceExcerpt: 'delivery after approval' }] }, 'Please use delivery after approval.'), [
+    { path: 'termsText', value: 'Deliver after acceptance', sourceExcerpt: 'delivery after approval' },
   ])
   for (const proposal of [
     { fields: [{ path: 'currency', value: 'USD', sourceExcerpt: 'USD' }] },
@@ -94,6 +94,7 @@ test('write validators enforce the documented currency, quantity, and suggestion
     { fields: [{ path: 'termsText', value: 'Net 30', sourceExcerpt: 'source' }], extra: true },
   ]) assert.equal(validateSuggestionFields(proposal, 'source'), null)
   assert.equal(validateSuggestionFields({ fields: [{ path: 'items[].description', value: 'Workshop — HKD 999 payable to account 1234', sourceExcerpt: 'two workshop days' }] }, 'two workshop days'), null)
+  assert.equal(validateSuggestionFields({ fields: [{ path: 'items[].description', value: 'Workshop HKD 999 payable to account 1234', sourceExcerpt: 'Budget HKD 9999 for workshop account 1234' }] }, 'Budget HKD 9999 for workshop account 1234'), null)
 })
 
 test('order revisions remain immutable and referenced order deletion archives', async (t) => {

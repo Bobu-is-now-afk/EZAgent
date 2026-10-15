@@ -62,8 +62,7 @@ export function validateSuggestionFields(value: unknown, description: string): S
     const excerpt = raw.sourceExcerpt.trim()
     if (!text || text.length > 500 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) ||
         !excerpt || excerpt.length > 240 || !description.includes(excerpt)) return null
-    const protectedClaims = text.match(new RegExp(PROTECTED_CLAIM.source, 'gi')) ?? []
-    if (protectedClaims.some((claim) => !excerpt.toLocaleLowerCase().includes(claim.toLocaleLowerCase()))) return null
+    if (PROTECTED_CLAIM.test(text)) return null
     if (raw.path === 'termsText') {
       if (hasTerms) return null
       hasTerms = true
