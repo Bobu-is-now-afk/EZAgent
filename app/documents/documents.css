@@ -249,7 +249,7 @@
 .confirm-dialog h2 { margin: 14px 0 7px; font-family: Georgia,serif; font-size: 23px; font-weight: 500; }
 .confirm-dialog p { margin: 0; color: #6f7e79; font-size: 11px; line-height: 1.65; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-@media (max-width: 520px) { .modal-backdrop { padding: 12px; } .confirm-dialog { max-height: calc(100dvh - 24px); padding: 18px; } .dialog-actions { flex-direction: column-reverse; } .dialog-actions > button { width: 100%; } }
+@media (max-width: 520px) { .modal-backdrop { padding: 12px; } .confirm-dialog { max-height: calc(100dvh - 24px); padding: 18px; } .dialog-actions { flex-direction: column; } .dialog-actions > button { width: 100%; } }
 .provenance-inline { display: inline-flex; margin-left: 4px; color: #71817b; font-size: 8px; font-weight: 400; }
 .item-fields { flex: 1; display: grid; grid-template-columns: 1fr; gap: 9px; }
 .field-checklist { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; max-height: 235px; overflow: auto; padding: 9px; border: 1px solid #e0e8e3; border-radius: 7px; background: #fff; }
@@ -347,7 +347,7 @@
   .paper-parties { gap: 10px; }
   .paper-table td,.paper-table th { font-size: 7px; }
   .paper-totals { width: 82%; }
-  .dialog-actions { flex-direction: column-reverse; }
+  .dialog-actions { flex-direction: column; }
   .dialog-actions button { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {

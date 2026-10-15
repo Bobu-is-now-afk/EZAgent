@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Check, ChevronRight, FilePlus2, FileText, LoaderCircle, Plus, Printer, ShieldCheck, Trash2, X } from 'lucide-react'
 import { LocalAiSetup } from '@/components/local-ai-setup'
 import {
@@ -157,6 +157,7 @@ export function DocumentWorkbench({ localAppMode = false, hostedMode = false, po
   const [orderForm, setOrderForm] = useState<OrderForm | null>(null)
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
   const [confirmSample, setConfirmSample] = useState(false)
+  const sampleDialogRef = useRef<HTMLElement | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -166,6 +167,13 @@ export function DocumentWorkbench({ localAppMode = false, hostedMode = false, po
   const [hostedChecking, setHostedChecking] = useState(hostedMode)
   const [inviteId, setInviteId] = useState('')
   const [accessToken, setAccessToken] = useState('')
+
+  useEffect(() => {
+    if (!confirmSample) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    sampleDialogRef.current?.querySelector<HTMLElement>('#sample-dialog-title')?.focus()
+    return () => previousFocus?.focus()
+  }, [confirmSample])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -463,7 +471,15 @@ export function DocumentWorkbench({ localAppMode = false, hostedMode = false, po
       </section>
     </div>
 
-    {confirmSample && activeDraft && <div className="modal-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="sample-dialog-title"><div className="dialog-stamp">SAMPLE</div><h2 id="sample-dialog-title">確認建立合成範例文件</h2><p>請核對即將建立的唯讀合成快照。這不是正式核准或正式出單；文件會標示「SAMPLE / NOT FOR PAYMENT」，不會寄出或發起付款。</p>{sourceOrderIsStale && <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="alert">來源訂單已更新至第 {activeDraft.sourceOrderCurrentRevision} 版；本草稿綁定第 {activeDraft.sourceOrder?.revision} 版。返回查看差異並從最新版建立新草稿，不能用舊版建立範例。</p>}<dl className="mt-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-2"><div><dt className="text-zinc-500">文件類型</dt><dd className="mt-1 font-medium">{typeName(activeDraft.type)}</dd></div><div><dt className="text-zinc-500">已覆核草稿版次</dt><dd className="mt-1 font-medium">第 {activeDraft.reviewedRevision ?? activeDraft.revision} 版</dd></div><div><dt className="text-zinc-500">來源</dt><dd className="mt-1 break-all font-medium">{activeDraft.sourceOrder ? `訂單 ${activeDraft.sourceOrder.id} · 第 ${activeDraft.sourceOrder.revision} 版` : '自訂工作描述'}</dd></div>{activeDraft.sourceOrder && activeDraft.sourceOrderCurrentRevision != null && <div><dt className="text-zinc-500">來源訂單目前版次</dt><dd className="mt-1 font-medium">第 {activeDraft.sourceOrderCurrentRevision} 版</dd></div>}<div><dt className="text-zinc-500">合計</dt><dd className="mt-1 font-medium">{formatMoney(totals?.totalMinor ?? activeDraft.totals?.totalMinor ?? null, activeDraft.currency)}</dd></div><div className="sm:col-span-2"><dt className="text-zinc-500">條款</dt><dd className="mt-1 whitespace-pre-wrap font-medium">{activeDraft.termsText?.trim() || '未設定（空白）'}</dd></div>{activeDraft.type === 'receipt' && <><div><dt className="text-zinc-500">實收金額</dt><dd className="mt-1 font-medium">{formatMoney(activeDraft.paymentAmountMinor, activeDraft.currency)}</dd></div><div><dt className="text-zinc-500">收款日期</dt><dd className="mt-1 font-medium">{activeDraft.paymentDate || '未填寫'}</dd></div></>}</dl><p className="mt-3 text-xs leading-5 text-zinc-600">確認後只建立上述版次的合成範例快照。正式核准、正式文件編號與外送目前均未啟用。</p><div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => setConfirmSample(false)} disabled={busy}>返回檢查</button><button type="button" className="primary-button" onClick={() => void createSample()} disabled={busy || sourceOrderIsStale}>{busy ? '建立中…' : sourceOrderIsStale ? '來源版本已更新' : '確認建立 SAMPLE 範例'}</button></div></section></div>}
+    {confirmSample && activeDraft && <div className="modal-backdrop" role="presentation"><section ref={sampleDialogRef} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="sample-dialog-title" onKeyDown={(event) => {
+      if (event.key === 'Escape') { event.preventDefault(); setConfirmSample(false); return }
+      if (event.key !== 'Tab') return
+      const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget.querySelector('#sample-dialog-title'))) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }}><div className="dialog-stamp">SAMPLE</div><h2 id="sample-dialog-title" tabIndex={-1}>確認建立合成範例文件</h2><p>請核對即將建立的唯讀合成快照。這不是正式核准或正式出單；文件會標示「SAMPLE / NOT FOR PAYMENT」，不會寄出或發起付款。</p>{sourceOrderIsStale && <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="alert">來源訂單已更新至第 {activeDraft.sourceOrderCurrentRevision} 版；本草稿綁定第 {activeDraft.sourceOrder?.revision} 版。返回查看差異並從最新版建立新草稿，不能用舊版建立範例。</p>}<dl className="mt-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-2"><div><dt className="text-zinc-500">文件類型</dt><dd className="mt-1 font-medium">{typeName(activeDraft.type)}</dd></div><div><dt className="text-zinc-500">已覆核草稿版次</dt><dd className="mt-1 font-medium">第 {activeDraft.reviewedRevision ?? activeDraft.revision} 版</dd></div><div><dt className="text-zinc-500">來源</dt><dd className="mt-1 break-all font-medium">{activeDraft.sourceOrder ? `訂單 ${activeDraft.sourceOrder.id} · 第 ${activeDraft.sourceOrder.revision} 版` : '自訂工作描述'}</dd></div>{activeDraft.sourceOrder && activeDraft.sourceOrderCurrentRevision != null && <div><dt className="text-zinc-500">來源訂單目前版次</dt><dd className="mt-1 font-medium">第 {activeDraft.sourceOrderCurrentRevision} 版</dd></div>}<div><dt className="text-zinc-500">合計</dt><dd className="mt-1 font-medium">{formatMoney(totals?.totalMinor ?? activeDraft.totals?.totalMinor ?? null, activeDraft.currency)}</dd></div><div className="sm:col-span-2"><dt className="text-zinc-500">條款</dt><dd className="mt-1 whitespace-pre-wrap font-medium">{activeDraft.termsText?.trim() || '未設定（空白）'}</dd></div>{activeDraft.type === 'receipt' && <><div><dt className="text-zinc-500">實收金額</dt><dd className="mt-1 font-medium">{formatMoney(activeDraft.paymentAmountMinor, activeDraft.currency)}</dd></div><div><dt className="text-zinc-500">收款日期</dt><dd className="mt-1 font-medium">{activeDraft.paymentDate || '未填寫'}</dd></div></>}</dl><p className="mt-3 text-xs leading-5 text-zinc-600">確認後只建立上述版次的合成範例快照。正式核准、正式文件編號與外送目前均未啟用。</p><div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => setConfirmSample(false)} disabled={busy}>返回檢查</button><button type="button" className="primary-button" onClick={() => void createSample()} disabled={busy || sourceOrderIsStale}>{busy ? '建立中…' : sourceOrderIsStale ? '來源版本已更新' : '確認建立 SAMPLE 範例'}</button></div></section></div>}
   </main>
 }
 
