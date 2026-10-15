@@ -69,7 +69,7 @@ if (!buildId) throw new Error('EZAGENT_BUILD_ID is required for a reproducible b
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
   images: { unoptimized: true },
-  experimental: { proxyClientMaxBodySize: '1mb' },
+  experimental: { proxyClientMaxBodySize: '1mb', cpus: 1 },
   output: 'standalone',
   outputFileTracingRoot: process.cwd(),
   generateBuildId: async () => buildId,
