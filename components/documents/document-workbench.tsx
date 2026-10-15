@@ -125,7 +125,7 @@ function sourceLabel(value: FieldProvenance | undefined) {
   return value.confirmed ? '你已確認' : '待你確認'
 }
 
-export function DocumentWorkbench() {
+export function DocumentWorkbench({ hostedPreviewEnabled = false }: { hostedPreviewEnabled?: boolean }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [samples, setSamples] = useState<SampleDocument[]>([])
@@ -361,7 +361,7 @@ export function DocumentWorkbench() {
     <header className="documents-topbar">
       <Link className="brand-link" href="/" aria-label="回到 EZAgent 首頁"><span className="brand-mark">E</span><span>EZAgent</span></Link>
       <div className="topbar-center"><span className="status-dot" />本機文件工作台 <span className="topbar-divider">/</span> 合成資料</div>
-      <div className="topbar-actions"><button type="button" className="quiet-button" onClick={() => void refresh()} disabled={busy || loading}>重新整理</button><Link href="/" className="quiet-button top-home"><ArrowLeft size={15} aria-hidden="true" /> 首頁</Link></div>
+      <div className="topbar-actions">{hostedPreviewEnabled && <Link href="/documents/hosted-preview" className="quiet-button">託管處理預覽</Link>}<button type="button" className="quiet-button" onClick={() => void refresh()} disabled={busy || loading}>重新整理</button><Link href="/" className="quiet-button top-home"><ArrowLeft size={15} aria-hidden="true" /> 首頁</Link></div>
     </header>
 
     <div className="workbench-frame">
