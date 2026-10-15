@@ -223,6 +223,7 @@ export function DocumentWorkbench({ localAppMode = false, hostedMode = false, po
   }
 
   const totals = useMemo(() => activeDraft ? computeTotals(activeDraft) : null, [activeDraft])
+  const sourceOrderIsStale = Boolean(activeDraft?.sourceOrder && activeDraft.sourceOrderCurrentRevision != null && activeDraft.sourceOrderCurrentRevision > activeDraft.sourceOrder.revision)
   const [draftDirty, setDraftDirty] = useState(false)
   const [reviewCheckedPaths, setReviewCheckedPaths] = useState<string[]>([])
   const [previewChecked, setPreviewChecked] = useState(false)
@@ -462,7 +463,7 @@ export function DocumentWorkbench({ localAppMode = false, hostedMode = false, po
       </section>
     </div>
 
-    {confirmSample && activeDraft && <div className="modal-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="sample-dialog-title"><div className="dialog-stamp">SAMPLE</div><h2 id="sample-dialog-title">建立合成範例文件？</h2><p>將依第 {activeDraft.revision} 版已覆核內容建立不可變更的合成快照。文件會標示「SAMPLE / NOT FOR PAYMENT」，不會寄出或發起付款。</p><div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => setConfirmSample(false)} disabled={busy}>返回檢查</button><button type="button" className="primary-button" onClick={() => void createSample()} disabled={busy}>{busy ? '建立中…' : '確認建立範例文件'}</button></div></section></div>}
+    {confirmSample && activeDraft && <div className="modal-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="sample-dialog-title"><div className="dialog-stamp">SAMPLE</div><h2 id="sample-dialog-title">確認建立合成範例文件</h2><p>請核對即將建立的唯讀合成快照。這不是正式核准或正式出單；文件會標示「SAMPLE / NOT FOR PAYMENT」，不會寄出或發起付款。</p>{sourceOrderIsStale && <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="alert">來源訂單已更新至第 {activeDraft.sourceOrderCurrentRevision} 版；本草稿綁定第 {activeDraft.sourceOrder?.revision} 版。返回查看差異並從最新版建立新草稿，不能用舊版建立範例。</p>}<dl className="mt-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-2"><div><dt className="text-zinc-500">文件類型</dt><dd className="mt-1 font-medium">{typeName(activeDraft.type)}</dd></div><div><dt className="text-zinc-500">已覆核草稿版次</dt><dd className="mt-1 font-medium">第 {activeDraft.reviewedRevision ?? activeDraft.revision} 版</dd></div><div><dt className="text-zinc-500">來源</dt><dd className="mt-1 break-all font-medium">{activeDraft.sourceOrder ? `訂單 ${activeDraft.sourceOrder.id} · 第 ${activeDraft.sourceOrder.revision} 版` : '自訂工作描述'}</dd></div>{activeDraft.sourceOrder && activeDraft.sourceOrderCurrentRevision != null && <div><dt className="text-zinc-500">來源訂單目前版次</dt><dd className="mt-1 font-medium">第 {activeDraft.sourceOrderCurrentRevision} 版</dd></div>}<div><dt className="text-zinc-500">合計</dt><dd className="mt-1 font-medium">{formatMoney(totals?.totalMinor ?? activeDraft.totals?.totalMinor ?? null, activeDraft.currency)}</dd></div><div className="sm:col-span-2"><dt className="text-zinc-500">條款</dt><dd className="mt-1 whitespace-pre-wrap font-medium">{activeDraft.termsText?.trim() || '未設定（空白）'}</dd></div>{activeDraft.type === 'receipt' && <><div><dt className="text-zinc-500">實收金額</dt><dd className="mt-1 font-medium">{formatMoney(activeDraft.paymentAmountMinor, activeDraft.currency)}</dd></div><div><dt className="text-zinc-500">收款日期</dt><dd className="mt-1 font-medium">{activeDraft.paymentDate || '未填寫'}</dd></div></>}</dl><p className="mt-3 text-xs leading-5 text-zinc-600">確認後只建立上述版次的合成範例快照。正式核准、正式文件編號與外送目前均未啟用。</p><div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => setConfirmSample(false)} disabled={busy}>返回檢查</button><button type="button" className="primary-button" onClick={() => void createSample()} disabled={busy || sourceOrderIsStale}>{busy ? '建立中…' : sourceOrderIsStale ? '來源版本已更新' : '確認建立 SAMPLE 範例'}</button></div></section></div>}
   </main>
 }
 
@@ -594,10 +595,38 @@ function DraftEditor(props: DraftEditorProps) {
         {reviewValues.length > 0 && <div className="field-checklist">{reviewValues.map((entry) => <label className="review-check-row" key={entry.path}><input type="checkbox" checked={props.reviewCheckedPaths.includes(entry.path)} disabled={props.busy || props.draftDirty || draft.status === 'reviewed'} onChange={(event) => props.setReviewCheckedPaths(event.target.checked ? [...props.reviewCheckedPaths, entry.path] : props.reviewCheckedPaths.filter((path) => path !== entry.path))} /><span><strong>{reviewFieldLabel(entry.path)}</strong><small>{entry.value} · {sourceLabel(entry.source)}</small></span></label>)}</div>}
         <label className="preview-confirm"><input type="checkbox" checked={props.previewChecked} disabled={props.busy || props.draftDirty || draft.status === 'reviewed'} onChange={(event) => props.setPreviewChecked(event.target.checked)} /><span>我已檢查右側文件預覽與合計</span></label>
         <button type="button" className="secondary-button" onClick={() => void props.reviewDraft()} disabled={props.busy || !props.completeForReview || props.draftDirty || !allFieldsConfirmed || !props.previewChecked || draft.status === 'reviewed'}><Check size={14} />{draft.status === 'reviewed' ? '已覆核此版本' : '覆核已儲存版本'}</button>{draft.status === 'reviewed' && <button type="button" className="sample-button" onClick={props.createSample} disabled={props.busy}>建立範例文件 <ChevronRight size={15} /></button>}</div>}
+
+      <ApprovalPreview draft={draft} total={props.totals?.totalMinor ?? null} />
     </section>
 
     <aside className="preview-column" aria-label="文件紙面預覽"><div className="preview-heading"><div><p className="eyebrow">精確草稿預覽</p><h3>{typeName(draft.type)}</h3></div>{isSample && <button className="primary-button print-action" onClick={() => window.print()}><Printer size={14} />列印</button>}<div className="preview-size">A4</div></div><PaperPreview draft={draft} totals={props.totals} sample={isSample} sampleNumber={props.sample?.sampleNumber ?? draft.sampleNumber} /><div className="preview-note"><span className="preview-pin" />只有已儲存並逐欄覆核的版本可建立範例文件。</div></aside></div>
   </div>
+}
+
+function ApprovalPreview({ draft, total }: { draft: Draft; total: number | null }) {
+  const source = draft.sourceOrder ? `訂單 ${draft.sourceOrder.id} · 第 ${draft.sourceOrder.revision} 版` : '自訂工作描述（無來源訂單）'
+  const sourceChanged = Boolean(draft.sourceOrder && draft.sourceOrderCurrentRevision != null && draft.sourceOrderCurrentRevision > draft.sourceOrder.revision)
+  return <section className="mt-5 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm" aria-labelledby="approval-preview-title">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Phase 4 示意 · 合成資料</p><h3 id="approval-preview-title" className="mt-1 text-base font-semibold">正式核准與出單預覽</h3></div>
+      <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700">未啟用</span>
+    </div>
+    <p className="mt-3 leading-6 text-zinc-700">此區只展示未來需要核對的內容，不會送出核准決定，也不會建立正式文件或正式編號。</p>
+    <dl className="mt-3 grid gap-x-5 gap-y-2 sm:grid-cols-2">
+      <div><dt className="text-xs text-zinc-500">核准對象（示意）</dt><dd className="mt-0.5 font-medium">{typeName(draft.type)} · 草稿第 {draft.revision} 版{draft.reviewedRevision === draft.revision ? '（此版已完成合成覆核）' : '（尚未完成合成覆核）'}</dd></div>
+      <div><dt className="text-xs text-zinc-500">來源訂單版次</dt><dd className="mt-0.5 font-medium">{source}</dd></div>
+      <div><dt className="text-xs text-zinc-500">條款</dt><dd className="mt-0.5 whitespace-pre-wrap font-medium">{draft.termsText?.trim() || '未設定（空白）'}</dd></div>
+      <div><dt className="text-xs text-zinc-500">本版合計</dt><dd className="mt-0.5 font-medium">{formatMoney(total, draft.currency)}</dd></div>
+      <div><dt className="text-xs text-zinc-500">正式輸出版本</dt><dd className="mt-0.5 font-medium">尚未產生；本頁紙面預覽不是正式輸出摘要</dd></div>
+    </dl>
+    <p className="mt-3 text-xs font-semibold text-zinc-600">預計狀態 · 靜態示意，不代表即時身分或決策</p>
+    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+      <div className="rounded-lg border border-zinc-200 bg-white p-3"><strong>身分不可用</strong><p className="mt-1 text-xs leading-5 text-zinc-600">尚未連接可信身分提供者；正式核准入口維持停用，本畫面不驗證身分或角色。</p></div>
+      <div className="rounded-lg border border-zinc-200 bg-white p-3"><strong>{sourceChanged ? '來源訂單已更新' : '內容版次已變更'}</strong><p className="mt-1 text-xs leading-5 text-zinc-600">{sourceChanged ? `此草稿仍綁定第 ${draft.sourceOrder?.revision} 版，來源目前為第 ${draft.sourceOrderCurrentRevision} 版；建立合成範例會被阻止。` : '未來核准必須綁定同一來源、草稿版次、條款、合計與輸出版本；改動後需重新覆核。'} 正式核准失效檢查尚未實作。</p></div>
+      <div className="rounded-lg border border-zinc-200 bg-white p-3"><strong>核准遭拒</strong><p className="mt-1 text-xs leading-5 text-zinc-600">拒絕原因與後續流程尚未實作；目前沒有核准或拒絕決策被記錄。</p></div>
+    </div>
+    <p className="mt-3 text-xs leading-5 text-zinc-600">管理者核准規則仍待產品負責人決定。這些欄位是提案中的 UI 契約，不是授權邊界；目前沒有角色切換、正式核准、出單、寄送或付款操作。</p>
+  </section>
 }
 
 function StatusTag({ status }: { status: Draft['status'] }) {
