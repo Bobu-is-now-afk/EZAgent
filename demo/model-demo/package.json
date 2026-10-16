@@ -1,0 +1,11 @@
+{
+  "name": "ezagent-model-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "gateway": "node gateway.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
