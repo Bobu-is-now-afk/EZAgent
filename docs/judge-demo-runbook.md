@@ -17,11 +17,11 @@ Status: rehearsal instructions; quotation critical path not yet recorded. Use sy
 5. Review the draft and explicitly confirm it. Check subtotal / tax / total of `HKD 2,500.00` / `HKD 0.00` / `HKD 2,500.00`, and that no date or price appeared before user entry.
 6. Repeat from a clean draft with the same inputs. Compare the normalized output field-by-field and the integer minor-unit total.
 7. Exercise invalid price (`12.345`) and invalid quantity (`0`, then `1.5`). Confirm a useful error, correction, and recovery without clearing unrelated fields.
-8. Stop or disconnect the local model service, if available in the test environment. Confirm an honest unavailable/error state, retry after service recovery, and verify that only one quotation is produced.
+8. Enter an out-of-range tax rate (`101`), then correct it to `8.25`. Confirm the invalid value blocks review/printing and the corrected value recomputes the tax and total. Model-service failure is outside this path because the quotation concept parser makes no model call.
 
 ## Recording fallback
 
-Capture the actual local critical path as one unedited desktop recording, from a clean draft through the completed preview. Include the missing-field refusal, user confirmation, second identical run, and one error/recovery case. Keep application and service status visible where practical. Do not splice, speed up, substitute screenshots, or present a prototype simulation as inference. Keep the original recording and its checksum with the internal rehearsal record; publish only an approved sanitized excerpt.
+Capture the actual local critical path as one unedited desktop recording, from a clean draft through the completed preview. Include the missing-field refusal, user confirmation, second identical run, and invalid-input recovery. Keep the app's concept-simulation disclosure visible where practical. Do not splice, speed up, substitute screenshots, or present a prototype simulation as model inference. Keep the original recording and its checksum with the internal rehearsal record; publish only an approved sanitized excerpt.
 
 As of 2026-10-19, no recording of this quotation path is available. The Vercel page listed in the submitted pitch is explicitly an interactive prototype; setup and model download are simulated, and it does not satisfy the recording fallback. Until the local path is runnable, the runbook is the rehearsal storyboard only.
 
