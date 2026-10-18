@@ -2,6 +2,7 @@ export const QUOTATION_SOURCE = 'Create a quote for two workshop days next month
 export const SUPPORTED_CURRENCIES = ['HKD', 'USD', 'EUR', 'GBP'] as const
 
 export type FieldSource = 'user' | 'concept-suggestion' | 'missing'
+export type SourceSummaryField = 'description' | 'quantity' | 'unitPrice'
 
 export type QuotationDraft = {
   sellerName: string
@@ -39,6 +40,25 @@ export const fieldSources: Record<keyof Omit<QuotationDraft, 'confirmed'>, Field
   unitPrice: 'missing',
   taxMode: 'missing',
   taxRate: 'missing',
+}
+
+export function suggestFromSource(source: string): Pick<QuotationDraft, 'description' | 'quantity'> {
+  const normalized = source.trim().replace(/\s+/g, ' ').toLowerCase()
+  if (normalized === 'create a quote for two workshop days next month.') {
+    return { description: 'Workshop day', quantity: '2' }
+  }
+  return { description: '', quantity: '' }
+}
+
+export function sourceAfterUserEdit(value: string): FieldSource {
+  return value.trim() ? 'user' : 'missing'
+}
+
+export function sourceSummaryBadge(field: SourceSummaryField, source: FieldSource): string {
+  const fieldLabel = field === 'description' ? 'Description' : field === 'quantity' ? 'Quantity' : 'Price'
+  if (source === 'concept-suggestion') return `${fieldLabel} · suggested from source`
+  if (source === 'user') return `${fieldLabel} · entered manually`
+  return `${fieldLabel} · no suggestion—enter manually`
 }
 
 export function getMissingFields(draft: QuotationDraft): string[] {

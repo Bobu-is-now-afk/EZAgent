@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { calculateTotals, getMissingFields, initialDraft, isValidISODate, toMinorUnits, type QuotationDraft } from '../../lib/documents/quotation'
+import { calculateTotals, getMissingFields, initialDraft, isValidISODate, sourceAfterUserEdit, sourceSummaryBadge, suggestFromSource, toMinorUnits, type QuotationDraft } from '../../lib/documents/quotation'
 
 const reviewedFixture: QuotationDraft = {
   ...initialDraft,
@@ -11,6 +11,40 @@ const reviewedFixture: QuotationDraft = {
   unitPrice: '1250.00',
   taxMode: 'none',
 }
+
+test('the exact synthetic source fixture is the only wording that receives a concept suggestion', () => {
+  assert.deepEqual(suggestFromSource('Create a quote for two workshop days next month.'), {
+    description: 'Workshop day', quantity: '2',
+  })
+  assert.deepEqual(suggestFromSource('  CREATE A QUOTE FOR TWO WORKSHOP DAYS NEXT MONTH.  '), {
+    description: 'Workshop day', quantity: '2',
+  }, 'the exact fixture can vary in case and surrounding whitespace')
+})
+
+test('unsupported count, Chinese wording, and negated requests stay blank and show honest source badges', () => {
+  const unsupportedSources = [
+    'Create a quote for three workshop days at HKD 900 per day. Reference JUDGE-732.',
+    '請報價三天工作坊，每天港幣900元。',
+    'Do not quote two workshop days. Quote three design sessions instead.',
+  ]
+
+  for (const source of unsupportedSources) {
+    assert.deepEqual(suggestFromSource(source), { description: '', quantity: '' }, source)
+  }
+
+  assert.equal(sourceSummaryBadge('description', 'missing'), 'Description · no suggestion—enter manually')
+  assert.equal(sourceSummaryBadge('quantity', 'missing'), 'Quantity · no suggestion—enter manually')
+})
+
+test('manual quantity edits replace suggestion provenance and update the source badge', () => {
+  assert.equal(sourceSummaryBadge('quantity', 'concept-suggestion'), 'Quantity · suggested from source')
+  const editedSource = sourceAfterUserEdit('3')
+  assert.equal(editedSource, 'user')
+  assert.equal(sourceSummaryBadge('quantity', editedSource), 'Quantity · entered manually')
+  assert.equal(sourceSummaryBadge('quantity', sourceAfterUserEdit(' ')), 'Quantity · no suggestion—enter manually')
+  assert.equal(sourceSummaryBadge('unitPrice', 'missing'), 'Price · no suggestion—enter manually')
+  assert.equal(sourceSummaryBadge('unitPrice', sourceAfterUserEdit('900')), 'Price · entered manually')
+})
 
 test('custom wording suggestion fixture stays incomplete until missing facts are entered', () => {
   assert.deepEqual(getMissingFields(initialDraft), [

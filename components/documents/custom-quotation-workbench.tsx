@@ -11,17 +11,15 @@ import {
   getMissingFields,
   initialDraft,
   QUOTATION_SOURCE,
+  sourceAfterUserEdit,
+  sourceSummaryBadge,
+  suggestFromSource,
   SUPPORTED_CURRENCIES,
   toMinorUnits,
   type QuotationDraft,
 } from '@/lib/documents/quotation'
 
 const currencies = SUPPORTED_CURRENCIES
-
-function suggestFromSource(source: string): Pick<QuotationDraft, 'description' | 'quantity'> {
-  if (/\btwo workshop days\b/i.test(source)) return { description: 'Workshop day', quantity: '2' }
-  return { description: '', quantity: '' }
-}
 
 function SourceLabel({ kind }: { kind: 'user' | 'concept-suggestion' | 'missing' }) {
   const label = kind === 'concept-suggestion' ? 'Concept suggestion · confirm' : kind === 'user' ? 'Entered by you' : 'Not provided'
@@ -59,13 +57,18 @@ export function CustomQuotationWorkbench() {
 
   function update<K extends keyof QuotationDraft>(key: K, value: QuotationDraft[K]) {
     setDraft((current) => current ? { ...current, [key]: value, confirmed: key === 'confirmed' ? Boolean(value) : false } : current)
-    if (key !== 'confirmed') setProvenance((current) => ({ ...current, [key]: String(value).trim() ? 'user' : 'missing' }))
+    if (key !== 'confirmed') setProvenance((current) => ({ ...current, [key]: sourceAfterUserEdit(String(value)) }))
   }
 
   function createDraft() {
     const suggested = suggestFromSource(source)
     setDraft({ ...initialDraft, ...suggested })
     setProvenance({ ...fieldSources, description: suggested.description ? 'concept-suggestion' : 'missing', quantity: suggested.quantity ? 'concept-suggestion' : 'missing' })
+  }
+
+  function startOver() {
+    setDraft(null)
+    setProvenance({ ...fieldSources })
   }
 
   const canReview = Boolean(draft && missing.length === 0 && totals)
@@ -86,21 +89,22 @@ export function CustomQuotationWorkbench() {
 
       <div role="note" className="mb-6 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
         <ShieldAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-        <p><strong>Concept simulation.</strong> No model is called, and this draft is not issued or sent. Suggestions remain unconfirmed until you review every required field.</p>
+        <p><strong>Concept simulation.</strong> No model is called, and this draft is not issued or sent. Suggestions remain unconfirmed until you review every required field. Draft stays in this tab; refreshing or leaving clears it.</p>
       </div>
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <section aria-labelledby="input-title" className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Step 1 · Source</p><h2 id="input-title" className="mt-1 text-lg font-semibold">Describe the work</h2></div>
-            {draft && <button type="button" onClick={() => setDraft(null)} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm text-zinc-600 hover:bg-zinc-100"><RotateCcw aria-hidden="true" className="size-4" />Start over</button>}
+            {draft && <button type="button" onClick={startOver} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm text-zinc-600 hover:bg-zinc-100"><RotateCcw aria-hidden="true" className="size-4" />Start over (clears unsaved fields)</button>}
           </div>
           <label htmlFor="work-source" className="mt-5 block text-sm font-medium">Custom-work request</label>
-          <textarea id="work-source" value={source} onChange={(event) => { setSource(event.target.value); setDraft(null) }} rows={3} className={`${inputClass} mt-2 resize-y py-3`} placeholder="Describe the work; leave unknown facts out." />
-          <p className="mt-2 text-xs leading-5 text-zinc-500">Synthetic example. The demo parser only recognizes “two workshop days”; all other wording stays as source until you edit the draft.</p>
+          <textarea id="work-source" value={source} readOnly={Boolean(draft)} onChange={(event) => setSource(event.target.value)} rows={3} className={`${inputClass} mt-2 resize-y py-3 read-only:bg-zinc-50 read-only:text-zinc-500`} placeholder="Describe the work; leave unknown facts out." />
+          {draft && <p className="mt-2 text-xs leading-5 text-zinc-500">Source text is locked while this draft is open. Choose Start over to clear unsaved fields before editing it.</p>}
+          <p className="mt-2 text-xs leading-5 text-zinc-500">Synthetic example. The demo parser only recognizes the exact sample sentence; all other wording stays as source until you edit the draft.</p>
           {!draft ? <button type="button" onClick={createDraft} disabled={!source.trim()} className="mt-5 min-h-11 rounded-lg bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40">Create editable draft</button> : <div className="mt-5 rounded-lg bg-zinc-50 p-4 text-sm">
             <p className="font-medium">Source preserved</p><blockquote className="mt-2 border-l-2 border-zinc-300 pl-3 text-zinc-600">{source}</blockquote>
-            <div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-white px-2.5 py-1 text-xs text-zinc-600">Description · suggested from source</span><span className="rounded-full bg-white px-2.5 py-1 text-xs text-zinc-600">Quantity · “two” from source</span><span className="rounded-full bg-white px-2.5 py-1 text-xs text-zinc-600">Price · missing</span></div>
+            <div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-white px-2.5 py-1 text-xs text-zinc-600">{sourceSummaryBadge('description', provenance.description)}</span><span className="rounded-full bg-white px-2.5 py-1 text-xs text-zinc-600">{sourceSummaryBadge('quantity', provenance.quantity)}</span><span className="rounded-full bg-white px-2.5 py-1 text-xs text-zinc-600">{sourceSummaryBadge('unitPrice', provenance.unitPrice)}</span></div>
           </div>}
 
           {draft && <div className="mt-7 border-t border-zinc-200 pt-6">
