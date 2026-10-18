@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Printer, RotateCcw, ShieldAlert } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -33,10 +34,26 @@ function Field({ label, source, children }: { label: string; source: 'user' | 'c
 
 const inputClass = 'min-h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none focus-visible:ring-2 focus-visible:ring-zinc-950'
 
+function PrintableQuotation({ draft, totalMinor }: { draft: QuotationDraft; totalMinor: number }) {
+  const subtotalMinor = calculateTotals(draft)?.subtotalMinor ?? 0
+  const taxMinor = calculateTotals(draft)?.taxMinor ?? 0
+  return <article id="quotation-print-root" className="border border-zinc-200 bg-white p-5 text-zinc-950 shadow-sm">
+    <p className="text-xs font-bold tracking-[0.18em] text-zinc-500">SAMPLE · QUOTATION</p>
+    <h1 className="mt-4 text-2xl font-semibold">Quotation</h1>
+    <div className="mt-5 grid grid-cols-2 gap-4 text-sm"><div><p className="text-xs text-zinc-500">FROM</p><p className="mt-1 font-medium">{draft.sellerName}</p></div><div><p className="text-xs text-zinc-500">TO</p><p className="mt-1 font-medium">{draft.buyerName}</p></div></div>
+    <p className="mt-4 text-xs text-zinc-500">Valid until · {draft.validUntil} · Currency · {draft.currency}</p>
+    <div className="mt-5 border-y border-zinc-200 py-3 text-sm"><div className="flex justify-between gap-3"><span>{draft.description} × {draft.quantity}</span><span>{formatMoney(subtotalMinor, draft.currency)}</span></div></div>
+    <div className="ml-auto mt-3 max-w-48 space-y-1 text-sm"><div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotalMinor, draft.currency)}</span></div><div className="flex justify-between"><span>Tax</span><span>{formatMoney(taxMinor, draft.currency)}</span></div><div className="flex justify-between border-t border-zinc-300 pt-2 font-bold"><span>Total</span><span>{formatMoney(totalMinor, draft.currency)}</span></div></div>
+    <p className="mt-6 border-t border-zinc-200 pt-3 text-xs text-zinc-500">Synthetic demonstration · Draft only · Not issued · No payment requested</p>
+  </article>
+}
+
 export function CustomQuotationWorkbench() {
   const [source, setSource] = useState(QUOTATION_SOURCE)
   const [draft, setDraft] = useState<QuotationDraft | null>(null)
   const [provenance, setProvenance] = useState({ ...fieldSources })
+  const [printHost, setPrintHost] = useState<HTMLElement | null>(null)
+  useEffect(() => setPrintHost(document.body), [])
   const missing = useMemo(() => draft ? getMissingFields(draft) : [], [draft])
   const totals = useMemo(() => draft ? calculateTotals(draft) : null, [draft])
 
@@ -53,7 +70,8 @@ export function CustomQuotationWorkbench() {
 
   const canReview = Boolean(draft && missing.length === 0 && totals)
 
-  return <main className="min-h-screen bg-zinc-50 text-zinc-950">
+  return <>
+  <main id="quotation-app-ui" className="min-h-screen bg-zinc-50 text-zinc-950">
     <header className="flex min-h-[72px] items-center justify-between border-b border-zinc-200 bg-white px-5 sm:px-8">
       <Link href="/" className="flex min-h-11 items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-950"><ArrowLeft aria-hidden="true" className="size-4" />EZAgent</Link>
       <span className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600">Quotation workbench · local demo</span>
@@ -140,6 +158,8 @@ export function CustomQuotationWorkbench() {
       </div>
       <p className="mt-6 flex items-center gap-2 text-xs text-zinc-500"><ShieldAlert aria-hidden="true" className="size-4" />No real business identity or customer data is included in this synthetic fixture.</p>
     </div>
-    <style jsx global>{`@media print { body { background: white !important; } body * { visibility: hidden !important; } [aria-label="Quotation sample preview"], [aria-label="Quotation sample preview"] * { visibility: visible !important; } [aria-label="Quotation sample preview"] { position: absolute; inset: 0; width: 100%; border: 0; box-shadow: none; } }`}</style>
+    <style jsx global>{`@media screen { #quotation-print-root { display: none !important; } } @media print { @page { size: A4; margin: 12mm; } html, body { margin: 0 !important; padding: 0 !important; background: white !important; } body > :not(#quotation-print-root) { display: none !important; } body > #quotation-print-root { display: block !important; position: static !important; width: auto !important; margin: 0 !important; border: 0 !important; box-shadow: none !important; break-inside: avoid-page; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`}</style>
   </main>
+  {printHost && draft?.confirmed && totals && createPortal(<PrintableQuotation draft={draft} totalMinor={totals.totalMinor} />, printHost)}
+  </>
 }
