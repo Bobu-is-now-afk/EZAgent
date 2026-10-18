@@ -11,6 +11,7 @@ import {
   initialDraft,
   QUOTATION_SOURCE,
   SUPPORTED_CURRENCIES,
+  toMinorUnits,
   type QuotationDraft,
 } from '@/lib/documents/quotation'
 
@@ -127,7 +128,7 @@ export function CustomQuotationWorkbench() {
                 <h4 className="mt-4 text-2xl font-semibold">Quotation</h4>
                 <div className="mt-5 grid grid-cols-2 gap-4 text-sm"><div><p className="text-xs text-zinc-500">FROM</p><p className="mt-1 font-medium">{draft.sellerName || <span className="text-amber-800">Missing seller</span>}</p></div><div><p className="text-xs text-zinc-500">TO</p><p className="mt-1 font-medium">{draft.buyerName || <span className="text-amber-800">Missing buyer</span>}</p></div></div>
                 <p className="mt-4 text-xs text-zinc-500">Valid until · {draft.validUntil || 'Missing date'} · Currency · {draft.currency || 'Missing currency'}</p>
-                <div className="mt-5 border-y border-zinc-200 py-3 text-sm"><div className="flex justify-between gap-3"><span>{draft.description || 'Missing item description'} × {draft.quantity || 'Missing quantity'}</span><span>{totals && draft.currency ? formatMoney(totals.subtotalMinor, draft.currency) : 'Missing price'}</span></div></div>
+                <div className="mt-5 border-y border-zinc-200 py-3 text-sm"><div className="flex justify-between gap-3"><span>{draft.description || 'Missing item description'} × {draft.quantity || 'Missing quantity'}</span><span>{totals && draft.currency ? formatMoney(totals.subtotalMinor, draft.currency) : toMinorUnits(draft.unitPrice) === null ? 'Invalid or missing price' : 'Totals unavailable until all fields are valid'}</span></div></div>
                 <div className="ml-auto mt-3 max-w-48 space-y-1 text-sm"><div className="flex justify-between"><span>Subtotal</span><span>{totals && draft.currency ? formatMoney(totals.subtotalMinor, draft.currency) : '—'}</span></div><div className="flex justify-between"><span>Tax</span><span>{totals && draft.currency ? formatMoney(totals.taxMinor, draft.currency) : '—'}</span></div><div className="flex justify-between border-t border-zinc-300 pt-2 font-bold"><span>Total</span><span>{totals && draft.currency ? formatMoney(totals.totalMinor, draft.currency) : '—'}</span></div></div>
                 <p className="mt-6 border-t border-zinc-200 pt-3 text-xs text-zinc-500">Synthetic demonstration · Draft only · Not issued · No payment requested</p>
               </article>
