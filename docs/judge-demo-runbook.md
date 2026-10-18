@@ -5,14 +5,14 @@ Status: rehearsal instructions; quotation critical path not yet recorded. Use sy
 ## Setup check
 
 1. Start the current local quotation build and open its documented local route. Confirm that the screen identifies whether inference is live, simulated, or unavailable.
-2. Use the fixed synthetic wording below. Keep the same build, model configuration, and explicit field values for both repeatability runs.
-3. If the quotation route is absent, a required service is unavailable, or the page says simulation, stop the quotation run. Record the blocker and switch to the contingency; do not narrate a successful run.
+2. Use the fixed synthetic wording below. Keep the same build and explicit field values for both repeatability runs.
+3. The current route is an explicitly labeled concept simulation and makes no model call. That disclosure is expected. If the route is absent or does not state its simulation boundary, stop and record the blocker; do not claim live inference.
 
 ## Critical path
 
 1. Enter exactly: `Create a quote for two workshop days next month.`
 2. Inspect provenance markers. The suggested description and quantity can be reviewed; seller, buyer, date, currency, price, and tax must remain visibly unresolved.
-3. Attempt to preview while fields are missing. Capture the refusal and list of missing fields.
+3. Inspect the incomplete sample preview while fields are missing. Confirm it identifies all missing fields and that explicit review and printing remain disabled.
 4. Supply synthetic values: seller `Sample Studio`, buyer `Demo Workshop Co`, valid-until `2026-11-30`, currency `HKD`, unit price `1250.00`, and confirmed tax treatment `No tax`. Review suggested description `Workshop day` and quantity `2` before retaining them.
 5. Review the draft and explicitly confirm it. Check subtotal / tax / total of `HKD 2,500.00` / `HKD 0.00` / `HKD 2,500.00`, and that no date or price appeared before user entry.
 6. Repeat from a clean draft with the same inputs. Compare the normalized output field-by-field and the integer minor-unit total.
