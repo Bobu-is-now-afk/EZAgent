@@ -282,7 +282,7 @@ function renderEmpty(){
   if(!agent){
     e.innerHTML = '<h3>How can I help?</h3><p>Use synthetic prompts only. A configured backend does not prove a reply ran; each Gemini reply is labelled live only after a successful response.</p><div class="chips"></div>';
   } else {
-    e.innerHTML = '<h3>Choose how to shape the work</h3><p>Use synthetic text only. One-off drafts and reusable tools are different paths. Both are previews; no tools or agents are created here.</p><div class="choice-list"></div><div class="chips"></div>';
+    e.innerHTML = '<h3>Choose how to shape the work</h3><p>Example future request: “Many synthetic receipts to organize into a statement?” A reusable tool could keep repeated runs consistent, but it is optional. This walkthrough uses a synthetic workshop order to draft a quotation; both choices below remain concept previews.</p><div class="choice-list"></div><div class="chips"></div>';
     const choices = [
       ['One-off task', 'Draft a response for this request only.'],
       ['Reusable tool concept', 'Preview a proposed team and reusable workflow.']
