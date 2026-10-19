@@ -6,8 +6,9 @@ import {
   Copy, FileText, Layers3, Library, MessageSquareText, Plus, RotateCcw, Send,
   ShieldCheck, Sparkles, Trash2, WandSparkles, X,
 } from 'lucide-react'
+import InkVoiceExample from './inkvoice-example'
 
-type View = 'overview' | 'chat' | 'builder' | 'documents' | 'library'
+type View = 'overview' | 'chat' | 'builder' | 'documents' | 'library' | 'inkvoice'
 type ChatMessage = { id: number; role: 'user' | 'assistant'; text: string; scripted?: boolean }
 type SavedTool = { id: number; name: string; goal: string; pills: string[] }
 
@@ -150,7 +151,7 @@ export default function Page() {
       </div>
       <div className="header-right"><span className="preview-pill"><span className="status-dot" /> Hackathon preview · fictional data</span></div>
     </header>
-    {view !== 'overview' && <nav className="module-nav" aria-label="Workspace modules">{navItems.filter((item) => item.id !== 'overview').map(({ id, label }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => navigate(id)} aria-current={view === id ? 'page' : undefined}>{label}</button>)}</nav>}
+    {view !== 'overview' && <nav className="module-nav" aria-label="Workspace modules">{navItems.filter((item) => item.id !== 'overview').map(({ id, label }) => <button key={id} className={view === id || (view === 'inkvoice' && id === 'library') ? 'active' : ''} onClick={() => navigate(id)} aria-current={view === id || (view === 'inkvoice' && id === 'library') ? 'page' : undefined}>{label}</button>)}</nav>}
     <main className="main-panel">
       <div className={`content ${view === 'overview' ? 'home-wrap' : ''}`}>
         {view === 'overview' && <section className="home-content">
@@ -187,9 +188,10 @@ export default function Page() {
           <PageHead number="04" label="TOOL LIBRARY" title="Keep useful patterns close" description="Browse fixed example workflows and reopen tools you designed in this session. This preview resets when the page reloads." />
           <div className="section-heading compact"><div><span className="eyebrow">YOUR SESSION</span><h2>Saved tools</h2></div><button className="button button-light" onClick={createTool}><Plus size={15} /> Create a tool</button></div>
           {savedTools.length ? <div className="library-grid">{savedTools.map((tool) => <article key={tool.id} className="library-card"><span className="feature-icon lilac"><WandSparkles size={20} /></span><span className="tiny-label">SESSION TOOL</span><h3>{tool.name}</h3><p>{tool.goal}</p><div className="library-pills">{tool.pills.map((pill) => <span key={pill}>{pill}</span>)}</div><div className="library-actions"><button onClick={() => openTool(tool)}>Open & edit <ArrowRight size={14} /></button><button aria-label={`Delete ${tool.name}`} onClick={() => setSavedTools((current) => current.filter((item) => item.id !== tool.id))}><Trash2 size={16} /></button></div></article>)}</div> : <div className="library-empty"><Library size={27} /><strong>No tools saved yet</strong><p>Design a workflow in Agent Builder and save it for this session.</p><button className="button button-dark" onClick={createTool}>Open Agent Builder <ArrowRight size={15} /></button></div>}
-          <div className="section-heading"><div><span className="eyebrow">STARTING POINTS</span><h2>Example patterns</h2></div></div><div className="library-grid"><article className="library-card"><span className="feature-icon mint"><FileText size={20} /></span><span className="tiny-label">FIXED EXAMPLE</span><h3>Workshop quotation review</h3><p>Select W-01, identify missing fields, and prepare a sample quotation for human review.</p><div className="library-actions"><button onClick={() => navigate('documents')}>Explore documents <ArrowRight size={14} /></button></div></article><article className="library-card"><span className="feature-icon peach"><MessageSquareText size={20} /></span><span className="tiny-label">FIXED EXAMPLE</span><h3>Source boundary check</h3><p>Compare W-01 against context-only W-02 and R-01 using clearly labeled sample replies.</p><div className="library-actions"><button onClick={() => navigate('chat')}>Explore chat <ArrowRight size={14} /></button></div></article></div>
+          <div className="section-heading"><div><span className="eyebrow">STARTING POINTS</span><h2>Example tools</h2></div></div><div className="library-grid"><article className="library-card"><span className="feature-icon mint"><FileText size={20} /></span><span className="tiny-label">FIXED EXAMPLE</span><h3>Workshop quotation review</h3><p>Select W-01, identify missing fields, and prepare a sample quotation for human review.</p><div className="library-actions"><button onClick={() => navigate('documents')}>Explore documents <ArrowRight size={14} /></button></div></article><article className="library-card"><span className="feature-icon peach"><WandSparkles size={20} /></span><span className="tiny-label">TEXT INPUT EXAMPLE</span><h3>InkVoice invoice assistant</h3><p>Describe a fictional invoice in plain language, then review the fields filled from your text.</p><div className="library-actions"><button onClick={() => navigate('inkvoice')}>Open InkVoice <ArrowRight size={14} /></button></div></article></div>
           <div className="overview-foot"><ShieldCheck size={20} /><p><strong>Nothing is deployed from this page.</strong> Session tools are temporary UI state; they do not create background agents, access local files, or persist after reload.</p></div>
         </>}
+        {view === 'inkvoice' && <InkVoiceExample onBack={() => navigate('library')} />}
       </div>
     </main>
   </div>
