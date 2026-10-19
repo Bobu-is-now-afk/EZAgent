@@ -57,7 +57,6 @@ function formatMoney(cents: number, currency: string): string {
 
 export default function Page() {
   const [view, setView] = useState<View>('overview')
-  const [menuOpen, setMenuOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatText, setChatText] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
@@ -95,7 +94,7 @@ export default function Page() {
   useEffect(() => { setConfirmed(false) }, [seller, buyer, serviceDate, unitPrice, quantity, currency, taxRate])
   useEffect(() => () => { if (chatTimer.current) clearTimeout(chatTimer.current) }, [])
 
-  function navigate(next: View) { setView(next); setMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
   function sendChat(prompt = chatText) {
     const trimmed = prompt.trim()
@@ -144,28 +143,26 @@ export default function Page() {
   }
 
   return <div className="product-shell">
-    <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
-      <button className="brand" onClick={() => navigate('overview')} aria-label="EZAgent overview"><span className="brand-symbol"><Sparkles size={20} strokeWidth={2.2} /></span><span><strong>EZAgent</strong><small>PRODUCT PREVIEW</small></span></button>
-      <div className="sidebar-section-label">WORKSPACE</div>
-      <nav aria-label="Main navigation">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${view === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={view === id ? 'page' : undefined}><Icon size={18} strokeWidth={1.9} /><span>{label}</span>{view === id && <ChevronRight size={15} className="nav-chevron" />}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="sidebar-note"><span className="status-dot" /> HACKATHON PREVIEW<p>Fictional records and scripted sample responses. No customer data is used.</p></div><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer" className="sidebar-link">Open guided demo <ArrowDownRight size={15} /></a></div>
-    </aside>
-    {menuOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
+    <header className="top-header">
+      <div className="header-left">
+        {view !== 'overview' && <button className="back-button" onClick={() => navigate('overview')}><ArrowRight size={16} /> Back to Workspace</button>}
+        <button className="brand" onClick={() => navigate('overview')} aria-label="EZAgent overview"><span className="brand-symbol"><Bot size={20} strokeWidth={2.1} /></span><strong>EZAgent</strong></button>
+      </div>
+      <div className="header-right"><span className="preview-pill"><span className="status-dot" /> Hackathon preview · fictional data</span></div>
+    </header>
+    {view !== 'overview' && <nav className="module-nav" aria-label="Workspace modules">{navItems.filter((item) => item.id !== 'overview').map(({ id, label }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => navigate(id)} aria-current={view === id ? 'page' : undefined}>{label}</button>)}</nav>}
     <main className="main-panel">
-      <header className="topbar"><button className="mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Layers3 size={20} /></button><div className="crumb"><span>Workspace</span><ChevronRight size={14} /><strong>{navItems.find((item) => item.id === view)?.label}</strong></div><div className="topbar-right"><span className="preview-pill"><span className="status-dot" /> Synthetic preview</span><span className="topbar-avatar">EZ</span></div></header>
-      <div className="content">
-        {view === 'overview' && <>
-          <div className="eyebrow">EZAGENT / HACKATHON PRODUCT PREVIEW</div><h1>Build a workflow.<br /><span className="heading-muted">Keep the human in control.</span></h1><p className="lede">Explore a web preview of an AI agent workspace. Follow one fictional workshop request from conversation to a reviewable quotation draft.</p>
-          <div className="journey-banner"><div className="journey-icon"><Sparkles size={24} /></div><div><strong>Start with the workshop scenario</strong><p>Three sample records, one selected order, and a quotation that requires your review.</p></div><button className="button button-dark" onClick={() => navigate('chat')}>Start the walkthrough <ArrowRight size={16} /></button></div>
-          <div className="section-heading"><div><span className="eyebrow">THE WORKSPACE</span><h2>One connected journey</h2></div><span className="muted-small">Choose any step to explore</span></div>
+      <div className={`content ${view === 'overview' ? 'home-wrap' : ''}`}>
+        {view === 'overview' && <section className="home-content">
+          <div className="home-heading"><div className="eyebrow">WORKSPACE</div><h1>What would you like to do today?</h1><p>Select a module to explore the EZAgent web preview.</p></div>
           <div className="feature-grid">{[
-            { step: '01', title: 'Understand the request', description: 'Ask about the fictional records and identify what is still missing.', icon: MessageSquareText, target: 'chat' as View, accent: 'peach' },
-            { step: '02', title: 'Design the agent', description: 'Turn an instruction into visible steps and a reusable tool draft.', icon: WandSparkles, target: 'builder' as View, accent: 'lilac' },
-            { step: '03', title: 'Review the document', description: 'Enter missing details, recalculate totals, and confirm a sample draft.', icon: FileText, target: 'documents' as View, accent: 'mint' },
-            { step: '04', title: 'Reuse your setup', description: 'Reopen tools saved in this browser session and refine their rules.', icon: Library, target: 'library' as View, accent: 'sky' },
-          ].map((card) => <button key={card.step} className="feature-card" onClick={() => navigate(card.target)}><span className={`feature-icon ${card.accent}`}><card.icon size={22} /></span><span className="feature-step">{card.step} / 04</span><strong>{card.title}</strong><p>{card.description}</p><span className="feature-link">Explore <ArrowRight size={15} /></span></button>)}</div>
-          <div className="overview-foot"><ShieldCheck size={20} /><p><strong>Clear boundaries.</strong> This site uses fictional data. Scripted answers are labeled; the quotation is a draft and cannot be issued or sent. Live Mac mini inference is not enabled on this preview.</p></div>
-        </>}
+            { step: '01', title: 'Chat', description: 'Explore scripted answers for a fictional workshop request.', icon: MessageSquareText, target: 'chat' as View },
+            { step: '02', title: 'Agent Builder', description: 'Shape a repeatable workflow with logic steps and a reviewable plan.', icon: Sparkles, target: 'builder' as View, featured: true },
+            { step: '03', title: 'Tool Library', description: 'Reopen and refine tools saved in this browser session.', icon: Library, target: 'library' as View },
+            { step: '04', title: 'Documents', description: 'Review a sample quotation from one fictional order.', icon: FileText, target: 'documents' as View },
+          ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Your session tools appear here after you save one.</span>}</button>)}</div>
+          <div className="home-footer"><p>Fictional records and scripted replies are labeled. This preview does not run a live model, issue documents, or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open guided demo <ArrowDownRight size={15} /></a></div>
+        </section>}
 
         {view === 'chat' && <>
           <PageHead number="01" label="CHAT" title="Understand the request" description="Ask about the fixed workshop records. Select a sample prompt to see a scripted answer, or enter your own text to see the preview boundary." />
