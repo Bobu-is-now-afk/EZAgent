@@ -571,6 +571,8 @@ function describeWorkflowStep(step: WorkflowStep, thresholdMinor: number, curren
 function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseStatus; onApiStatusChange: (status: ApiResponseStatus) => void }) {
   const [goal, setGoal] = useState('')
   const [source, setSource] = useState<LocalSource | null>(null)
+  const [sourceAttemptName, setSourceAttemptName] = useState<string | null>(null)
+  const [sourceChangedSinceRun, setSourceChangedSinceRun] = useState(false)
   const [pills, setPills] = useState<LogicPill[]>([])
   const [isEditingPlan, setIsEditingPlan] = useState(false)
   const [plannedWorkflow, setPlannedWorkflow] = useState<WorkflowDefinition | null>(null)
@@ -960,7 +962,9 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
 
   function clearSource() {
     setSource(null)
+    setSourceAttemptName(null)
     setSourceError(null)
+    setSourceChangedSinceRun(true)
     if (selectedTemplateId && plannedWorkflow) {
       setPlannerPreview(null)
       setConfirmedSignature(null)
@@ -977,6 +981,8 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
     if (runBlocksNewWork) return
     const workflow = makeTemplateWorkflow(template.workflow)
     setSource(null)
+    setSourceAttemptName(null)
+    setSourceChangedSinceRun(true)
     setSourceError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
     clearPlanState()
@@ -1043,6 +1049,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
       if (!response.ok) throw new Error('sample_unavailable')
       const sample = await response.json()
       setSource(sample)
+      setSourceAttemptName(sample.name)
       setGoal('篩選港幣 10,000 元以上的發票，標記缺漏欄位並匯出 CSV')
     } catch { setSourceError('示範資料暫時無法載入，請再試一次。') }
     finally { setIsReadingSource(false) }
@@ -1062,6 +1069,8 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
     }
     setSource(null)
     setSourceError(null)
+    setSourceChangedSinceRun(true)
+    setSourceAttemptName(file?.name ?? null)
     if (!file) return
     if (file.size > MAX_SOURCE_BYTES) {
       setSourceError('來源檔案超過 1 MiB 上限，請選擇較小的 UTF-8 CSV 或 TXT。')
@@ -1162,6 +1171,7 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
       setRunId(run.id)
       setRunEvents([])
       setRunSourceBatch(source.name)
+      setSourceChangedSinceRun(false)
       setRunTemplateLabel(selectedTemplate
         ? `${selectedTemplate.name} · v${selectedTemplate.version}${selectedTemplateDirty ? ' · 含尚未儲存的參數修改' : ''}`
         : '自訂 workflow（未套用模板）')
@@ -1315,6 +1325,18 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
   const canCreateRun = Boolean(editedWorkflow && source && isConfirmed && !isEditingPlan && !pillErrors.length && !isCreatingRun && !runBlocksNewWork)
   const previewText = plannerPreview === null ? '' : formatPreview(plannerPreview)
   const workflowForDisplay = editedWorkflow ?? runInfo?.workflow ?? null
+  const isPreviousRun = Boolean(runInfo && (sourceChangedSinceRun || !source))
+  const previousRunSource = runSourceBatch ?? apiSourceBatchLabel ?? '來源未記錄'
+  const currentSourceName = source?.name ?? sourceAttemptName
+  const currentSourceState = sourceError
+    ? '來源無效；尚未執行'
+    : planError
+      ? '計畫建立失敗；Run 尚未執行'
+      : source
+        ? '尚未執行'
+        : isReadingSource
+          ? '正在讀取'
+          : '尚未選取新來源'
   const runWorkflowMatches = Boolean(runInfo && workflowForDisplay && JSON.stringify(runInfo.workflow) === JSON.stringify(workflowForDisplay))
   const displayThresholdMinor = editedWorkflow ? thresholdMinor ?? 0 : runInfo?.workflow.parameters.thresholdMinor ?? thresholdMinor ?? 0
   const displayCurrency = editedWorkflow ? currency : runInfo?.workflow.parameters.currency ?? currency
@@ -1403,18 +1425,18 @@ function MainStage({ apiStatus, onApiStatusChange }: { apiStatus: ApiResponseSta
 
       <section aria-labelledby="result-title" className="flex flex-col rounded-2xl border border-zinc-200 bg-zinc-50/60 p-5 sm:p-6">
         <div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-white text-zinc-600 ring-1 ring-zinc-200"><FileText aria-hidden="true" className="size-4" /></div><div><h2 id="result-title" className="text-sm font-semibold">處理結果</h2><p className="mt-0.5 text-xs text-zinc-500">完成後可下載並檢視 CSV</p></div></div>
-        {runInfo ? <div className="mt-5 flex flex-1 flex-col rounded-xl border border-zinc-200 bg-white p-4"><p role="status" aria-live="polite" className="text-sm font-semibold text-zinc-900">{syncError ? `最近一次 API 回報：${RUN_STATUS_LABELS[runInfo.status]}` : RUN_STATUS_LABELS[runInfo.status]}</p><details className="mt-3 text-xs"><summary className="cursor-pointer">進階詳情：處理識別與來源</summary><p className="mt-2 break-all font-mono text-[11px] text-zinc-500">Run ID · {runInfo.id}</p><p className="mt-1 text-[11px] text-zinc-500">Workflow version · {runInfo.workflowVersion}</p><p className="mt-1 break-all text-[11px] text-zinc-500">來源批次 · {runSourceBatch ?? (apiSourceBatchLabel || 'Run API 尚未回報來源參照')}</p><p className="mt-1 break-words text-[11px] text-zinc-500">模板版本 · {runTemplateLabel ?? 'GET Run 未提供模板版本（僅以 Run ID 恢復）'}</p>{runInfo.currentTask && <p className="mt-2 break-all text-xs text-zinc-600">目前 Task · {runInfo.currentTask}</p>}
+        {runInfo ? <div className="mt-5 flex flex-1 flex-col rounded-xl border border-zinc-200 bg-white p-4">{isPreviousRun && <div role="status" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11px] leading-5 text-amber-950"><p className="font-semibold">上一個 Run（Previous run for {previousRunSource}）· {RUN_STATUS_LABELS[runInfo.status]}</p><p className="mt-1">目前來源{currentSourceName ? ` · ${currentSourceName}` : ''}：{currentSourceState}。以下狀態與結果屬於上一個來源，並未套用到目前來源。</p></div>}<p role="status" aria-live="polite" className="text-sm font-semibold text-zinc-900">{isPreviousRun ? `上一個 Run 狀態：${syncError ? `最近一次 API 回報 ${RUN_STATUS_LABELS[runInfo.status]}` : RUN_STATUS_LABELS[runInfo.status]}` : syncError ? `最近一次 API 回報：${RUN_STATUS_LABELS[runInfo.status]}` : RUN_STATUS_LABELS[runInfo.status]}</p><details className="mt-3 text-xs"><summary className="cursor-pointer">進階詳情：處理識別與來源</summary><p className="mt-2 break-all font-mono text-[11px] text-zinc-500">Run ID · {runInfo.id}</p><p className="mt-1 text-[11px] text-zinc-500">Workflow version · {runInfo.workflowVersion}</p><p className="mt-1 break-all text-[11px] text-zinc-500">來源批次 · {runSourceBatch ?? (apiSourceBatchLabel || 'Run API 尚未回報來源參照')}</p><p className="mt-1 break-words text-[11px] text-zinc-500">模板版本 · {runTemplateLabel ?? 'GET Run 未提供模板版本（僅以 Run ID 恢復）'}</p>{runInfo.currentTask && <p className="mt-2 break-all text-xs text-zinc-600">目前 Task · {runInfo.currentTask}</p>}
 </details>
           {runInfo.status === 'running' && <p role="status" className="mt-3 rounded-lg bg-sky-50 p-3 text-[11px] leading-5 text-sky-900">正在整理發票，完成後會顯示下載按鈕。</p>}
           {runInfo.status === 'cancelling' && <p role="status" className="mt-3 rounded-lg bg-amber-50 p-3 text-[11px] leading-5 text-amber-900">已送出取消要求，正在等待 Agent API 回報 cancelled 或其他最終狀態。</p>}
           {runInfo.status === 'awaiting_approval' && <p role="status" className="mt-3 rounded-lg bg-amber-50 p-3 text-[11px] leading-5 text-amber-900">Agent API 回報此 Run 尚待核准。請確認 workflow 與來源批次後，再使用 API 支援的核准流程。</p>}
           {runInfo.status === 'completed' && (runInfo.artifacts.length > 0
-            ? <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-[11px] leading-5 text-emerald-900">整理完成。請下載並核對結果中的缺漏標記。</p>
+            ? <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-[11px] leading-5 text-emerald-900">{isPreviousRun ? `上一個 Run（${previousRunSource}）已完成；以下結果未套用到目前來源。` : '整理完成。請下載並核對結果中的缺漏標記。'}</p>
             : <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-[11px] leading-5 text-amber-900">處理已結束，但沒有產生結果。請重新同步；若仍失敗，請聯絡支援。</p>)}
           {runInfo.status === 'cancelled' && <p role="status" className="mt-3 rounded-lg bg-zinc-100 p-3 text-[11px] leading-5 text-zinc-800">Agent API 已回報取消。僅使用仍列在下方的 artifacts；如需重跑，請選新來源並重新核准 workflow。</p>}
           {runInfo.status === 'failed' && <ErrorNotice detail={`${runFailureCode ?? ''}: ${runFailureMessage ?? ''}`} message="整理未完成。請檢查來源與條件，重新建立計畫。" />}
           <details className="mt-3 text-xs"><summary className="cursor-pointer">進階詳情：步驟檢核</summary><div className="mt-4 border-t border-zinc-100 pt-3"><h3 className="text-[11px] font-semibold text-zinc-700">Task states</h3>{Object.entries(runInfo.taskStates).length > 0 ? <ul className="mt-2 space-y-2">{Object.entries(runInfo.taskStates).map(([taskId, taskState]) => { const taskStep = runInfo.workflow.steps.find((step) => step.id === taskId); const current = runInfo.currentTask === taskId; return <li key={taskId} className={`rounded-lg border px-3 py-2 ${current ? 'border-sky-300 bg-sky-50' : 'border-zinc-100 bg-zinc-50'}`}><div className="flex flex-wrap items-center justify-between gap-2"><span className="break-all text-[11px] font-medium text-zinc-800">{taskStep ? TOOL_TITLES[taskStep.tool] : taskId}</span><span className="text-[10px] text-zinc-600">{TASK_STATUS_LABELS[taskState.status]}</span></div><p className="mt-1 text-[10px] text-zinc-500">Attempts · {taskState.attempts}{taskState.validation ? ` · ${taskState.validation.pass ? '檢核通過' : '檢核未通過'} · ${taskState.validation.code}` : ''}</p>{taskState.validation?.evidence.length ? <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[10px] leading-4 text-zinc-600">{taskState.validation.evidence.map((item, index) => <li key={`${taskId}-validation-${index}`}>{item}</li>)}</ul> : taskState.status === 'failed' ? <p className="mt-1 text-[10px] text-amber-800">API 未提供此 Task 的驗證證據。</p> : null}</li> })}</ul> : <p className="mt-2 text-[11px] text-zinc-500">Run API 尚未回報 Task 狀態。</p>}</div></details>
-          <div className="mt-4 border-t border-zinc-100 pt-3"><h3 className="text-[11px] font-semibold text-zinc-700">可下載的結果</h3>{runInfo.artifacts.length === 0 ? <p role="status" className="mt-2 text-[11px] leading-5 text-zinc-500">{isTerminalRunStatus(runInfo.status) ? '處理已停止，目前沒有可下載的結果。' : '正在等待整理結果。'}</p> : <ul className="mt-2 space-y-3">{runInfo.artifacts.map((artifact) => {
+          <div className="mt-4 border-t border-zinc-100 pt-3"><h3 className="text-[11px] font-semibold text-zinc-700">{isPreviousRun ? `上一個 Run 的結果 · ${previousRunSource}` : '可下載的結果'}</h3>{runInfo.artifacts.length === 0 ? <p role="status" className="mt-2 text-[11px] leading-5 text-zinc-500">{isTerminalRunStatus(runInfo.status) ? '處理已停止，目前沒有可下載的結果。' : '正在等待整理結果。'}</p> : <ul className="mt-2 space-y-3">{runInfo.artifacts.map((artifact) => {
             const table = artifactPreview?.artifactId === artifact.id ? artifactPreview.table : null
             const referenceRows = artifact.sourceRefs.slice(0, 50)
             return <li key={artifact.id} className="rounded-lg border border-zinc-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-all text-[11px] font-semibold text-zinc-800">{artifact.type}</p><details className="mt-2 text-xs"><summary className="cursor-pointer">進階詳情：結果位置</summary><p className="break-all">{artifact.location}</p></details></div>{isCsvArtifact(artifact) && <button type="button" onClick={() => void downloadCsvArtifact(artifact)} disabled={artifactLoadingId !== null} className="shrink-0 rounded-md border border-zinc-300 px-2 py-1.5 text-[10px] font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-wait disabled:opacity-60">{artifactLoadingId === artifact.id ? '載入 CSV…' : '下載並檢視 CSV'}</button>}</div>
