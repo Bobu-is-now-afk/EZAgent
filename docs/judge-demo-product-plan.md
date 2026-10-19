@@ -13,14 +13,15 @@
 
 ## Current implementation progress and gaps (2026-10-19)
 
-PRs #24–#26 are open against `main`, but no single integrated PR combines them with `codex/judge-facing-demo`:
+PR #28 now carries the three-record source set at commit `e25601a`. Its 8/8 test result is reported in the PR description; the added test asserts that the visible page source exactly matches the server-owned fixture and checks that W-02 and R-01 are context only.
 
 | Work | Present progress | Integration gap |
 |---|---|---|
 | #24 Gemini contract | Defines same-origin routes, fail-closed behavior, five fixed roles, source boundaries, and public cost gates | Contract says public live service stays disabled until access/rate limits and provider budget controls are approved |
 | #25 Gemini adapter | Same-origin status/chat/agent/document endpoints; server-owned fixture IDs; bounded provider calls; errors do not fall back to samples | Chat returns `answer`; Agent returns `roles`, `proposedSteps`, and `missing`. The current `judge-facing-demo` client expects `reply` for both, so it will reject valid responses unless adapted |
 | #26 document page | Standalone `documents.html`; manual field application/confirmation; integer-cent totals; quotation/receipt preview and failure state | It is not linked from the current landing branch. Its prompt is still “Create a quote for two workshop days next month,” not a receipt source, so it does not yet satisfy a receipts-to-quotation story |
-| `codex/judge-facing-demo` | Landing labels M6/Qwen as simulated; labels replies live only after a successful response; request errors remain errors; fixed five-role concept is visibly simulated and defined in `agent-team-spec.md` | Sample mode is automatic when the backend is unavailable, with no explicit mode choice. The team screen hardcodes the role diagram instead of loading/rendering the Markdown spec. Document page and API are not present in this branch |
+| #28 integrated candidate | Landing, same-origin API, document studio, mock-backend browser replay, fixture-only input, and fixed W-01/W-02/R-01 source text are integrated; PR description reports 8/8 API tests | The quote is generated from Order W-01, not Receipt R-01. Call this an **order/receipt context to quotation** demo; do not claim receipt-to-quotation extraction |
+| `codex/judge-facing-demo` | Landing labels M6/Qwen as simulated; labels replies live only after a successful response; request errors remain errors; fixed five-role concept is visibly simulated and defined in `agent-team-spec.md` | Sample mode is automatic when the backend is unavailable, with no explicit mode choice. The team screen hardcodes the role diagram instead of loading/rendering the Markdown spec. This branch predates the integrated document page and API |
 
 The integration should retain the correct existing labels and fail-closed behavior. Before calling the end-to-end flow complete, add an explicit Sample demo mode choice when Gemini is not configured/unreachable; keep a connected Gemini request failure in an error state with retry or deliberate switch-to-sample. Use an actual synthetic receipt fixture as the source for the quotation, then allow only grounded item/quantity suggestions. Keep identity, price, currency, tax, and dates blank unless explicitly supplied and confirmed by a person. Treat the Markdown file as the team structure source of truth, and label its static choreography simulated.
 
@@ -29,7 +30,7 @@ The integration should retain the correct existing labels and fail-closed behavi
 1. **Preview setup:** show a clearly fictional “Mac mini M6 demo profile” (all specs marked simulated; no claim of an announced or tested product configuration). Animate the `qwen3.5:9b` download with a persistent **Simulated — no device setup or model download occurs** label.
 2. **Choose execution:** show **Gemini connected — live response** only when the protected server-side Gemini adapter is configured and reachable. When Gemini is not configured or not connected, let the judge explicitly choose **Sample demo mode**. If a Gemini request fails after connection, show a clear error with retry/switch-to-sample choices; never silently replace the failed live response with a sample. Never expose API credentials in the browser. Keep local-model setup simulation separate from Gemini status.
 3. **Build the agent:** load a short Markdown spec and render this fixed hierarchy: **GM → 2 mini managers → 2 workers**. The spec names each role, allowed tools, handoff, and approval gate. Label static role assignments and handoff animations **Simulated**; show a handoff as completed only after that action actually ran. Do not imply parallel execution or tool access that the backend did not perform.
-4. **Start from synthetic records:** show three clearly marked sample receipts, select exactly one, then offer **“Prepare one quotation”** or **“Preview reusable tool.”** The first creates a draft from that record. The second shows the static role/spec concept. Both say one record at a time; no batch is run and no tool is saved.
+4. **Start from synthetic records:** show the fixed source text for Order W-01, Order W-02, and Receipt R-01. W-01 is the only quote source; mark W-02 and R-01 **Context only**. State that Receipt R-01 has no payment evidence. Offer **“Prepare one quotation from Order W-01”** or **“Preview reusable tool.”** The first creates one draft from W-01; the second shows the static role/spec concept. The copy says only W-01 enters the quote and no batch processing is claimed.
 5. **Draft and review:** use a generic quotation/receipt template inspired by InkVoice’s visual simplicity, without copying its branding or implying affiliation. AI may suggest only source-grounded fields with visible provenance; leave unknown seller/buyer identity, date, currency, price, and tax blank. A person edits and confirms every required value.
 6. **Show deterministic result:** calculate subtotal, tax, and total with integer minor units after explicit currency and tax choices. Keep a `SAMPLE · DRAFT` preview visible, and label every backend-dependent action **Live** or **Simulated**. No numbering, issuance, sending, payment, or customer data.
 
@@ -61,34 +62,34 @@ The integration should retain the correct existing labels and fail-closed behavi
 | Spec hierarchy | A supplied Markdown fixture renders one GM, exactly two mini managers, and exactly two workers with visible spec-derived assignments/handoffs. Static choreography is labeled simulated; a handoff is marked completed only after it actually ran. |
 | API/client contract | Chat and Agent UI accept the documented #25 response shapes (`answer`; `roles`/`proposedSteps`/`missing`) and validate them; malformed or failed responses stay in an explicit error state. |
 | One-off/reusable choice | Both choices are available; one-off does not persist. Reusable choice states whether it is a preview or actually saved and can be reset without affecting other data. |
-| Receipt suggestions | A visible synthetic receipt is the source for the quotation. Suggestions match only explicit receipt facts and show provenance. Unsupported/ambiguous facts remain blank for manual review; no invented identity, date, price, currency, or tax. |
+| Synthetic source set | Exactly three fixed records appear: Order W-01 (selected quote source), Order W-02 (context only), and Receipt R-01 (context only; no payment evidence). The page text exactly matches the server-owned source constant. The UI says **order/receipt context to quotation**; it does not claim the receipt generated the quote. |
+| Recalculation | **Rerun calculation** preserves current quote inputs and total, clears field confirmations, and increments a local rerun count. It does not call Gemini again or process W-02/R-01. UI copy must keep this distinction clear. |
+| Receipt suggestions | Suggestions match only explicit facts from the selected order and show provenance. Unsupported/ambiguous facts remain blank for manual review; no invented identity, date, price, currency, or tax. |
 | Human review | Missing/invalid fields block confirmation and print; edits update provenance; totals refresh deterministically. |
 | Arithmetic | Fixed fixture produces the documented expected total; invalid amounts, quantity, currency, or tax block preview confirmation. |
 | No real issuance | Preview is always visibly SAMPLE/DRAFT; no document number, outbound request, payment action, or real customer record is created. |
 
-## Minimal synthetic receipt fixture and copy
+## Final three-record fixture plan and copy
 
-Keep a tiny, versioned fixture set with stable IDs. The browser displays only these synthetic records; the suggestion request sends one `fixtureId` per run, never an array or uploaded receipt. The server resolves that ID to its fixed source data. Historical receipt amounts are shown only on the source card and are never copied into the new quote price.
+Keep the three fixed synthetic records from PR #28 as the source of truth; do not add a second invented fixture set. The page and server must use matching values and stable IDs. The browser displays all three records, but the quote request sends only Order W-01's allowlisted ID, never an array or uploaded source. W-02 and R-01 are context only; R-01 has no payment evidence. The demo shows no historical amount copied into the new quote.
 
-```json
-[
-  {"fixtureId":"receipt_001","label":"SAMPLE-R-001","merchant":"Sample Workshop Supply","date":"2026-10-01","currency":"USD","items":[{"description":"Workshop notebooks","quantity":2,"historicalUnitMinor":4500}],"historicalTotalMinor":9000},
-  {"fixtureId":"receipt_002","label":"SAMPLE-R-002","merchant":"Sample Tool Hire","date":"2026-10-03","currency":"USD","items":[{"description":"Portable projector rental","quantity":1,"historicalUnitMinor":12000}],"historicalTotalMinor":12000},
-  {"fixtureId":"receipt_003","label":"SAMPLE-R-003","merchant":"Sample Print Shop","date":"2026-10-05","currency":"USD","items":[{"description":"Workshop handouts","quantity":24,"historicalUnitMinor":25}],"historicalTotalMinor":600}
-]
-```
+| Record | Role in demo | Required label |
+|---|---|---|
+| Order W-01 | The only source selected to create the quotation draft | **Selected quote source · SAMPLE** |
+| Order W-02 | Context only; never sent in the quote suggestion request | **Context only · SAMPLE** |
+| Receipt R-01 | Context only; no payment evidence and never treated as payment proof | **Context only · SAMPLE · no payment evidence** |
 
-Exact UI copy:
+Recommended exact UI copy:
 
-- Section: **“Synthetic receipts · simulated records”**
-- Helper: **“Choose one sample receipt. This preview handles one record at a time; it does not import or batch-process receipts.”**
-- Card: **“SAMPLE-R-001 · Sample Workshop Supply · 2026-10-01”**, item and quantity, plus **“Historical receipt total · source only: USD 90.00”**.
-- Action: **“Use this receipt for one quotation”** / **“Preview reusable tool”**.
-- Draft source: **“Selected source · SAMPLE-R-001”**. Keep seller, buyer, quote date, currency, new unit price, and tax blank for human entry/confirmation. Suggestions may propose only source-grounded description and quantity.
-- Rerun: **“Run this receipt again”** with **“Reuses SAMPLE-R-001 only. This is one fixture replay, not a batch run. Prior output remains labeled as the previous run; review confirmations reset.”**
-- Quote preview: **“SAMPLE · DRAFT”** and **“New quotation total”**, visually separate from **“Historical receipt total · source only.”**
+- Section: **“Synthetic orders and receipt · simulated records”**
+- Helper: **“Choose one sample record. Order W-01 creates one quotation draft; Order W-02 and Receipt R-01 are context only. No batch is run.”**
+- Cards: **“Order W-01 · Selected quote source”**, **“Order W-02 · Context only”**, **“Receipt R-01 · Context only · no payment evidence.”**
+- Action: **“Prepare one quotation from Order W-01”** / **“Preview reusable tool.”**
+- Draft source: **“Selected source · Order W-01.”** Keep seller, buyer, quote date, currency, new unit price, and tax blank for human entry/confirmation. Suggestions may propose only source-grounded description and quantity.
+- Rerun: keep the implemented **“Rerun calculation”** label and describe it as **“Recalculates this draft from the same entered values. It does not rerun Gemini or process the other records; confirmations reset for review.”** Rename the count to **“Calculation reruns”** so it cannot be read as a batch run count.
+- Quote preview: **“SAMPLE · DRAFT”** and **“New quotation total.”** Do not present Receipt R-01 as the source or as payment proof.
 
-Acceptance: selecting one card sends only its allowlisted ID; suggestions are bounded to that record; rerun uses the same ID and does not touch the other two records. The UI never says “processed all receipts,” “batch complete,” or implies uploaded/real receipts. Keep receipt historical price separate from quote price; deterministic quote totals use only the manually entered and confirmed quote fields.
+Acceptance: the document suggestion call uses the fixed server-owned fixture; suggestions are bounded to W-01 and amount/identity/tax are not inferred. Rerunning recalculates only the current draft and does not call Gemini or touch W-02/R-01. The UI never says “processed all records” or “batch complete,” and never implies upload or real data. Deterministic quote totals use only manually entered and confirmed quote fields.
 
 ## Integration order
 
@@ -96,7 +97,7 @@ Acceptance: selecting one card sends only its allowlisted ID; suggestions are bo
 2. Carry #24’s API/error and public cost gates into integration. Keep Live disabled until approved access/rate limits and provider budget controls exist; otherwise offer explicit Sample demo mode.
 3. Integrate #25 and adapt the landing client to the documented response shapes (`answer` for Chat; fixed `roles` plus bounded `proposedSteps`/`missing` for Agent). Test success, malformed response, provider error, and explicit sample selection independently.
 4. Use the Markdown team spec as the source for the static five-role diagram and mark all simulated assignments/handoffs as simulated. Do not show completed work unless a deterministic action actually ran.
-5. Integrate #26’s document page and link it from the existing landing. Replace the quote-request fixture with the three-record synthetic receipt set above; make the API accept only one allowlisted receipt ID per suggestion call. Keep grounded suggestions separate until human application/confirmation. Reuse its deterministic totals and print gates.
+5. Keep #28’s three fixed source records aligned between page and server. Label Order W-01 as the quote source and W-02/R-01 as context only. Keep grounded suggestions separate until human application/confirmation. Describe the existing rerun accurately as deterministic recalculation, then retain totals and print gates.
 6. Fold in relevant evidence/runbook material from #20 after checking it against the final interaction. Leave #22 out unless its run-state UX is needed for this path.
 7. Run acceptance cases against the integrated branch, update evidence/runbook, and open a review PR. Deployment and any Vercel project changes remain separate decisions.
 
