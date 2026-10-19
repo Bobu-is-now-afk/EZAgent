@@ -104,19 +104,19 @@ export default function Page() {
         {view !== 'overview' && <button className="back-button" onClick={() => navigate('overview')}><ArrowRight size={16} /> Back to Workspace</button>}
         <button className="brand" onClick={() => navigate('overview')} aria-label="EZAgent overview"><span className="brand-symbol"><Bot size={20} strokeWidth={2.1} /></span><strong>EZAgent</strong></button>
       </div>
-      <div className="header-right"><span className="preview-pill"><span className="status-dot" /> Hackathon preview · fictional data</span></div>
+      <div className="header-right"><span className="preview-pill"><span className="status-dot" /> EZAgent Product Web Preview</span></div>
     </header>
     {view !== 'overview' && <nav className="module-nav" aria-label="Workspace modules">{navItems.filter((item) => item.id !== 'overview').map(({ id, label }) => <button key={id} className={view === id || ((view === 'inkvoice' || view === 'accounting') && id === 'library') ? 'active' : ''} onClick={() => navigate(id)} aria-current={view === id || ((view === 'inkvoice' || view === 'accounting') && id === 'library') ? 'page' : undefined}>{label}</button>)}</nav>}
     <main className="main-panel">
       <div className={`content ${view === 'overview' ? 'home-wrap' : ''} ${view === 'inkvoice' ? 'iv-content' : ''}`}>
         {view === 'overview' && <section className="home-content">
-          <div className="home-heading"><div className="eyebrow">WORKSPACE</div><h1>What would you like to do today?</h1><p>Select a module to explore the EZAgent web preview.</p></div>
+          <div className="home-heading"><div className="eyebrow">EZAGENT PRODUCT WEB PREVIEW</div><h1>What would you like to do today?</h1><p>Explore the interactive web version of EZAgent. This Hackathon preview uses fictional records; AI chat replies and agent plans are scripted examples.</p></div>
           <div className="feature-grid">{[
             { step: '01', title: 'Chat', description: 'Explore scripted answers for a fictional workshop request.', icon: MessageSquareText, target: 'chat' as View },
             { step: '02', title: 'Agent Builder', description: 'Shape a repeatable workflow with logic steps and a reviewable plan.', icon: Sparkles, target: 'builder' as View, featured: true },
             { step: '03', title: 'Tool Library', description: 'Open InkVoice and the Accounting Statement Generator, or refine your saved tools.', icon: Library, target: 'library' as View },
           ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Example tools are ready to explore. Your session tools appear here after you save one.</span>}</button>)}</div>
-          <div className="home-footer"><p>Fictional records and scripted replies are labeled. This preview does not run a live model, issue documents, or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open guided demo <ArrowDownRight size={15} /></a></div>
+          <div className="home-footer"><p><strong>Product Web Preview:</strong> the workspace and browser tools are interactive. AI replies are examples; this website does not connect to the Mac mini model, issue documents, or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open simulated judge demo <ArrowDownRight size={15} /></a></div>
         </section>}
 
         {view === 'chat' && <>

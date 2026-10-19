@@ -16,8 +16,9 @@ With Vercel Root Directory `demo`, the browser uses fixed fictional scripts and
 does not call a model API. The former `/api/chat`, `/api/agent-suggest`, and
 `/api/document-suggest` routes return HTTP 410 `scripted_demo_only` even if a
 key remains configured. `/api/status` reports `scripted_demo`. The separate
-local product prototype uses Ollama `qwen3.5:9b` on a Mac mini, but has no
-public web URL yet. This website does not contact the Mac mini.
+local product prototype uses Ollama `qwen3.5:9b` on a Mac mini. The separate
+[EZAgent Product Web Preview](https://ezagent-product-web-preview.vercel.app/)
+is accessible from this demo's home page. Neither public website contacts the Mac mini.
 
 The prior Gemini adapter is retained as historical implementation material.
 Remove `GEMINI_API_KEY` from the public Vercel project after this scripted

@@ -1,10 +1,10 @@
 # EZAgent
 
-EZAgent explores a guided path from a request to a reviewed AI-assisted document workflow. The [judge demo](https://ezagent-judge-demo.vercel.app/) is a scripted website with fixed fictional responses and synthetic source data. Enter fictional values only in editable fields. The actual product web preview is not public yet.
+EZAgent explores a guided path from a request to a reviewed AI-assisted document workflow. The [simulated judge demo](https://ezagent-judge-demo.vercel.app/) is a scripted website with fixed fictional responses and synthetic source data. Judges can open the separate [EZAgent Product Web Preview](https://ezagent-product-web-preview.vercel.app/) from its home page. Enter fictional values only in editable fields.
 
 ## Hackathon product web preview
 
-The repository-root Next.js app is a separate, interactive product preview for judges. Its guided path connects Chat, Agent Builder, Documents, and Tool Library around fictional orders W-01/W-02 and receipt R-01. Chat answers and plan results are scripted examples, while quotation totals and confirmation gates are calculated in the browser. Session tools reset on reload. No model, background agent, local file, or customer system is contacted by this public web preview.
+The repository-root Next.js app is a separate, interactive product web preview for judges. It shows Chat, Agent Builder, InkVoice, and the Accounting Statement Generator. Chat answers and agent plans are scripted examples. InkVoice and the accounting tool have editable browser workflows; receipt images use browser OCR and text PDFs use browser text extraction. Session tools reset on reload. No live model, background agent, or customer system is contacted by this public web preview.
 
 Deploy this app as a **second Vercel project** connected to the same GitHub repository, with Root Directory set to the repository root and Production Branch set to `main`. Keep the existing judge demo project pointed at `demo/`. Verify the second project's public Production URL before linking to it from the judge demo. Run `pnpm exec tsc --noEmit` and `pnpm build` from the repository root before release.
 
@@ -26,4 +26,4 @@ The document preview is always **SAMPLE · DRAFT**. It does not issue, send, num
 | Agent team and reusable tool | Proposed structure and workflow preview |
 | Quotation arithmetic and review gates | Deterministic browser code on synthetic inputs |
 
-The separate local application prototype uses Ollama `qwen3.5:9b` on a Mac mini; model responses can be slower than this scripted website. That product prototype has no public web URL yet. The public Vercel project uses [`demo/`](demo/) as its Root Directory. Its former Gemini routes now return HTTP 410 and do not read or use `GEMINI_API_KEY`; remove that production environment variable after this change is deployed. The retained adapter code and tests are historical implementation material, not part of the active demo. Run `node --test tests/demo/*.test.mjs` to verify the demo contracts.
+The separate local application prototype uses Ollama `qwen3.5:9b` on a Mac mini; model responses can be slower than this scripted website. Neither public site connects to that Mac mini. The simulated judge demo Vercel project uses [`demo/`](demo/) as its Root Directory. Its former Gemini routes return HTTP 410 and do not read or use `GEMINI_API_KEY`; remove that production environment variable after deployment. The retained adapter code and tests are historical implementation material, not part of the active demo. Run `node --test tests/demo/*.test.mjs` to verify the demo contracts.
