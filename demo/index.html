@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EZAgent — an AI agent that gets things done</title>
+<title>EZAgent — interactive concept preview</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
@@ -41,6 +41,10 @@ h1{font-size:clamp(36px,6.4vw,64px);line-height:1.05;letter-spacing:-.04em;margi
 .side a{display:inline-block;text-decoration:none;color:var(--ink);font-size:14px;font-weight:500;border-bottom:1px solid var(--line);padding:4px 0}
 .side a:hover{border-color:var(--ink)}
 .fine{font-size:13px;color:var(--mute);margin:26px auto 0;max-width:52ch}
+.disclosures{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:760px;margin:28px auto 0}
+.disclosure{border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:12px;color:var(--mute);background:#fff}
+.disclosure strong{color:var(--ink);font-weight:600}
+.screen-note{width:100%;max-width:720px;margin:0 auto;padding:10px 14px;border:1px solid #e6ddbd;background:#fbf8eb;color:#62562f;border-radius:10px;font-size:13px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);max-width:760px;margin:64px auto 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .stats div{padding:20px 12px;text-align:center}
 .stats div+div{border-left:1px solid var(--line)}
@@ -79,7 +83,6 @@ h1{font-size:clamp(36px,6.4vw,64px);line-height:1.05;letter-spacing:-.04em;margi
 .step{border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14.5px}
 .step h4{margin:0;font-size:14px;font-weight:600;display:flex;align-items:center;gap:9px}
 .step h4::before{content:"";width:9px;height:9px;border-radius:50%;border:2px solid #BDBDB8;flex:none}
-.step.done h4::before{background:var(--ok);border-color:var(--ok)}
 .step p{margin:6px 0 0;color:var(--mute);white-space:pre-wrap}
 .empty{margin:8vh auto 0;text-align:center;max-width:46ch}
 .empty h3{font-size:26px;letter-spacing:-.02em;margin:0 0 6px}
@@ -87,6 +90,19 @@ h1{font-size:clamp(36px,6.4vw,64px);line-height:1.05;letter-spacing:-.04em;margi
 .chips{display:flex;flex-direction:column;gap:8px;margin-top:22px}
 .chips button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 16px;text-align:left;font-size:14.5px}
 .chips button:hover{background:var(--soft)}
+.choice-list{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0;text-align:left}
+.choice{border:1px solid var(--line);background:#fff;border-radius:14px;padding:16px;text-align:left}
+.choice:hover{border-color:#9b9b94;background:#fcfcfa}
+.choice strong{display:block;margin-bottom:5px}
+.choice span{display:block;color:var(--mute);font-size:13px}
+.team{width:100%;max-width:680px;margin:24px auto;display:grid;gap:12px}
+.team-node{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
+.team-node.lead{border-color:#aaa994;background:#f7f6ef}
+.team-branches{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.team-node h4{margin:0 0 4px;font-size:14px}
+.team-node p{margin:0;color:var(--mute);font-size:13px}
+.team-workers{border-top:1px solid var(--line);margin-top:10px;padding-top:9px;color:var(--mute);font-size:12.5px}
+.quiet-btn{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 12px}
 form{display:flex;justify-content:center;padding:12px 18px 22px}
 .box{display:flex;gap:10px;width:100%;max-width:720px;border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 16px;background:#fff}
 .box:focus-within{border-color:var(--ink)}
@@ -106,6 +122,7 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
   .cta .side{justify-self:center}
   .cta .spacer{display:none}
   .stats,.how{grid-template-columns:1fr}
+  .choice-list,.team-branches{grid-template-columns:1fr}
   .stats div+div{border-left:0;border-top:1px solid var(--line)}
   .apptop{flex-wrap:wrap}
   .seg{order:3;width:100%;margin:0}.seg button{flex:1}
@@ -120,40 +137,47 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
 <div id="landing">
   <nav class="nav">
     <div class="brand">EZAgent</div>
-    <div class="status"><span class="dot" id="lDot"></span><span id="lStatus">Checking…</span></div>
+    <div class="status"><span class="dot" id="lDot"></span><span id="lStatus">Sample mode</span></div>
   </nav>
 
   <section class="hero">
-    <h1>An AI agent that gets things done.</h1>
-    <p class="lede">Chat with an assistant, or hand the agent a task and watch it plan and finish the work, step by step.</p>
+    <h1>Shape AI work around the way your team thinks.</h1>
+    <p class="lede">Explore a concept for asking a question, drafting a one-off workflow, or shaping a reusable tool.</p>
 
     <div class="cta">
       <div class="spacer"></div>
-      <button class="main-btn" id="installBtn">Preview setup</button>
+      <button class="main-btn" id="installBtn">Preview setup concept</button>
       <div class="side"><span class="fine">Interactive prototype</span></div>
     </div>
-    <p class="fine">Setup and model download are simulated. Chat and Agent use a live server only when connected; offline replies are labelled samples.</p>
+    <p class="fine">Interactive concept preview. It does not install software, download a model, create tools, or deploy agents.</p>
+
+    <div class="disclosures" aria-label="Demo disclosures">
+      <span class="disclosure"><strong>All demo data is synthetic</strong></span>
+      <span class="disclosure">Assumed device profile: <strong>Mac mini M6</strong> · not detected</span>
+      <span class="disclosure"><strong>Qwen 3.5 · 9B</strong> download animation is simulated</span>
+      <span class="disclosure">Gemini replies are labelled live only after a successful response</span>
+    </div>
 
     <div class="stats">
-      <div><small>Model</small><b id="tModel">qwen3.5:9b</b></div>
-      <div><small>Server</small><b id="tServer">Checking…</b></div>
-      <div><small>Modes</small><b>Chat and Agent</b></div>
+      <div><small id="tModelLabel">Illustrative model</small><b id="tModel">Qwen 3.5 · 9B</b></div>
+      <div><small>Reply source</small><b id="tServer">Sample replies</b></div>
+      <div><small>Explore</small><b>Chat · Agent concept</b></div>
     </div>
   </section>
 
   <section class="how" aria-label="How it works">
-    <div><h3>1. Preview setup</h3><p>Walk through the intended setup experience.</p></div>
-    <div><h3>2. Choose a model</h3><p>The model download animation is illustrative; it does not install a model.</p></div>
-    <div><h3>3. Start working</h3><p>Chat for quick answers, or switch to Agent for bigger tasks.</p></div>
+    <div><h3>1. Preview setup</h3><p>See a concept animation; nothing is installed.</p></div>
+    <div><h3>2. Choose a model</h3><p>The Qwen 3.5 · 9B download animation is illustrative only.</p></div>
+    <div><h3>3. Explore the interface</h3><p>Try labelled samples; each Gemini reply is labelled live only after a successful response.</p></div>
   </section>
 </div>
 
 <!-- INSTALLER -->
 <div id="installer" hidden>
-  <div class="win" role="region" aria-label="Setup">
-    <div class="winbar"><i></i><i></i><i></i><span>&nbsp;Setup simulation — no files are installed</span></div>
+  <div class="win" role="region" aria-label="Setup concept simulation">
+    <div class="winbar"><i></i><i></i><i></i><span>&nbsp;Concept simulation — nothing is installed or downloaded</span></div>
     <div id="term" aria-live="polite"></div>
-    <div class="launch"><button id="launchBtn" hidden>Open EZAgent</button></div>
+    <div class="launch"><button id="launchBtn" hidden>Open interface preview</button></div>
   </div>
 </div>
 
@@ -174,46 +198,55 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
   <div id="log"><div class="col" id="col"></div></div>
   <form id="form" autocomplete="off">
     <div class="box">
-      <input id="inp" type="text" placeholder="Ask anything" aria-label="Message">
-      <button id="send" type="submit">Send</button>
+      <input id="inp" type="text" placeholder="Choose a synthetic prompt above" aria-label="Synthetic prompt preview" disabled>
+      <button id="send" type="submit" disabled>Send</button>
     </div>
   </form>
 </div>
 
 <dialog id="cfg">
-  <h3>Settings</h3>
-  <p>Where EZAgent sends requests.</p>
-  <label for="cApi">Server address</label><input id="cApi">
-  <label for="cModel">Model</label><input id="cModel">
-  <menu><button class="btn" id="cCancel" type="button">Cancel</button><button class="btn pri" id="cSave" type="button">Save</button></menu>
+  <h3>Connection status</h3>
+  <p>Live replies use the protected Gemini backend configured for this demo. Provider credentials stay server-side.</p>
+  <p id="cfgStatus" role="status">Checking connection…</p>
+  <menu><button class="btn" id="cCancel" type="button">Close</button><button class="btn pri" id="cCheck" type="button">Check again</button></menu>
 </dialog>
 
-<script>
+<script type="module">
+import { parseAgentResponse, parseChatResponse } from './live-response.mjs';
 /* ============ EDIT THESE ============ */
 const CONFIG = {
-  API_BASE: "",   // set only after a protected demo API is available
-  MODEL: "qwen3.5:9b"
+  API_BASE: "",   // same-origin protected server-side proxy; never put provider keys here
+  MODEL: "gemini-2.5-flash"
 };
 /* ===================================== */
 
 const $ = s => document.querySelector(s);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sleep = ms => new Promise(r => setTimeout(r, reduceMotion ? 0 : ms));
 let API = CONFIG.API_BASE, MODEL = CONFIG.MODEL;
-try { API = localStorage.getItem('api') || API; MODEL = localStorage.getItem('model') || MODEL; } catch(e){}
-let online = false, mode = 'chat', busy = false, history = [];
-$('#tModel').textContent = MODEL;
+let backendConfigured = false, lastResponseLive = false, mode = 'chat', busy = false, history = [], selectedFixtureId = null;
 
 /* server status */
 async function ping(){
-  if(!API){ online = false; paint(); return; }
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
-  try { const r = await fetch(API + '/api/tags', {signal: ctl.signal}); online = r.ok; } catch(e){ online = false; }
+  try {
+    const r = await fetch(API + '/api/status', {signal: ctl.signal});
+    const status = r.ok ? await r.json() : {};
+    backendConfigured = r.ok && status.configured === true;
+    if(!backendConfigured) lastResponseLive = false;
+    if(backendConfigured && typeof status.model === 'string') MODEL = status.model;
+  } catch(e){ backendConfigured = false; lastResponseLive = false; }
   clearTimeout(t); paint();
 }
 function paint(){
-  const txt = online ? 'Connected' : 'Offline';
-  ['l','a'].forEach(p => { $('#'+p+'Dot').className = 'dot ' + (online ? 'on' : 'off'); $('#'+p+'Status').textContent = txt; });
-  $('#tServer').textContent = online ? 'Online' : 'Offline';
+  const txt = lastResponseLive ? 'Last reply confirmed · Gemini' : backendConfigured ? 'Backend configured · connectivity not checked' : 'Sample mode · no Gemini backend';
+  ['l','a'].forEach(p => { $('#'+p+'Dot').className = 'dot' + (lastResponseLive ? ' on' : ''); $('#'+p+'Status').textContent = txt; });
+  $('#tServer').textContent = lastResponseLive ? 'Last reply confirmed · Gemini' : backendConfigured ? 'Backend configured · unverified' : 'Sample replies';
+  $('#tModel').textContent = lastResponseLive || backendConfigured ? MODEL : 'Qwen 3.5 · 9B (illustrative)';
+  $('#tModelLabel').textContent = lastResponseLive ? 'Model used for live reply' : backendConfigured ? 'Configured model · not yet verified' : 'Illustrative model';
+  $('#inp').disabled = true;
+  $('#inp').placeholder = 'Choose a synthetic prompt above';
+  $('#send').disabled = true;
 }
 ping(); setInterval(ping, 30000);
 
@@ -223,138 +256,158 @@ function line(html, cls){ const d = document.createElement('div'); if(cls) d.cla
 async function progress(row, step, ms){ for(let i = 0; i <= 100; i += step){ row.querySelector('i').style.width = i + '%'; row.querySelector('.pc').textContent = i + '%'; await sleep(ms); } }
 $('#installBtn').onclick = async () => {
   $('#landing').hidden = true; $('#installer').hidden = false; term.innerHTML = '';
-  line('SIMULATION — no install or download occurs', 'dim'); await sleep(700);
-  line('$ ezagent install [preview]'); await sleep(700);
-  line('Resolving package…', 'dim'); await sleep(600);
-  await progress(line('Downloading EZAgent <span class="bar"><i></i></span> <span class="pc">0%</span>'), 4, 45);
-  line('✔ Setup animation complete', 'ok'); await sleep(500);
-  line('$ ollama pull ' + MODEL); await sleep(600);
-  for(const l of ['pulling manifest','pulling model layer','pulling template','pulling params']){
+  line('CONCEPT SIMULATION — nothing is installed or downloaded', 'dim'); await sleep(700);
+  line('Previewing a possible guided start…'); await sleep(700);
+  line('Illustrative device profile: Mac mini M6 (assumed, not detected)', 'dim'); await sleep(600);
+  await progress(line('Setup animation <span class="bar"><i></i></span> <span class="pc">0%</span>'), 4, 45);
+  line('Setup animation shown — no files were installed', 'ok'); await sleep(500);
+  line('Qwen 3.5 · 9B model download animation'); await sleep(600);
+  for(const l of ['Model metadata · illustration','Model files · illustration','Template files · illustration','Model settings · illustration']){
     await progress(line(l + ' <span class="bar"><i></i></span> <span class="pc">0%</span>'), l === 'pulling model layer' ? 2 : 10, l === 'pulling model layer' ? 55 : 25);
   }
-  line('verifying sha256 digest', 'dim'); await sleep(600);
-  line('success', 'ok'); await sleep(400);
-  line('✔ Model download animation complete', 'ok'); await sleep(700);
-  line('All set. Click Open EZAgent to begin.', 'ok');
+  line('Illustrative progress only — no model was downloaded', 'dim'); await sleep(700);
+  line('Preview sequence ended. No setup or model download occurred.', 'ok');
   $('#launchBtn').hidden = false; $('#launchBtn').focus();
 };
-$('#launchBtn').onclick = () => { $('#installer').hidden = true; $('#app').hidden = false; renderEmpty(); $('#inp').focus(); };
+$('#launchBtn').onclick = () => { $('#installer').hidden = true; $('#app').hidden = false; renderEmpty(); };
 
 /* app */
 const log = $('#log'), col = $('#col');
 const scroll = () => { log.scrollTop = log.scrollHeight; };
+function submitFixture(fixtureId, label){
+  if(busy) return;
+  selectedFixtureId = fixtureId;
+  $('#inp').value = label;
+  $('#form').requestSubmit();
+}
 function renderEmpty(){
   col.innerHTML = '';
   const agent = mode === 'agent';
   const e = document.createElement('div'); e.className = 'empty'; e.id = 'empty';
-  e.innerHTML = '<h3>' + (agent ? 'What should the agent do?' : 'How can I help?') + '</h3><p>' +
-    (agent ? 'Describe a task. EZAgent plans the steps, works through them, then gives you the result.' : 'Ask a question or start a conversation.') + '</p><div class="chips"></div>';
-  (agent ? ['Plan a 3-day study schedule for an exam','Compare two ways to cache API responses','Draft a launch checklist for a small app']
-         : ['Explain what a local LLM is in two sentences','Write a haiku about a quiet server','Give me 3 tips for a good demo']).forEach(s => {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = s;
-    b.onclick = () => { $('#inp').value = s; $('#form').requestSubmit(); };
+  if(!agent){
+    e.innerHTML = '<h3>How can I help?</h3><p>Use synthetic prompts only. A configured backend does not prove a reply ran; each Gemini reply is labelled live only after a successful response.</p><div class="chips"></div>';
+  } else {
+    e.innerHTML = '<h3>Choose how to shape the work</h3><p>Use synthetic text only. One-off drafts and reusable tools are different paths. Both are previews; no tools or agents are created here.</p><div class="choice-list"></div><div class="chips"></div>';
+    const choices = [
+      ['One-off task', 'Send the fixed synthetic workshop-order prompt.'],
+      ['Reusable tool concept', 'Preview a proposed team and reusable workflow.']
+    ];
+    choices.forEach(([title, description], i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'choice';
+      b.innerHTML = '<strong></strong><span></span>';
+      b.querySelector('strong').textContent = title; b.querySelector('span').textContent = description;
+      b.onclick = () => i === 0
+        ? submitFixture('synthetic_document_task', 'Review this synthetic workshop order. Outline the requested document and flag missing details for human review.')
+        : renderBuilder();
+      e.querySelector('.choice-list').appendChild(b);
+    });
+  }
+  const prompts = agent ? [] : [
+        {id:'study_schedule', label:'Make a 3-day study schedule for a synthetic exam.'},
+        {id:'cache_comparison', label:'Compare two ways to cache API responses.'},
+        {id:'launch_checklist', label:'Draft a launch checklist for a small app.'}
+      ];
+  prompts.forEach(({id, label}) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+    b.onclick = () => submitFixture(id, label);
     e.querySelector('.chips').appendChild(b);
   });
   col.appendChild(e);
 }
+function renderBuilder(){
+  col.innerHTML = '';
+  const panel = document.createElement('section'); panel.className = 'empty';
+  panel.innerHTML = '<span class="tag">Concept simulation · proposed structure</span><h3>Reusable workshop document tool</h3><p>This screen proposes a team shape for the synthetic workshop quote. It does not create, save, deploy, or run agents or tools.</p>';
+  const team = document.createElement('div'); team.className = 'team';
+  team.innerHTML = '<div class="team-node lead"><h4>General manager · proposed</h4><p>Coordinates the proposed workflow and sends drafts for human review.</p></div><div class="team-branches"><div class="team-node"><h4>Mini-manager · Research · proposed</h4><p>Organizes the synthetic source and research questions.</p><div class="team-workers">Worker 1 · Analysis · proposed field extraction and checks</div></div><div class="team-node"><h4>Mini-manager · Delivery · proposed</h4><p>Organizes the draft deliverable and review handoff.</p><div class="team-workers">Worker 2 · Document · proposed draft structure</div></div></div>';
+  const path = document.createElement('p'); path.className = 'screen-note';
+  path.textContent = 'Proposed simulation: synthetic workshop request → proposed research and delivery steps → human review. No tool is saved, and no business action is performed.';
+  const back = document.createElement('button'); back.className = 'quiet-btn'; back.textContent = 'Back to Agent choices'; back.onclick = renderEmpty;
+  const preview = document.createElement('button'); preview.className = 'quiet-btn'; preview.textContent = 'Preview sample workflow';
+  preview.onclick = () => { path.textContent = 'Simulated sample flow: proposed analysis → proposed document draft → human review. This preview does not execute or save a tool.'; };
+  panel.append(team, path, preview, back); col.appendChild(panel);
+  const documentLink = document.createElement('a'); documentLink.href = 'documents.html'; documentLink.className = 'quiet-btn'; documentLink.textContent = 'Open document concept';
+  fetch('documents.html', {method:'HEAD'}).then(r => { if(r.ok) panel.appendChild(documentLink); }).catch(() => {});
+}
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if(busy) return;
-  mode = b.dataset.mode; history = [];
+  mode = b.dataset.mode; history = []; selectedFixtureId = null; lastResponseLive = false; paint();
   document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
-  $('#inp').placeholder = mode === 'agent' ? 'Describe a task' : 'Ask anything';
+  $('#inp').placeholder = 'Choose a synthetic prompt above';
   renderEmpty();
 });
-$('#newChat').onclick = () => { if(!busy){ history = []; renderEmpty(); } };
+$('#newChat').onclick = () => { if(!busy){ history = []; selectedFixtureId = null; lastResponseLive = false; paint(); renderEmpty(); } };
 
 function bubble(cls, text){ const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text || ''; col.appendChild(d); scroll(); return d; }
 const clean = t => t.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trimStart();
-const mark = el => { const g = document.createElement('div'); g.className = 'tag'; g.textContent = 'Sample reply (server offline)'; el.prepend(g); };
+const mark = (el, label) => { const g = document.createElement('div'); g.className = 'tag'; g.textContent = label; el.prepend(g); };
 
-/* one model call: streams from Ollama, or falls back to a clearly tagged sample if the server is unreachable */
-async function ask(messages, onText, kind){
-  if(online){
+/* Live replies require a server-side Gemini proxy that passes /api/status. Otherwise this returns a labelled sample. */
+async function ask(fixtureId, onText, kind){
+  if(backendConfigured){
     try {
-      const r = await fetch(API + '/api/chat', {method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({model: MODEL, messages, stream: true, think: false})});
-      if(!r.ok || !r.body) throw new Error('bad response');
-      const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', full = '';
-      for(;;){
-        const {done, value} = await rd.read(); if(done) break;
-        buf += dec.decode(value, {stream:true});
-        const lines = buf.split('\n'); buf = lines.pop();
-        for(const l of lines){ if(!l.trim()) continue; try { const j = JSON.parse(l); if(j.message && j.message.content){ full += j.message.content; onText(clean(full)); } } catch(e){} }
-      }
-      return {text: clean(full), sample: false};
-    } catch(e){ online = false; paint(); }
+      const endpoint = kind === 'chat' ? '/api/chat' : '/api/agent-suggest';
+      const r = await fetch(API + endpoint, {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({fixtureId})});
+      let result = {};
+      try { result = await r.json(); } catch(e){}
+      if(!r.ok) throw new Error((result.error || 'Gemini backend request failed.') + ' No sample was substituted. Check the connection and try again.');
+      const parsed = kind === 'chat' ? parseChatResponse(result) : parseAgentResponse(result);
+      MODEL = parsed.model; lastResponseLive = true; paint();
+      const full = clean(parsed.text); onText(full);
+      return {text: full, sample: false};
+    } catch(e){ lastResponseLive = false; paint(); throw e; }
   }
   const canned = {
-    plan: '1. Clarify what the task needs\n2. Gather the key points\n3. Draft the result',
-    step: 'Done. (Sample output: the server is offline, so the model did not run this step.)',
-    chat: 'The server is offline right now, so this is a sample reply. When it is online, answers are generated live by ' + MODEL + '.'
+    agent: 'Sample draft: organize the stated workshop request, flag missing document details, and prepare an outline for human review. No agent or tool ran.',
+    chat: 'This is a labelled sample reply. Choose one of the synthetic prompts for a live Gemini suggestion.'
   }[kind || 'chat'];
+  if(typeof canned !== 'string') throw new Error('No sample is available for this request.');
   let out = ''; for(const ch of canned){ out += ch; onText(out); await sleep(10); }
   return {text: canned, sample: true};
 }
 
-async function runChat(q){
+async function runChat(q, fixtureId){
   history.push({role:'user', content:q});
   const el = bubble('a', '…');
-  const res = await ask([{role:'system', content:'You are a helpful, concise assistant.'}, ...history], t => { el.textContent = t; scroll(); }, 'chat');
-  if(res.sample) mark(el);
+  const res = await ask(fixtureId, t => { el.textContent = t; scroll(); }, 'chat');
+  mark(el, res.sample ? 'Sample reply · synthetic example' : 'Live reply · Gemini backend');
   history.push({role:'assistant', content: res.text});
 }
 
-async function runAgent(task){
+async function runAgent(task, fixtureId){
   const wrap = document.createElement('div'); wrap.className = 'steps'; col.appendChild(wrap);
-  const card = title => { const c = document.createElement('div'); c.className = 'step'; c.innerHTML = '<h4></h4><p>Working…</p>'; c.querySelector('h4').textContent = title; wrap.appendChild(c); scroll(); return c; };
-  const done = (c, t) => { c.classList.add('done'); c.querySelector('p').textContent = t; };
-
-  const pc = card('Planning');
-  const plan = await ask([{role:'system', content:'You are a planner. Break the task into 3 or 4 short numbered steps, one per line. Output only the steps.'}, {role:'user', content:task}], t => pc.querySelector('p').textContent = t, 'plan');
-  done(pc, plan.text);
-  let steps = plan.text.split('\n').map(l => l.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean).slice(0, 4);
-  if(!steps.length) steps = ['Work on the task'];
-
-  const results = [];
-  for(let i = 0; i < steps.length; i++){
-    const c = card('Step ' + (i + 1) + ': ' + steps[i]);
-    const r = await ask([
-      {role:'system', content:'You complete one step of a larger task. Answer in at most 3 sentences.'},
-      {role:'user', content:'Task: ' + task + '\nEarlier results:\n' + (results.join('\n') || 'none') + '\nNow do this step: ' + steps[i]}
-    ], t => c.querySelector('p').textContent = t, 'step');
-    done(c, r.text); results.push('- ' + steps[i] + ': ' + r.text);
-  }
-
-  const fc = card('Writing the final answer');
+  const card = title => { const c = document.createElement('div'); c.className = 'step'; c.innerHTML = '<h4></h4><p>Waiting for response…</p>'; c.querySelector('h4').textContent = title; wrap.appendChild(c); scroll(); return c; };
+  const fc = card('One-off task · draft only');
   const el = bubble('a', '…');
-  const fin = await ask([
-    {role:'system', content:'Write the final answer to the task using the step results. Be clear and well organized.'},
-    {role:'user', content:'Task: ' + task + '\nStep results:\n' + results.join('\n')}
-  ], t => { el.textContent = t; scroll(); }, 'chat');
-  done(fc, 'Done. Your result is below.');
-  if(fin.sample) mark(el);
+  const fin = await ask(fixtureId, t => { el.textContent = t; scroll(); }, 'agent');
+  fc.querySelector('p').textContent = 'Draft response only; no agents or external tools were executed.';
+  mark(el, fin.sample ? 'Sample draft · synthetic example' : 'Live draft · Gemini backend');
 }
 
 $('#form').onsubmit = async e => {
   e.preventDefault();
   const q = $('#inp').value.trim(); if(!q || busy) return;
+  if(!selectedFixtureId){ bubble('a', 'Only preset synthetic prompts can be sent. Your text was not sent.'); return; }
+  const fixtureId = selectedFixtureId; selectedFixtureId = null;
+  lastResponseLive = false; paint();
   $('#inp').value = ''; busy = true; $('#send').disabled = true;
   const em = $('#empty'); if(em) em.remove();
   bubble('u', q);
-  try { mode === 'agent' ? await runAgent(q) : await runChat(q); }
-  catch(err){ bubble('a', 'Something went wrong (' + err.message + '). Open Settings to check the server address, then try again.'); }
-  busy = false; $('#send').disabled = false; $('#inp').focus();
+  try { mode === 'agent' ? await runAgent(q, fixtureId) : await runChat(q, fixtureId); }
+  catch(err){
+    col.querySelectorAll('.msg.a').forEach(el => { if(el.textContent === '…') el.textContent = 'Request stopped. No reply was received.'; });
+    col.querySelectorAll('.step p').forEach(p => { if(p.textContent === 'Waiting for response…') p.textContent = 'Stopped: backend request failed. No sample was substituted.'; });
+    bubble('a', err.message || 'Backend request failed. No sample was substituted. Check the connection and try again.');
+  }
+  busy = false; $('#send').disabled = true;
 };
 
 /* settings */
 const dlg = $('#cfg');
-$('#cfgBtn').onclick = () => { $('#cApi').value = API; $('#cModel').value = MODEL; dlg.showModal(); };
+$('#cfgBtn').onclick = async () => { dlg.showModal(); $('#cfgStatus').textContent = 'Checking backend configuration…'; await ping(); $('#cfgStatus').textContent = backendConfigured ? 'Backend configured · connectivity is not checked by this status endpoint. Replies are verified per request.' : 'Backend not configured · sample mode'; };
 $('#cCancel').onclick = () => dlg.close();
-$('#cSave').onclick = () => {
-  API = $('#cApi').value.trim().replace(/\/$/, '') || API; MODEL = $('#cModel').value.trim() || MODEL;
-  try { localStorage.setItem('api', API); localStorage.setItem('model', MODEL); } catch(e){}
-  $('#tModel').textContent = MODEL; dlg.close(); ping();
-};
+$('#cCheck').onclick = async () => { $('#cfgStatus').textContent = 'Checking backend configuration…'; await ping(); $('#cfgStatus').textContent = backendConfigured ? 'Backend configured · connectivity is not checked by this status endpoint. Replies are verified per request.' : 'Backend not configured · sample mode'; };
 </script>
 </body>
 </html>
