@@ -26,6 +26,10 @@ The user supplies the missing fields, reviews the complete draft, and explicitly
 8. **Human usability:** five first-time nontechnical participants must complete the task. Record sample size, time to completion, completion rate, wrong clicks, requests for help, and false beliefs about AI or approval. This gate remains pending until sessions are run.
 9. **Clean install and offline:** test the declared target on a clean account/device; install, complete the task, relaunch, and repeat with network disconnected. This gate remains pending until the packaged app and required resources are available. It applies to the installed product, not this concept parser's offline behavior in a development server.
 
+## Separate local invoice workflow
+
+The local `/invoice-demo` Ollama planner and deterministic invoice Run are a separate product path from the quotation concept parser. The quotation acceptance gates above cannot be satisfied by an invoice plan, installed model, or invoice CSV. See the J-05 evidence row and runbook section for the exact local commit, synthetic goal, bounded model request, output and remaining recovery gaps.
+
 ## Evidence rule
 
 Use [judge-demo-evidence.md](judge-demo-evidence.md) for dated observations and run status, and [judge-demo-runbook.md](judge-demo-runbook.md) for the repeatable sequence. A test result applies only to the exact path and environment recorded. A Vercel prototype, invoice workflow, unit test, or installed model does not pass the quotation acceptance gates by implication.
