@@ -23,8 +23,12 @@ same-origin server-side proxy is expected at the Vercel project root:
 - `POST /api/agent-suggest` accepts only `fixtureId: "synthetic_document_task"`,
   which maps to the server-owned synthetic workshop quote fixture.
   The browser never sends free-form text to a live endpoint.
-- Successful suggestion responses use
-  `{"status":"live","source":"gemini","model":"…","reply":"…"}`.
+- Successful Chat responses use
+  `{"status":"live","source":"gemini","model":"…","answer":"…"}`.
+- Successful Agent responses use
+  `{"status":"live","source":"gemini","model":"…","roles":[…],"proposedSteps":[…],"missing":[…]}`.
+  The UI renders these as proposed roles/steps and human-review items; it does
+  not treat the proposal as executed work.
 - Errors return a non-2xx response and may include `{"status":"error","error":"…"}`.
   The UI shows the error and never substitutes a sample for a failed live request.
 - `/api/document-suggest` accepts the server-owned `workshop_quote` fixture.
@@ -36,6 +40,8 @@ No raw Ollama URL or model override is exposed in the public Settings dialog.
 The Gemini route implementation is maintained separately from this static page.
 
 The agent team shape and role names are recorded in [agent-team-spec.md](./agent-team-spec.md).
+Run `node --test tests/demo/live-response.test.mjs` to check the Chat and Agent
+success-response contracts and their live-state validation.
 
 Deploy this folder as a separate Vercel project with Root Directory `demo` and
 Production Branch `main`. Do not put API keys in `index.html` or expose a raw
