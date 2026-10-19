@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f1e9">
+  <title>Document studio · EZAgent</title>
+  <link rel="stylesheet" href="documents.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="EZAgent demo home"><span class="brand-mark" aria-hidden="true">E</span><span>EZAgent <span class="brand-divider">/</span> Studio</span></a>
+    <div class="topbar-right"><span class="demo-chip"><span class="status-dot" aria-hidden="true"></span>Synthetic demo</span><a class="home-link" href="index.html">Back to home</a></div>
+  </header>
+
+  <main class="page-shell">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">DOCUMENT STUDIO <span>·</span> 01 / 03</p>
+        <h1 id="page-title">From a vague request<br><em>to a reviewed document.</em></h1>
+        <p class="intro-copy">Shape a quotation or receipt from a fixed synthetic example. Suggestions stay separate until you apply and confirm them.</p>
+      </div>
+      <div class="run-card" aria-live="polite">
+        <span class="run-label">CALCULATION RERUNS</span>
+        <strong id="run-count">00</strong>
+        <span id="run-note">Inputs required · no total</span>
+      </div>
+    </section>
+
+    <div class="safety-note" role="note"><span class="note-icon" aria-hidden="true">i</span><p><strong>Sample only.</strong> Enter fictional values only; do not enter customer or payment information. Edits stay in this browser. The Gemini suggestion request sends only the allowlisted fixture ID. This page never issues or sends a document, assigns a real number, or requests payment.</p></div>
+
+    <nav class="type-switch" aria-label="Document type">
+      <button type="button" data-type="quotation" aria-pressed="true"><span class="switch-index">01</span><span><strong>Quotation</strong><small>Offer · review before print</small></span></button>
+      <button type="button" data-type="receipt" aria-pressed="false"><span class="switch-index">02</span><span><strong>Receipt</strong><small>Record · sample only</small></span></button>
+    </nav>
+
+    <div class="workspace">
+      <div class="editor-column">
+        <section class="panel request-panel" aria-labelledby="request-title">
+          <div class="section-heading"><div><span class="step-kicker">STEP 01 <span>·</span> UNDERSTAND</span><h2 id="request-title">The synthetic batch</h2></div><span class="local-tag">Fixed sample</span></div>
+          <label class="sr-only" for="request-text">Synthetic batch source text</label>
+          <textarea id="request-text" rows="7" readonly>Synthetic batch (fixed examples):
+Order W-01: Create a quote for two workshop days next month. Buyer, exact date, unit price, currency, and tax are missing.
+Order W-02: Request one workshop materials pack. Buyer and price are missing. Context only; not included in this draft.
+Receipt R-01: Sample payment record has no payment proof. Context only; do not issue a receipt.
+Selected for this draft: Order W-01 only.</textarea>
+          <div class="request-foot"><span class="tiny-mark" aria-hidden="true">✳</span><span>Only W-01 enters this quotation. W-02 and R-01 remain context; no batch processing is claimed. Missing price, date and identity require a person.</span></div>
+        </section>
+
+        <section class="panel suggestion-panel" aria-labelledby="suggestion-title">
+          <div class="section-heading"><div><span class="step-kicker">STEP 02 <span>·</span> PROPOSE</span><h2 id="suggestion-title">AI suggestion box</h2></div><span class="ai-pill"><span aria-hidden="true">✳</span> Gemini · optional</span></div>
+          <p class="panel-copy">Ask the server-side suggestion endpoint for draft field ideas. Nothing enters the document until you apply it.</p>
+          <button type="button" id="suggest-button" class="outline-button"><span aria-hidden="true">✳</span> Suggest fields</button>
+          <div id="suggestion-status" class="suggestion-status" role="status" aria-live="polite">Gemini status has not been checked. This sample remains usable without AI.</div>
+          <div id="suggestion-result" class="proposal-list" hidden></div>
+        </section>
+
+        <section class="panel draft-panel" aria-labelledby="draft-title">
+          <div class="section-heading draft-heading"><div><span class="step-kicker">STEP 03 <span>·</span> CONFIRM</span><h2 id="draft-title">Editable draft</h2></div><div class="draft-actions"><button type="button" id="blank-button" class="text-button">Start blank</button><button type="button" id="rerun-button" class="text-button"><span aria-hidden="true">↻</span> Rerun calculation</button></div></div>
+          <p class="panel-copy">Every required value has a separate confirmation state. Editing a confirmed value clears its confirmation. Price, currency, tax and dates are never inferred.</p>
+
+          <div class="form-grid">
+            <div class="field" data-field-wrap="sellerName"><label for="sellerName">Prepared by</label><input id="sellerName" data-field="sellerName" autocomplete="off"><div class="field-foot"><span class="field-source">Synthetic sample</span><button type="button" class="confirm-field" data-confirm="sellerName">Confirm</button></div></div>
+            <div class="field" data-field-wrap="buyer"><label id="buyer-label" for="buyer">Buyer</label><input id="buyer" data-field="buyer" autocomplete="off"><div class="field-foot"><span class="field-source">Synthetic sample</span><button type="button" class="confirm-field" data-confirm="buyer">Confirm</button></div></div>
+            <div class="field" data-field-wrap="date"><label id="date-label" for="date">Valid until</label><input id="date" data-field="date" type="date"><div class="field-foot"><span class="field-source">Synthetic sample</span><button type="button" class="confirm-field" data-confirm="date">Confirm</button></div></div>
+            <div class="field" data-field-wrap="currency"><label for="currency">Currency</label><select id="currency" data-field="currency"><option value="">Select currency</option><option value="USD">USD · US dollar</option><option value="HKD">HKD · Hong Kong dollar</option><option value="EUR">EUR · Euro</option><option value="GBP">GBP · Pound sterling</option></select><div class="field-foot"><span class="field-source">Not provided</span><button type="button" class="confirm-field" data-confirm="currency">Confirm</button></div></div>
+            <div class="field field-wide" data-field-wrap="description"><label for="description">Line item</label><input id="description" data-field="description" autocomplete="off"><div class="field-foot"><span class="field-source">Synthetic sample</span><button type="button" class="confirm-field" data-confirm="description">Confirm</button></div></div>
+            <div class="field" data-field-wrap="quantity"><label for="quantity">Quantity <span class="label-note">whole units</span></label><input id="quantity" data-field="quantity" inputmode="numeric" autocomplete="off"><div class="field-foot"><span class="field-source">Not provided</span><button type="button" class="confirm-field" data-confirm="quantity">Confirm</button></div></div>
+            <div class="field" data-field-wrap="unitPrice"><label for="unitPrice">Unit price</label><div class="money-input"><span id="currency-symbol">¤</span><input id="unitPrice" data-field="unitPrice" inputmode="decimal" autocomplete="off" aria-label="Unit price in selected currency"></div><div class="field-foot"><span class="field-source">Not provided</span><button type="button" class="confirm-field" data-confirm="unitPrice">Confirm</button></div></div>
+            <div class="field" data-field-wrap="taxMode"><label for="taxMode">Tax treatment</label><select id="taxMode" data-field="taxMode"><option value="">Select treatment</option><option value="none">No tax</option><option value="rate">Add a tax rate</option></select><div class="field-foot"><span class="field-source">Not provided</span><button type="button" class="confirm-field" data-confirm="taxMode">Confirm</button></div></div>
+            <div class="field" id="tax-rate-field" data-field-wrap="taxRate" hidden><label for="taxRate">Tax rate <span class="label-note">0–100%</span></label><input id="taxRate" data-field="taxRate" inputmode="decimal" autocomplete="off" placeholder="0.00"><div class="field-foot"><span class="field-source">Not provided</span><button type="button" class="confirm-field" data-confirm="taxRate">Confirm</button></div></div>
+          </div>
+          <div id="receipt-proof-note" class="receipt-proof-note" role="note" hidden>Receipt review is blocked in this synthetic demo because no payment evidence is provided. The receipt stays a draft preview.</div>
+          <div class="confirmation-row"><button id="confirm-all" type="button" class="primary-button">Confirm all fields</button><span>Use after reviewing the values above.</span></div>
+          <div id="missing-fields" class="missing-box" role="alert" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <aside class="preview-column" aria-labelledby="preview-title">
+        <section class="preview-panel">
+          <div class="preview-heading"><div><span class="step-kicker">STEP 04 <span>·</span> REVIEW</span><h2 id="preview-title">Live preview</h2></div><span id="preview-status" class="review-state">REVIEW PENDING</span></div>
+          <article id="document-preview" class="paper" aria-label="Synthetic document preview">
+            <div class="paper-top"><span class="paper-brand">SAMPLE STUDIO</span><span class="sample-stamp">SAMPLE</span></div>
+            <div class="paper-title-row"><div><span id="paper-overline" class="paper-overline">SYNTHETIC QUOTATION</span><h3 id="paper-title">Quotation</h3></div><span class="paper-number">DRAFT<br><b>NO NUMBER</b></span></div>
+            <div class="paper-parties"><div><span id="paper-from-label">PREPARED BY</span><strong id="paper-from">Sample Studio</strong></div><div><span id="paper-to-label">PREPARED FOR</span><strong id="paper-to">Workshop Team</strong></div></div>
+            <div class="paper-date"><span id="paper-date-label">VALID UNTIL</span><strong id="paper-date">2026-11-15</strong><span class="currency-tag" id="paper-currency">USD</span></div>
+            <div class="line-head"><span>DESCRIPTION</span><span>AMOUNT</span></div>
+            <div class="line-item"><div><strong id="paper-description">Half-day workshop</strong><span>Qty <b id="paper-quantity">2</b> <span class="multiply">×</span> <span id="paper-unit-price">$425.00</span></span></div><strong id="paper-subtotal">$850.00</strong></div>
+            <div class="totals"><div><span>Subtotal</span><b id="subtotal">$850.00</b></div><div><span>Tax</span><b id="tax">$0.00</b></div><div class="total-line"><span>Total</span><b id="total">$850.00</b></div></div>
+            <div id="receipt-disclaimer" class="receipt-disclaimer" hidden>Fictional example only · not proof of payment</div>
+            <div class="paper-footer"><span>Draft only · No payment requested</span><span>Page 01</span></div>
+          </article>
+          <div class="preview-actions"><button id="print-button" type="button" class="primary-button" disabled><span aria-hidden="true">↗</span> Print / Save as PDF</button><p id="print-note">Confirm all required fields before printing this SAMPLE.</p></div>
+        </section>
+
+        <section class="calc-note" aria-label="Calculation method"><span class="calc-mark" aria-hidden="true">∑</span><div><strong>Deterministic totals</strong><p>Amounts use integer cents. Tax is rounded to the nearest cent. Rerunning the sample preserves the same values and total.</p></div></section>
+      </aside>
+    </div>
+    <footer class="page-footer"><span>EZAgent <span>·</span> document workflow concept</span><span>Example values only · Not an issued document</span></footer>
+  </main>
+  <article id="print-document" class="print-only" aria-hidden="true"></article>
+  <script src="documents.js" defer></script>
+</body>
+</html>
