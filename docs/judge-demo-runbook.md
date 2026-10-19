@@ -36,6 +36,12 @@ The observed run at this commit returned HTTP 200 for one plan request; the UI s
 
 The successful run used one model-backed plan request and one deterministic Run request. Model-call internals were not instrumented. Do not infer inference from the installed model list alone. Do not reuse these results as evidence for the quotation parser, the public Vercel page, a clean install, or fully disconnected operation.
 
+### Controlled Run-failure replay (J-05)
+
+This isolated service replay used existing `tests/agent/run-service.test.ts` plus a temporary store and a fixed Planner stub; it made no Ollama call and wrote no project data. The existing suite passed all 7 tests. For a bounded failure, use one valid synthetic invoice row with an HKD amount below the approved threshold; let the filter enter `needs_input`, then submit corrections that keep the threshold above the row amount until the configured three-attempt limit is reached. The observed terminal state was `failed` at task `filter`, with a `run_failed` event (`no_matching_invoice_rows`), the original source preserved, and zero artifacts. A resume request against that failed Run was rejected as `run_not_resumable`. Create a new Run with a corrected threshold to recover; the synthetic one-row replay completed and the artifact cited `synthetic-failure.csv`, row 2.
+
+The UI component renders the failure event/task evidence in a `role=alert` notice and directs the user to inspect the source/conditions and create a new plan. This mapping was confirmed by code inspection only; no browser session verified visible placement or accessibility. Failed Runs do not expose artifact row references because no artifact is committed; source attribution was checked on the successful replacement Run. Same-page UI recovery and an unedited recording remain pending.
+
 ## Five-person usability protocol and results template (J-08)
 
 Status: **not run**. Recruit five first-time, nontechnical participants. Use only the synthetic quotation fixture above; do not collect names, contacts, or other personal data. Run sessions one at a time on the same reviewed build. Give each participant only this task: “Create a quote for two workshop days next month.” Do not explain navigation or field order. Record wrong turns and every moderator prompt; a moderator may repeat the task but must not coach the interface.
