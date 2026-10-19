@@ -3,9 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'EZAgent | Offline AI Workspace',
-  description: 'A clean offline workspace for local AI agents and workflows.',
-  generator: 'v0.app',
+  title: 'EZAgent | Hackathon Web Preview',
+  description: 'Explore a fictional workshop workflow in the EZAgent hackathon web preview.',
   icons: {
     icon: [
       {

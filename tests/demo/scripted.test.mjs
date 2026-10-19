@@ -34,8 +34,9 @@ test('former provider routes never invoke a provider even when a key exists', as
 test('visible demo scripts use fixed responses and never request model endpoints', async () => {
   const home = await readFile(new URL('../../demo/index.html', import.meta.url), 'utf8')
   const studio = await readFile(new URL('../../demo/documents.js', import.meta.url), 'utf8')
-  assert.match(home, /Open actual product web preview · coming soon/)
-  assert.match(home, /This website does not contact that Mac mini/)
+  assert.match(home, /This demo website simulates the process/)
+  assert.match(home, /href="https:\/\/ezagent-product-web-preview\.vercel\.app\/"/)
+  assert.match(home, /is not connected to either public website/)
   assert.match(home, /Pre-scripted reply · fictional example/)
   assert.match(studio, /description: 'workshop days', quantity: 2/)
   assert.doesNotMatch(home, /fetch\(/)

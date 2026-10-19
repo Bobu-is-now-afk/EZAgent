@@ -1,71 +1,149 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  ArrowLeft,
-  ArrowUp,
-  Bot,
-  Check,
-  FilePlus2,
-  FolderKanban,
-  Grid2X2,
-  MessageCircle,
-  Paperclip,
-  Play,
-  Plus,
-  Sparkles,
-  Wrench,
+  ArrowDownRight, ArrowRight, Bot, Check, CircleHelp, ClipboardCheck,
+  FileText, Layers3, Library, MessageSquareText, Plus, RotateCcw, Send,
+  ShieldCheck, Sparkles, Trash2, WandSparkles,
 } from 'lucide-react'
+import InkVoiceExample from './inkvoice-example'
+import AccountingExample from './accounting-example'
 
-type ActiveView = 'home' | 'normal-llm' | 'main-stage' | 'custom-tools' | 'preset-library'
+type View = 'overview' | 'chat' | 'builder' | 'library' | 'inkvoice' | 'accounting'
+type ChatMessage = { id: number; role: 'user' | 'assistant'; text: string; scripted?: boolean }
+type SavedTool = { id: number; name: string; goal: string; pills: string[] }
 
-const modules = [
-  { title: 'Normal LLM', description: 'Standard offline chat environment for general Q&A and writing.', icon: MessageCircle, view: 'normal-llm' as ActiveView },
-  { title: 'Build Something (Main Stage)', description: 'Orchestrate custom AI agents and local workflows using natural language.', icon: Sparkles, view: 'main-stage' as ActiveView, featured: true },
-  { title: '自訂工具庫', description: 'Your saved custom agents and automated tools.', icon: FolderKanban, view: 'custom-tools' as ActiveView },
-  { title: 'Preset Library', description: 'Pre-built offline workflows for repetitive work.', icon: Grid2X2, view: 'preset-library' as ActiveView },
+const examples = [
+  {
+    title: 'Find the quote source',
+    prompt: 'Which sample record can be used to prepare a quotation?',
+    answer: 'Order W-01 is the selected source. It requests a quotation for two workshop days next month. Order W-02 and Receipt R-01 are context only. The buyer, exact date, unit price, currency, and tax still need a person to enter and confirm them.',
+  },
+  {
+    title: 'Check missing details',
+    prompt: 'What is missing before the W-01 quotation can be confirmed?',
+    answer: 'The W-01 request does not provide the seller, buyer, exact service date, unit price, currency, or tax rate. The draft should stay unconfirmed until a person supplies and checks these fields.',
+  },
+  {
+    title: 'Review the receipt',
+    prompt: 'Can Receipt R-01 be treated as payment proof?',
+    answer: 'No. Receipt R-01 is a fictional context record with no payment evidence. This preview does not issue a receipt or confirm payment.',
+  },
+] as const
+
+const pillOptions = ['Select source', 'Flag missing fields', 'Calculate totals', 'Require human review']
+const navItems: { id: View; label: string; icon: typeof Bot }[] = [
+  { id: 'overview', label: 'Overview', icon: Layers3 },
+  { id: 'chat', label: 'Chat', icon: MessageSquareText },
+  { id: 'builder', label: 'Agent Builder', icon: WandSparkles },
+  { id: 'library', label: 'Tool Library', icon: Library },
 ]
 
-function Header({ onBack, subView }: { onBack: () => void; subView: boolean }) {
-  return (
-    <header className="flex h-[76px] shrink-0 items-center justify-between border-b border-zinc-200/80 bg-white px-6 sm:px-10">
-      <div className="flex items-center gap-3">
-        {subView && <button onClick={onBack} className="mr-2 flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"><ArrowLeft className="size-4" /> Back to Workspace</button>}
-        <div className="flex size-9 items-center justify-center rounded-[10px] bg-zinc-950 text-white shadow-sm"><Bot aria-hidden="true" className="size-[19px]" strokeWidth={2.1} /></div>
-        <span className="text-[17px] font-semibold tracking-[-0.02em]">EZAgent</span>
-      </div>
-      <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700"><span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500" />100% Offline Engine Active</div>
-    </header>
-  )
-}
-
-function NormalLlm() {
-  const [prompt, setPrompt] = useState('')
-  const [sent, setSent] = useState(false)
-  return <section className="mx-auto flex h-[calc(100vh-76px)] w-full max-w-4xl flex-col px-6 py-10">
-    <div className="mb-8"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Normal LLM</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">Offline chat</h1></div>
-    <div className="flex flex-1 flex-col items-center justify-center overflow-auto rounded-2xl border border-zinc-200 bg-zinc-50/40 p-8">
-      <div className="flex size-12 items-center justify-center rounded-2xl bg-zinc-950 text-white"><MessageCircle className="size-5" /></div>
-      <p className="mt-5 text-center text-lg font-medium text-zinc-900">{sent ? 'Message queued for the offline assistant.' : 'Offline Assistant Ready. How can I help you today?'}</p>
-      {!sent && <p className="mt-2 text-sm text-zinc-500">Ask a question or start drafting something new.</p>}
-    </div>
-    <div className="mt-5 flex items-center gap-3 rounded-2xl border border-zinc-300 bg-white p-2 shadow-[0_8px_30px_-20px_rgba(24,24,27,0.35)]"><button aria-label="Attach a file" className="flex size-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"><Paperclip className="size-[18px]" /></button><input aria-label="Message" value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { setSent(true); setPrompt('') } }} placeholder="Message your offline assistant..." className="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-zinc-400" /><button aria-label="Send message" onClick={() => { setSent(true); setPrompt('') }} className="flex size-10 items-center justify-center rounded-xl bg-zinc-950 text-white transition hover:bg-zinc-700"><ArrowUp className="size-[18px]" /></button></div>
-  </section>
-}
-
-function MainStage() {
-  const [prompt, setPrompt] = useState('You are a precise local operations assistant. Read the provided documents, apply the selected rules, and return a concise result.')
-  const [ran, setRan] = useState(false)
-  const pills = ['Read Local PDF', 'Filter > $10,000', 'Export to Excel']
-  return <section className="mx-auto flex h-[calc(100vh-76px)] w-full max-w-[1240px] flex-col px-6 py-8 sm:px-10"><div className="mb-7 flex items-end justify-between"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Main Stage</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">Build something</h1></div><span className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500">Draft workflow</span></div><div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[1.05fr_0.95fr]"><div className="flex min-h-0 flex-col rounded-2xl border border-zinc-200 bg-white p-5"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold">Natural Language Logic Canvas</h2><p className="mt-1 text-xs text-zinc-500">Describe how your agent should behave.</p></div><button aria-label="Add logic step" className="rounded-lg border border-zinc-200 p-2 text-zinc-500 hover:bg-zinc-50"><Plus className="size-4" /></button></div><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} aria-label="System prompt" className="mt-5 min-h-40 resize-none rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 text-sm leading-6 text-zinc-700 outline-none focus:border-zinc-400" /><div className="mt-5"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">Logic pills</p><div className="mt-3 flex flex-wrap gap-2">{pills.map((pill) => <button key={pill} onClick={() => setPrompt((value) => `${value} ${pill}.`)} className="rounded-full border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition hover:border-zinc-950 hover:bg-zinc-950 hover:text-white">[ {pill} ]</button>)}</div></div></div><div className="flex min-h-0 flex-col rounded-2xl border border-zinc-200 bg-zinc-50/50 p-5"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold">Agent Preview / Test Harness</h2><p className="mt-1 text-xs text-zinc-500">Run your workflow against local files.</p></div><button onClick={() => setRan(true)} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-zinc-700"><Play className="size-3.5 fill-current" /> Run Agent</button></div><div className="mt-5 flex flex-1 flex-col rounded-xl border border-dashed border-zinc-300 bg-white p-4 font-mono text-xs text-zinc-400"><div className="flex items-center gap-2 border-b border-zinc-100 pb-3 font-sans text-xs text-zinc-500"><span className="size-2 rounded-full bg-zinc-300" /> output console</div>{ran ? <div className="mt-4 space-y-2 text-zinc-600"><p><span className="text-emerald-600">✓</span> Agent completed successfully.</p><p>3 local documents processed.</p><p>Ready to export results.</p></div> : <p className="mt-4">Your agent output will appear here.</p>}</div></div></div></section>
-}
-
-function CustomTools({ onBuild }: { onBuild: () => void }) { return <section className="mx-auto flex h-[calc(100vh-76px)] max-w-4xl flex-col items-center justify-center px-6 text-center"><div className="flex size-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-600"><Wrench className="size-6" /></div><h1 className="mt-6 text-2xl font-semibold tracking-[-0.04em]">自訂工具庫</h1><p className="mt-3 text-sm text-zinc-500">You haven&apos;t built anything yet, go build some.</p><button onClick={onBuild} className="mt-7 rounded-lg bg-zinc-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-zinc-700">Build Something</button></section> }
-
-function Presets() { const presets = [['Easy Invoice Generator', 'Extract and compile local PDF invoices automatically.'], ['Easy Income Statement Recorder', 'Log income receipts offline directly into Excel ledgers.']] as const; return <section className="mx-auto w-full max-w-5xl px-6 py-12 sm:px-10"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Preset Library</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">Official Preset Workflows</h1><div className="mt-9 grid gap-4 sm:grid-cols-2">{presets.map(([title, description]) => <article key={title} className="rounded-2xl border border-zinc-200 p-6"><div className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700"><FilePlus2 className="size-5" /></div><h2 className="mt-6 text-base font-semibold">{title}</h2><p className="mt-2 min-h-10 text-sm leading-5 text-zinc-500">{description}</p><button className="mt-6 flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2.5 text-xs font-semibold text-zinc-800 transition hover:border-zinc-950 hover:bg-zinc-950 hover:text-white">Launch Workflow <ArrowUp className="size-3.5 rotate-45" /></button></article>)}</div></section> }
-
 export default function Page() {
-  const [activeView, setActiveView] = useState<ActiveView>('home')
-  const subView = activeView !== 'home'
-  return <main className="min-h-screen bg-white text-zinc-950"><Header subView={subView} onBack={() => setActiveView('home')} />{activeView === 'home' && <section className="mx-auto flex max-w-[880px] flex-col items-center px-6 pb-20 pt-[clamp(5.5rem,14vh,9rem)]"><div className="text-center"><p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Workspace</p><h1 className="text-balance text-[clamp(2rem,4vw,2.75rem)] font-semibold tracking-[-0.045em]">What would you like to do today?</h1><p className="mt-3 text-[15px] text-zinc-500">Select a module to begin.</p></div><div className="mt-12 grid w-full grid-cols-1 gap-4 sm:grid-cols-2">{modules.map((module) => { const Icon = module.icon; return <button key={module.title} onClick={() => setActiveView(module.view)} className={`group relative flex min-h-[224px] flex-col rounded-xl border bg-white p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_10px_30px_-18px_rgba(24,24,27,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 ${module.featured ? 'border-zinc-400 ring-1 ring-zinc-200' : 'border-zinc-200'}`}><div className="flex items-start justify-between"><div className={`flex size-10 items-center justify-center rounded-lg ${module.featured ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'} transition-colors group-hover:bg-zinc-950 group-hover:text-white`}><Icon aria-hidden="true" className="size-[19px]" strokeWidth={1.8} /></div>{module.featured && <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Featured</span>}</div><h2 className="mt-7 text-[17px] font-semibold tracking-[-0.025em] text-zinc-900">{module.title}</h2><p className="mt-2 max-w-[330px] text-[13px] leading-5 text-zinc-500">{module.description}</p>{module.view === 'custom-tools' && <div className="mt-auto flex items-center gap-2 pt-5 text-[11px] font-medium text-zinc-400"><Wrench className="size-3.5" />Nothing in here yet. Click to build something.</div>}</button> })}</div></section>}{activeView === 'normal-llm' && <NormalLlm />}{activeView === 'main-stage' && <MainStage />}{activeView === 'custom-tools' && <CustomTools onBuild={() => setActiveView('main-stage')} />}{activeView === 'preset-library' && <Presets />}</main>
+  const [view, setView] = useState<View>('overview')
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [chatText, setChatText] = useState('')
+  const [chatBusy, setChatBusy] = useState(false)
+  const chatTimer = useRef<number | null>(null)
+  const chatRequest = useRef(0)
+  const [goal, setGoal] = useState('Prepare a reviewable quotation from sample Order W-01')
+  const [toolName, setToolName] = useState('Workshop quotation assistant')
+  const [pills, setPills] = useState<string[]>(['Select source', 'Flag missing fields', 'Require human review'])
+  const [planVisible, setPlanVisible] = useState(false)
+  const [runVisible, setRunVisible] = useState(false)
+  const [savedTools, setSavedTools] = useState<SavedTool[]>([])
+  const [editingToolId, setEditingToolId] = useState<number | null>(null)
+  useEffect(() => () => { if (chatTimer.current) clearTimeout(chatTimer.current) }, [])
+
+  function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+
+  function sendChat(prompt = chatText) {
+    const trimmed = prompt.trim()
+    if (!trimmed || chatBusy) return
+    setChatText('')
+    const match = examples.find((item) => item.prompt.toLowerCase() === trimmed.toLowerCase())
+    const id = Date.now()
+    setMessages((current) => [...current, { id, role: 'user', text: trimmed }])
+    setChatBusy(true)
+    const request = ++chatRequest.current
+    chatTimer.current = window.setTimeout(() => {
+      if (request !== chatRequest.current) return
+      chatTimer.current = null
+      setMessages((current) => [...current, {
+        id: id + 1, role: 'assistant', scripted: true,
+        text: match ? match.answer : 'This public preview has scripted answers for the three sample prompts above. Your text was not sent to a model. Choose a sample prompt to explore the workflow.',
+      }])
+      setChatBusy(false)
+    }, 600)
+  }
+
+  function clearChat() {
+    chatRequest.current += 1
+    if (chatTimer.current) clearTimeout(chatTimer.current)
+    chatTimer.current = null
+    setMessages([])
+    setChatBusy(false)
+  }
+  function togglePill(pill: string) { setPills((current) => current.includes(pill) ? current.filter((item) => item !== pill) : [...current, pill]) }
+  function saveTool() {
+    const name = toolName.trim()
+    if (!name || !goal.trim() || pills.length === 0) return
+    if (editingToolId !== null) {
+      setSavedTools((current) => current.map((tool) => tool.id === editingToolId ? { ...tool, name, goal: goal.trim(), pills: [...pills] } : tool))
+    } else {
+      setSavedTools((current) => [...current, { id: Date.now(), name, goal: goal.trim(), pills: [...pills] }])
+    }
+    setEditingToolId(null)
+    navigate('library')
+  }
+  function openTool(tool: SavedTool) { setEditingToolId(tool.id); setToolName(tool.name); setGoal(tool.goal); setPills(tool.pills); setPlanVisible(true); setRunVisible(false); navigate('builder') }
+  function createTool() { setEditingToolId(null); setToolName('Workshop quotation assistant'); setGoal('Prepare a reviewable quotation from sample Order W-01'); setPills(['Select source', 'Flag missing fields', 'Require human review']); setPlanVisible(false); setRunVisible(false); navigate('builder') }
+  return <div className="product-shell">
+    <header className="top-header">
+      <div className="header-left">
+        {view !== 'overview' && <button className="back-button" onClick={() => navigate('overview')}><ArrowRight size={16} /> Back to Workspace</button>}
+        <button className="brand" onClick={() => navigate('overview')} aria-label="EZAgent overview"><span className="brand-symbol"><Bot size={20} strokeWidth={2.1} /></span><strong>EZAgent</strong></button>
+      </div>
+      <div className="header-right"><span className="preview-pill"><span className="status-dot" /> EZAgent Product Web Preview</span></div>
+    </header>
+    {view !== 'overview' && <nav className="module-nav" aria-label="Workspace modules">{navItems.filter((item) => item.id !== 'overview').map(({ id, label }) => <button key={id} className={view === id || ((view === 'inkvoice' || view === 'accounting') && id === 'library') ? 'active' : ''} onClick={() => navigate(id)} aria-current={view === id || ((view === 'inkvoice' || view === 'accounting') && id === 'library') ? 'page' : undefined}>{label}</button>)}</nav>}
+    <main className="main-panel">
+      <div className={`content ${view === 'overview' ? 'home-wrap' : ''} ${view === 'inkvoice' ? 'iv-content' : ''}`}>
+        {view === 'overview' && <section className="home-content">
+          <div className="home-heading"><div className="eyebrow">EZAGENT PRODUCT WEB PREVIEW</div><h1>What would you like to do today?</h1><p>Explore the interactive web version of EZAgent. This Hackathon preview uses fictional records; AI chat replies and agent plans are scripted examples.</p></div>
+          <div className="feature-grid">{[
+            { step: '01', title: 'Chat', description: 'Explore scripted answers for a fictional workshop request.', icon: MessageSquareText, target: 'chat' as View },
+            { step: '02', title: 'Agent Builder', description: 'Shape a repeatable workflow with logic steps and a reviewable plan.', icon: Sparkles, target: 'builder' as View, featured: true },
+            { step: '03', title: 'Tool Library', description: 'Open InkVoice and the Accounting Statement Generator, or refine your saved tools.', icon: Library, target: 'library' as View },
+          ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Example tools are ready to explore. Your session tools appear here after you save one.</span>}</button>)}</div>
+          <div className="home-footer"><p><strong>Product Web Preview:</strong> the workspace and browser tools are interactive. AI replies are examples; this website does not connect to the Mac mini model, issue documents, or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open simulated judge demo <ArrowDownRight size={15} /></a></div>
+        </section>}
+
+        {view === 'chat' && <>
+          <PageHead number="01" label="CHAT" title="Understand the request" description="Ask about the fixed workshop records. Select a sample prompt to see a scripted answer, or enter your own text to see the preview boundary." />
+          <div className="work-grid chat-grid"><section className="panel chat-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon peach"><MessageSquareText size={18} /></span><div><strong>Workspace chat</strong><small>Scripted sample responses</small></div></div><button className="text-button" onClick={clearChat}><RotateCcw size={14} /> Clear</button></div><div className="messages" aria-live="polite">{messages.length === 0 ? <div className="empty-chat"><div className="empty-symbol"><Sparkles size={26} /></div><h3>Start with a sample question</h3><p>These answers are prewritten for the fictional workshop scenario. No model request is sent.</p></div> : messages.map((message) => <div key={message.id} className={`message ${message.role}`}><span className="message-role">{message.role === 'user' ? 'You' : 'EZAgent preview'} {message.scripted && <em>Scripted sample</em>}</span><p>{message.text}</p></div>)}{chatBusy && <div className="message assistant"><span className="message-role">EZAgent preview</span><p>Displaying sample response<span className="typing-dots">…</span></p></div>}</div><div className="chat-compose"><label htmlFor="chat-input" className="sr-only">Your message</label><input id="chat-input" value={chatText} onChange={(event) => setChatText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') sendChat() }} placeholder="Ask about the workshop records…" /><button aria-label="Send message" onClick={() => sendChat()} disabled={!chatText.trim() || chatBusy}><Send size={17} /></button></div></section><aside className="side-stack"><section className="panel side-panel"><span className="eyebrow">TRY A SAMPLE</span><h3>Suggested questions</h3><div className="sample-list">{examples.map((item) => <button key={item.prompt} onClick={() => sendChat(item.prompt)} disabled={chatBusy}><span><strong>{item.title}</strong><small>{item.prompt}</small></span><ArrowRight size={16} /></button>)}</div></section><section className="note-card"><CircleHelp size={19} /><div><strong>About this preview</strong><p>Live model replies are not available here yet. The sample prompts demonstrate intended behavior without claiming that an AI processed your input.</p></div></section></aside></div>
+          <NextStep onClick={() => navigate('builder')} label="Next: turn the request into a tool" />
+        </>}
+
+        {view === 'builder' && <>
+          <PageHead number="02" label="AGENT BUILDER" title="Make the work repeatable" description="Describe the goal, select the rules, and inspect a deterministic plan. Saved tools live only in this browser session." />
+          <div className="work-grid builder-grid"><section className="panel form-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon lilac"><WandSparkles size={18} /></span><div><strong>Tool definition</strong><small>Editable preview</small></div></div></div><div className="field"><label htmlFor="tool-name">Tool name</label><input id="tool-name" value={toolName} onChange={(event) => setToolName(event.target.value)} maxLength={70} /></div><div className="field"><label htmlFor="goal">What should this tool do?</label><textarea id="goal" rows={5} value={goal} onChange={(event) => { setGoal(event.target.value); setPlanVisible(false); setRunVisible(false) }} maxLength={500} /><small>For this preview, the sample run is limited to Order W-01.</small></div><div className="field"><label>Logic steps <span className="field-hint">Choose at least one</span></label><div className="pill-list">{pillOptions.map((pill) => <button key={pill} type="button" className={`logic-pill ${pills.includes(pill) ? 'selected' : ''}`} aria-pressed={pills.includes(pill)} onClick={() => { togglePill(pill); setPlanVisible(false); setRunVisible(false) }}>{pills.includes(pill) ? <Check size={14} /> : <Plus size={14} />}{pill}</button>)}</div></div><div className="form-actions"><button className="button button-dark" disabled={!goal.trim() || !toolName.trim() || pills.length === 0} onClick={() => { setPlanVisible(true); setRunVisible(false) }}>Preview plan <ArrowRight size={15} /></button><button className="button button-light" disabled={!planVisible} onClick={saveTool}>{editingToolId === null ? 'Save tool for this session' : 'Update this session tool'}</button></div></section><section className="panel plan-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon mint"><ClipboardCheck size={18} /></span><div><strong>Review plan</strong><small>Deterministic preview, no agents started</small></div></div></div>{!planVisible ? <div className="plan-empty"><Layers3 size={31} /><h3>Your plan appears here</h3><p>Adjust the goal and rules, then select Preview plan.</p></div> : <div className="plan-content"><div className="plan-summary"><span className="tiny-label">GOAL</span><strong>{goal}</strong></div><div className="plan-steps">{pills.map((pill, index) => <div key={`${pill}-${index}`} className="plan-step"><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{pill}</strong><small>{pill === 'Select source' ? 'Use W-01 only; W-02 and R-01 stay context.' : pill === 'Flag missing fields' ? 'Identify buyer, date, price, currency and tax as missing.' : pill === 'Calculate totals' ? 'Use entered values; do not infer a price.' : 'Keep the draft behind a human confirmation gate.'}</small></div></div>)}</div><div className="plan-run"><button className="button button-dark" onClick={() => setRunVisible(true)}>Preview fixed sample <ArrowRight size={15} /></button><small>Uses the on-page W-01 fixture only.</small></div>{runVisible && <div className="run-result"><span className="result-badge"><Check size={14} /> Fixed sample evaluated</span><p>{pills.map((pill) => pill === 'Select source' ? 'Selected source: W-01. W-02 and R-01 remain context only.' : pill === 'Flag missing fields' ? 'The sample is missing buyer, exact date, unit price, currency, tax, and seller identity.' : pill === 'Calculate totals' ? 'A total needs an entered price, currency, and tax rate in a document tool.' : 'A person must inspect and confirm the draft before copying it.').join(' ')} No file, agent, or model was run.</p><button className="text-button" onClick={() => navigate('library')}>Browse example tools <ArrowRight size={14} /></button></div>}</div>}</section></div>
+          <NextStep onClick={() => navigate('library')} label="Next: explore example tools" />
+        </>}
+
+        {view === 'library' && <>
+          <PageHead number="03" label="TOOL LIBRARY" title="Keep useful patterns close" description="Explore ready-to-use examples and reopen tools you designed in this session. This preview resets when the page reloads." />
+          <div className="section-heading compact"><div><span className="eyebrow">YOUR SESSION</span><h2>Saved tools</h2></div><button className="button button-light" onClick={createTool}><Plus size={15} /> Create a tool</button></div>
+          {savedTools.length ? <div className="library-grid">{savedTools.map((tool) => <article key={tool.id} className="library-card"><span className="feature-icon lilac"><WandSparkles size={20} /></span><span className="tiny-label">SESSION TOOL</span><h3>{tool.name}</h3><p>{tool.goal}</p><div className="library-pills">{tool.pills.map((pill) => <span key={pill}>{pill}</span>)}</div><div className="library-actions"><button onClick={() => openTool(tool)}>Open & edit <ArrowRight size={14} /></button><button aria-label={`Delete ${tool.name}`} onClick={() => setSavedTools((current) => current.filter((item) => item.id !== tool.id))}><Trash2 size={16} /></button></div></article>)}</div> : <div className="library-empty"><Library size={27} /><strong>No tools saved yet</strong><p>Design a workflow in Agent Builder and save it for this session.</p><button className="button button-dark" onClick={createTool}>Open Agent Builder <ArrowRight size={15} /></button></div>}
+          <div className="section-heading"><div><span className="eyebrow">STARTING POINTS</span><h2>Example tools</h2></div></div><div className="library-grid"><article className="library-card"><span className="feature-icon mint"><FileText size={20} /></span><span className="tiny-label">INTERACTIVE EXAMPLE</span><h3>Accounting Statement Generator</h3><p>Edit fictional income and expenses to generate a simple statement with a live total.</p><div className="library-actions"><button onClick={() => navigate('accounting')}>Open accounting tool <ArrowRight size={14} /></button></div></article><article className="library-card"><span className="feature-icon peach"><WandSparkles size={20} /></span><span className="tiny-label">TEXT INPUT EXAMPLE</span><h3>InkVoice</h3><p>Prepare a fictional quotation or invoice with editable fields and a live document preview.</p><div className="library-actions"><button onClick={() => navigate('inkvoice')}>Open InkVoice <ArrowRight size={14} /></button></div></article></div>
+          <div className="overview-foot"><ShieldCheck size={20} /><p><strong>Nothing is deployed from this page.</strong> Session tools are temporary UI state; they do not create background agents, access local files, or persist after reload.</p></div>
+        </>}
+        {view === 'inkvoice' && <InkVoiceExample onBack={() => navigate('library')} />}
+        {view === 'accounting' && <AccountingExample onBack={() => navigate('library')} />}
+      </div>
+    </main>
+  </div>
 }
+
+function PageHead({ number, label, title, description }: { number: string; label: string; title: string; description: string }) { return <div className="page-head"><div className="eyebrow">{number} / {label}</div><h1>{title}</h1><p>{description}</p></div> }
+function NextStep({ onClick, label }: { onClick: () => void; label: string }) { return <button className="next-step" onClick={onClick}><span><small>CONTINUE THE WALKTHROUGH</small><strong>{label}</strong></span><ArrowRight size={19} /></button> }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EZAgent — interactive concept preview</title>
+<title>EZAgent — Simulated Judge Demo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
@@ -34,15 +34,17 @@ button{font:inherit;cursor:pointer;color:inherit}
 .hero{max-width:920px;margin:0 auto;padding:clamp(40px,9vw,110px) 24px 32px;text-align:center}
 h1{font-size:clamp(36px,6.4vw,64px);line-height:1.05;letter-spacing:-.04em;margin:0 auto 20px;max-width:16ch;font-weight:700}
 .lede{font-size:18px;color:var(--mute);max-width:46ch;margin:0 auto 44px}
-.cta{display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:center;max-width:760px;margin:0 auto}
-.cta .side{justify-self:end}
+.cta{display:flex;justify-content:center;gap:12px;align-items:center;flex-wrap:wrap;max-width:760px;margin:0 auto}
 .main-btn{background:var(--ink);color:#fff;border:0;border-radius:14px;padding:18px 38px;font-size:18px;font-weight:600;transition:transform .12s}
 .main-btn:hover{transform:translateY(-2px)}
+.product-main{text-decoration:none;display:inline-block}
+.setup-btn{padding:18px 24px;border-radius:14px;font-size:16px;background:#fff}
 .product-entry{max-width:760px;margin:28px auto 0;padding:20px;border:2px solid var(--ink);border-radius:16px;text-align:left;background:var(--soft)}
 .product-entry strong{display:block;font-size:18px}
 .product-entry p{margin:6px 0 14px;color:var(--mute);font-size:14px}
-.product-entry button{width:100%;border:0;border-radius:10px;background:#d9d9d4;color:#4b4b48;padding:12px 16px;font-weight:700;cursor:not-allowed}
-.product-entry a{display:inline-block;margin-top:10px;color:var(--ink);font-size:13px}
+.product-entry .product-link{display:block;width:100%;border:0;border-radius:10px;background:var(--ink);color:#fff;padding:14px 16px;font-weight:700;text-align:center;text-decoration:none;font-size:15px}
+.product-entry .product-link:hover{background:#333}
+.product-entry .source-link{display:inline-block;margin-top:10px;color:var(--ink);font-size:13px}
 .side a{display:inline-block;text-decoration:none;color:var(--ink);font-size:14px;font-weight:500;border-bottom:1px solid var(--line);padding:4px 0}
 .side a:hover{border-color:var(--ink)}
 .fine{font-size:13px;color:var(--mute);margin:26px auto 0;max-width:52ch}
@@ -123,9 +125,8 @@ dialog menu{display:flex;gap:8px;justify-content:flex-end;padding:0;margin:18px 
 dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
 
 @media (max-width:700px){
-  .cta{grid-template-columns:1fr;justify-items:center}
-  .cta .side{justify-self:center}
-  .cta .spacer{display:none}
+  .cta{flex-direction:column}
+  .cta .product-main,.cta .setup-btn{width:100%}
   .stats,.how{grid-template-columns:1fr}
   .choice-list,.team-branches{grid-template-columns:1fr}
   .stats div+div{border-left:0;border-top:1px solid var(--line)}
@@ -147,20 +148,19 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
 
   <section class="hero">
     <h1>Shape AI work around the way your team thinks.</h1>
-    <p class="lede">Explore a concept for asking a question, drafting a one-off workflow, or shaping a reusable tool.</p>
+    <p class="lede"><strong>Simulated judge demo.</strong> Follow a scripted process with fictional data to see the intended EZAgent workflow.</p>
 
     <div class="cta">
-      <div class="spacer"></div>
-      <button class="main-btn" id="installBtn">Preview setup concept</button>
-      <div class="side"><span class="fine">Interactive prototype</span></div>
+      <a class="main-btn product-main" href="https://ezagent-product-web-preview.vercel.app/">Explore EZAgent Product Web Preview →</a>
+      <button class="btn setup-btn" id="installBtn">Start simulated demo</button>
     </div>
-    <p class="fine">Scripted interactive demo with fictional data. It does not install software, download a model, create tools, or deploy agents.</p>
+    <p class="fine">This demo website simulates the process. Its replies, device setup, and AI steps are pre-scripted; it does not install software, download a model, create tools, or deploy agents.</p>
 
-    <div class="product-entry" role="note" aria-label="Actual product access">
-      <strong>Looking for the actual product?</strong>
-      <p>The web preview is not public yet. This page is a scripted walkthrough. The separate local product prototype uses Ollama with <code>qwen3.5:9b</code> on a Mac mini; local AI replies can take longer. This website does not contact that Mac mini.</p>
-      <button type="button" disabled aria-label="Open actual product web preview, not available yet">Open actual product web preview · coming soon</button>
-      <a href="https://github.com/Bobu-is-now-afk/EZAgent">View the product source on GitHub</a>
+    <div class="product-entry" role="note" aria-label="EZAgent product web preview access">
+      <strong>Explore the EZAgent Product Web Preview</strong>
+      <p>This page is the simulated judge walkthrough. For the interactive web version of the product, open the separate Product Web Preview. It includes the workspace, Agent Builder, InkVoice, and Accounting Statement Generator. Its AI chat and agent plans are still labelled scripted examples; browser tools work locally. The Mac mini <code>qwen3.5:9b</code> model is part of a separate local prototype and is not connected to either public website.</p>
+      <a class="product-link" href="https://ezagent-product-web-preview.vercel.app/">Open EZAgent Product Web Preview →</a>
+      <a class="source-link" href="https://github.com/Bobu-is-now-afk/EZAgent">View the product source on GitHub</a>
     </div>
 
     <div class="disclosures" aria-label="Demo disclosures">
