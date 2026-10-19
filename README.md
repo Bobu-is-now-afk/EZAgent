@@ -2,6 +2,12 @@
 
 EZAgent explores a guided path from a request to a reviewed AI-assisted document workflow. The [judge demo](https://ezagent-judge-demo.vercel.app/) is a scripted website with fixed fictional responses and synthetic source data. Enter fictional values only in editable fields. The actual product web preview is not public yet.
 
+## Hackathon product web preview
+
+The repository-root Next.js app is a separate, interactive product preview for judges. Its guided path connects Chat, Agent Builder, Documents, and Tool Library around fictional orders W-01/W-02 and receipt R-01. Chat answers and plan results are scripted examples, while quotation totals and confirmation gates are calculated in the browser. Session tools reset on reload. No model, background agent, local file, or customer system is contacted by this public web preview.
+
+Deploy this app as a **second Vercel project** connected to the same GitHub repository, with Root Directory set to the repository root and Production Branch set to `main`. Keep the existing judge demo project pointed at `demo/`. Verify the second project's public Production URL before linking to it from the judge demo. Run `pnpm exec tsc --noEmit` and `pnpm build` from the repository root before release.
+
 ## Judge walkthrough
 
 1. **Preview setup.** The Mac mini M6 profile and `qwen3.5:9b` selection are assumptions for an animation. No hardware is detected and no model is downloaded or installed.
