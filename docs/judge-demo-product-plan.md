@@ -29,7 +29,7 @@ The integration should retain the correct existing labels and fail-closed behavi
 1. **Preview setup:** show a clearly fictional “Mac mini M6 demo profile” (all specs marked simulated; no claim of an announced or tested product configuration). Animate the `qwen3.5:9b` download with a persistent **Simulated — no device setup or model download occurs** label.
 2. **Choose execution:** show **Gemini connected — live response** only when the protected server-side Gemini adapter is configured and reachable. When Gemini is not configured or not connected, let the judge explicitly choose **Sample demo mode**. If a Gemini request fails after connection, show a clear error with retry/switch-to-sample choices; never silently replace the failed live response with a sample. Never expose API credentials in the browser. Keep local-model setup simulation separate from Gemini status.
 3. **Build the agent:** load a short Markdown spec and render this fixed hierarchy: **GM → 2 mini managers → 2 workers**. The spec names each role, allowed tools, handoff, and approval gate. Label static role assignments and handoff animations **Simulated**; show a handoff as completed only after that action actually ran. Do not imply parallel execution or tool access that the backend did not perform.
-4. **Start from a synthetic receipt:** show a clearly marked sample receipt fixture and ask **“Use this receipt to prepare a quotation draft.”** Offer two explicit paths: **Do this once** (one-off task) and **Save as reusable tool** (preview a reusable workflow; saving is local demo state only unless persistence is implemented and labeled).
+4. **Start from synthetic records:** show three clearly marked sample receipts, select exactly one, then offer **“Prepare one quotation”** or **“Preview reusable tool.”** The first creates a draft from that record. The second shows the static role/spec concept. Both say one record at a time; no batch is run and no tool is saved.
 5. **Draft and review:** use a generic quotation/receipt template inspired by InkVoice’s visual simplicity, without copying its branding or implying affiliation. AI may suggest only source-grounded fields with visible provenance; leave unknown seller/buyer identity, date, currency, price, and tax blank. A person edits and confirms every required value.
 6. **Show deterministic result:** calculate subtotal, tax, and total with integer minor units after explicit currency and tax choices. Keep a `SAMPLE · DRAFT` preview visible, and label every backend-dependent action **Live** or **Simulated**. No numbering, issuance, sending, payment, or customer data.
 
@@ -66,13 +66,37 @@ The integration should retain the correct existing labels and fail-closed behavi
 | Arithmetic | Fixed fixture produces the documented expected total; invalid amounts, quantity, currency, or tax block preview confirmation. |
 | No real issuance | Preview is always visibly SAMPLE/DRAFT; no document number, outbound request, payment action, or real customer record is created. |
 
+## Minimal synthetic receipt fixture and copy
+
+Keep a tiny, versioned fixture set with stable IDs. The browser displays only these synthetic records; the suggestion request sends one `fixtureId` per run, never an array or uploaded receipt. The server resolves that ID to its fixed source data. Historical receipt amounts are shown only on the source card and are never copied into the new quote price.
+
+```json
+[
+  {"fixtureId":"receipt_001","label":"SAMPLE-R-001","merchant":"Sample Workshop Supply","date":"2026-10-01","currency":"USD","items":[{"description":"Workshop notebooks","quantity":2,"historicalUnitMinor":4500}],"historicalTotalMinor":9000},
+  {"fixtureId":"receipt_002","label":"SAMPLE-R-002","merchant":"Sample Tool Hire","date":"2026-10-03","currency":"USD","items":[{"description":"Portable projector rental","quantity":1,"historicalUnitMinor":12000}],"historicalTotalMinor":12000},
+  {"fixtureId":"receipt_003","label":"SAMPLE-R-003","merchant":"Sample Print Shop","date":"2026-10-05","currency":"USD","items":[{"description":"Workshop handouts","quantity":24,"historicalUnitMinor":25}],"historicalTotalMinor":600}
+]
+```
+
+Exact UI copy:
+
+- Section: **“Synthetic receipts · simulated records”**
+- Helper: **“Choose one sample receipt. This preview handles one record at a time; it does not import or batch-process receipts.”**
+- Card: **“SAMPLE-R-001 · Sample Workshop Supply · 2026-10-01”**, item and quantity, plus **“Historical receipt total · source only: USD 90.00”**.
+- Action: **“Use this receipt for one quotation”** / **“Preview reusable tool”**.
+- Draft source: **“Selected source · SAMPLE-R-001”**. Keep seller, buyer, quote date, currency, new unit price, and tax blank for human entry/confirmation. Suggestions may propose only source-grounded description and quantity.
+- Rerun: **“Run this receipt again”** with **“Reuses SAMPLE-R-001 only. This is one fixture replay, not a batch run. Prior output remains labeled as the previous run; review confirmations reset.”**
+- Quote preview: **“SAMPLE · DRAFT”** and **“New quotation total”**, visually separate from **“Historical receipt total · source only.”**
+
+Acceptance: selecting one card sends only its allowlisted ID; suggestions are bounded to that record; rerun uses the same ID and does not touch the other two records. The UI never says “processed all receipts,” “batch complete,” or implies uploaded/real receipts. Keep receipt historical price separate from quote price; deterministic quote totals use only the manually entered and confirmed quote fields.
+
 ## Integration order
 
 1. Keep #19 as the public Vercel root and stable entry point; add a concise link/entry to the integrated story without changing Root Directory `demo`.
 2. Carry #24’s API/error and public cost gates into integration. Keep Live disabled until approved access/rate limits and provider budget controls exist; otherwise offer explicit Sample demo mode.
 3. Integrate #25 and adapt the landing client to the documented response shapes (`answer` for Chat; fixed `roles` plus bounded `proposedSteps`/`missing` for Agent). Test success, malformed response, provider error, and explicit sample selection independently.
 4. Use the Markdown team spec as the source for the static five-role diagram and mark all simulated assignments/handoffs as simulated. Do not show completed work unless a deterministic action actually ran.
-5. Integrate #26’s document page and link it from the existing landing. Replace the quote-request fixture with a clearly synthetic receipt source and keep grounded suggestions separate until human application/confirmation. Reuse its deterministic totals and print gates.
+5. Integrate #26’s document page and link it from the existing landing. Replace the quote-request fixture with the three-record synthetic receipt set above; make the API accept only one allowlisted receipt ID per suggestion call. Keep grounded suggestions separate until human application/confirmation. Reuse its deterministic totals and print gates.
 6. Fold in relevant evidence/runbook material from #20 after checking it against the final interaction. Leave #22 out unless its run-state UX is needed for this path.
 7. Run acceptance cases against the integrated branch, update evidence/runbook, and open a review PR. Deployment and any Vercel project changes remain separate decisions.
 
