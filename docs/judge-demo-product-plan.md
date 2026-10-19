@@ -14,8 +14,8 @@
 ## One judge-facing flow
 
 1. **Preview setup:** show a clearly fictional “Mac mini M6 demo profile” (all specs marked simulated; no claim of an announced or tested product configuration). Animate the `qwen3.5:9b` download with a persistent **Simulated — no device setup or model download occurs** label.
-2. **Choose execution:** show **Gemini connected — live response** only when the protected server-side Gemini adapter is configured and reachable. Otherwise show **Demo mode — sample response**. Never expose API credentials in the browser. Keep local-model setup simulation separate from Gemini status.
-3. **Build the agent:** load a short Markdown spec and render this fixed hierarchy: **GM → 2 mini managers → 2 workers**. The spec names each role, allowed tools, handoff, and approval gate; the UI shows assignments and completed handoffs. Do not imply parallel execution or tool access that the backend did not perform.
+2. **Choose execution:** show **Gemini connected — live response** only when the protected server-side Gemini adapter is configured and reachable. When Gemini is not configured or not connected, let the judge explicitly choose **Sample demo mode**. If a Gemini request fails after connection, show a clear error with retry/switch-to-sample choices; never silently replace the failed live response with a sample. Never expose API credentials in the browser. Keep local-model setup simulation separate from Gemini status.
+3. **Build the agent:** load a short Markdown spec and render this fixed hierarchy: **GM → 2 mini managers → 2 workers**. The spec names each role, allowed tools, handoff, and approval gate. Label static role assignments and handoff animations **Simulated**; show a handoff as completed only after that action actually ran. Do not imply parallel execution or tool access that the backend did not perform.
 4. **Start from a synthetic receipt request:** “Turn this sample receipt into a quotation draft.” Offer two explicit paths: **Do this once** (one-off task) and **Save as reusable tool** (preview a reusable workflow; saving is local demo state only unless persistence is implemented and labeled).
 5. **Draft and review:** use a generic quotation/receipt template inspired by InkVoice’s visual simplicity, without copying its branding or implying affiliation. AI may suggest only source-grounded fields with visible provenance; leave unknown seller/buyer identity, date, currency, price, and tax blank. A person edits and confirms every required value.
 6. **Show deterministic result:** calculate subtotal, tax, and total with integer minor units after explicit currency and tax choices. Keep a `SAMPLE · DRAFT` preview visible, and label every backend-dependent action **Live** or **Simulated**. No numbering, issuance, sending, payment, or customer data.
@@ -32,8 +32,8 @@
 
 - Setup: **“Mac mini M6 demo profile · Simulated”** / **“No device was detected or configured.”**
 - Model: **“qwen3.5:9b download · Simulated”** / **“This animation does not download or install a model.”**
-- Runtime: **“Gemini · Live”** only after a successful protected-backend check; otherwise **“Demo mode · Sample responses.”**
-- Agent: **“GM coordinates two mini managers and two workers from this Markdown spec. Review each handoff; unavailable actions are marked simulated.”**
+- Runtime: **“Gemini · Live”** only after a successful protected-backend check; if unavailable, offer **“Sample demo mode · Simulated responses.”** If a live request fails, show **“Gemini request failed. Retry or switch to sample mode.”**
+- Agent: **“GM coordinates two mini managers and two workers from this Markdown spec. Static role assignments are simulated; completed handoffs appear only after they run.”**
 - Choice: **“Do this once”** / **“Save as reusable tool · demo preview.”**
 - Quotation: **“Suggestions are drafts. Check each source and enter missing values. Totals are calculated from the values you confirm.”**
 - Footer/preview: **“SAMPLE · DRAFT — not issued or sent. No payment is requested.”**
@@ -43,9 +43,9 @@
 | Case | Pass condition |
 |---|---|
 | Setup disclosure | Mac mini profile and model-download animation remain explicitly simulated on narrow and wide layouts; no install command runs. |
-| Gemini unavailable | No secret or raw endpoint appears; UI says Demo mode and sample output is unmistakably synthetic. |
-| Gemini available | Protected server reports ready; one prompt receives a live Gemini response, labeled Live. If the call fails, status falls back to Demo mode and labels the response. |
-| Spec hierarchy | A supplied Markdown fixture renders one GM, exactly two mini managers, and exactly two workers with visible spec-derived assignments/handoffs; no unperformed action is shown complete. |
+| Gemini unavailable | No secret or raw endpoint appears; judge can explicitly choose Sample demo mode and sample output is unmistakably synthetic. |
+| Gemini available | Protected server reports ready; one prompt receives a live Gemini response, labeled Live. A failed live request shows an explicit error and retry/switch choices; no sample is substituted silently. |
+| Spec hierarchy | A supplied Markdown fixture renders one GM, exactly two mini managers, and exactly two workers with visible spec-derived assignments/handoffs. Static choreography is labeled simulated; a handoff is marked completed only after it actually ran. |
 | One-off/reusable choice | Both choices are available; one-off does not persist. Reusable choice states whether it is a preview or actually saved and can be reset without affecting other data. |
 | Receipt suggestions | Exact synthetic fixture yields only source-backed suggestions and provenance. Unsupported/ambiguous wording leaves fields blank or asks for manual review; no invented identity, date, price, currency, or tax. |
 | Human review | Missing/invalid fields block confirmation and print; edits update provenance; totals refresh deterministically. |
