@@ -121,7 +121,7 @@ h1 em { color: var(--accent); font-weight: 400; }
 .money-input input { padding-left: 24px; }
 .field-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 20px; margin-top: 2px; }
 .field-source { color: #94968d; font-size: 8px; }
-.field-source[data-origin="gemini"] { color: #567361; }
+.field-source[data-origin="scripted"] { color: #567361; }
 .field-source[data-state="confirmed"] { color: #4b7556; font-weight: 650; }
 .field-source[data-state="missing"] { color: #9a634b; }
 .confirm-field { padding: 2px 3px; border: 0; background: transparent; color: #52735a; font-size: 8px; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }

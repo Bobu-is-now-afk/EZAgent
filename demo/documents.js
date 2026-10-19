@@ -16,7 +16,7 @@
   let documentType = 'quotation'
   let draft = emptyDraft()
   let suggestion = null
-  let proposalStatus = 'Gemini status has not been checked. This sample remains usable without AI.'
+  let proposalStatus = 'Pre-scripted suggestions are ready. No AI service is contacted.'
   let suggestionState = 'idle'
   let sampleRun = 0
 
@@ -115,10 +115,10 @@
       const confirmButton = wrap.querySelector('[data-confirm]')
       const isConfirmed = Boolean(confirmed[key])
       const hasValue = Boolean(String(draft[key] ?? '').trim())
-      const originLabel = origins[key] === 'Gemini proposal' ? 'Gemini proposal' : origins[key] === 'Entered manually' ? 'entered manually' : origins[key] === 'Synthetic sample' ? 'synthetic sample' : 'not provided'
+      const originLabel = origins[key] === 'Scripted suggestion' ? 'scripted suggestion' : origins[key] === 'Entered manually' ? 'entered manually' : origins[key] === 'Synthetic sample' ? 'synthetic sample' : 'not provided'
       status.textContent = isConfirmed ? `Confirmed · ${originLabel}` : (hasValue ? `${originLabel} · not confirmed` : 'Not provided')
       status.dataset.state = isConfirmed ? 'confirmed' : (hasValue ? 'pending' : 'missing')
-      status.dataset.origin = origins[key].startsWith('Gemini') ? 'gemini' : 'local'
+      status.dataset.origin = origins[key] === 'Scripted suggestion' ? 'scripted' : 'local'
       confirmButton.textContent = isConfirmed ? 'Confirmed' : 'Confirm'
       confirmButton.setAttribute('aria-pressed', String(isConfirmed))
       confirmButton.disabled = isConfirmed || !hasValue || valueErrors().includes(fieldErrorLabel(key))
@@ -138,7 +138,7 @@
     if (!suggestion) return
     const intro = document.createElement('p')
     intro.className = 'proposal-intro'
-    intro.textContent = `Proposed fields · ${suggestion.model}`
+    intro.textContent = 'Pre-scripted fields · fictional example'
     result.append(intro)
     const proposals = suggestion.suggestion
     for (const key of Object.keys(proposalFields)) {
@@ -252,50 +252,20 @@
     if (!field) return
     draft[field] = value
     confirmed[field] = false
-    origins[field] = 'Gemini proposal'
+    origins[field] = 'Scripted suggestion'
     proposalStatus = `Applied proposed ${labels[field]}; it remains unconfirmed until you review it.`
-    suggestionState = 'live'
+    suggestionState = 'ready'
     render()
     inputs[field]?.focus()
   }
 
-  function validSuggestionResponse(data) {
-    if (!data || data.status !== 'live' || data.source !== 'gemini' || typeof data.model !== 'string' || !data.suggestion || typeof data.suggestion !== 'object') return false
-    return ['buyer', 'description', 'quantity'].every((key) => {
-      const value = data.suggestion[key]
-      return value === null || value === undefined || typeof value === 'string' || typeof value === 'number'
-    }) && (Array.isArray(data.suggestion.missing) || typeof data.suggestion.missing === 'string' || data.suggestion.missing === null)
-  }
-
-  async function requestSuggestions() {
+  function requestSuggestions() {
     const button = $('#suggest-button')
-    suggestion = null
-    suggestionState = 'loading'
-    proposalStatus = 'Requesting suggestions from the server-side Gemini endpoint…'
-    button.disabled = true
+    suggestion = { suggestion: { buyer: null, description: 'workshop days', quantity: 2, missing: ['buyer'] } }
+    suggestionState = 'ready'
+    proposalStatus = 'Pre-scripted suggestions are ready. Apply any field you want to review; nothing was auto-filled or sent to an AI service.'
+    button.disabled = false
     render()
-    try {
-      const response = await fetch('/api/document-suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fixtureId: 'workshop_quote' }),
-        cache: 'no-store',
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      if (!validSuggestionResponse(data)) throw new Error('Unexpected response')
-      suggestion = data
-      suggestionState = 'live'
-      proposalStatus = `Live Gemini suggestions are ready${data.model ? ` · ${data.model}` : ''}. Apply any field you want to review; nothing was auto-filled.`
-    } catch (error) {
-      suggestion = null
-      suggestionState = 'unavailable'
-      const detail = error instanceof Error && error.message.startsWith('HTTP ') ? ` (${error.message})` : ''
-      proposalStatus = `Gemini suggestions unavailable${detail}. No suggestion was applied; the sample draft is unchanged.`
-    } finally {
-      button.disabled = false
-      render()
-    }
   }
 
   function makeNode(tag, className, text) {

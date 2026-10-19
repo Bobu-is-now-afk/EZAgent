@@ -38,6 +38,11 @@ h1{font-size:clamp(36px,6.4vw,64px);line-height:1.05;letter-spacing:-.04em;margi
 .cta .side{justify-self:end}
 .main-btn{background:var(--ink);color:#fff;border:0;border-radius:14px;padding:18px 38px;font-size:18px;font-weight:600;transition:transform .12s}
 .main-btn:hover{transform:translateY(-2px)}
+.product-entry{max-width:760px;margin:28px auto 0;padding:20px;border:2px solid var(--ink);border-radius:16px;text-align:left;background:var(--soft)}
+.product-entry strong{display:block;font-size:18px}
+.product-entry p{margin:6px 0 14px;color:var(--mute);font-size:14px}
+.product-entry button{width:100%;border:0;border-radius:10px;background:#d9d9d4;color:#4b4b48;padding:12px 16px;font-weight:700;cursor:not-allowed}
+.product-entry a{display:inline-block;margin-top:10px;color:var(--ink);font-size:13px}
 .side a{display:inline-block;text-decoration:none;color:var(--ink);font-size:14px;font-weight:500;border-bottom:1px solid var(--line);padding:4px 0}
 .side a:hover{border-color:var(--ink)}
 .fine{font-size:13px;color:var(--mute);margin:26px auto 0;max-width:52ch}
@@ -149,13 +154,20 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
       <button class="main-btn" id="installBtn">Preview setup concept</button>
       <div class="side"><span class="fine">Interactive prototype</span></div>
     </div>
-    <p class="fine">Interactive concept preview. It does not install software, download a model, create tools, or deploy agents.</p>
+    <p class="fine">Scripted interactive demo with fictional data. It does not install software, download a model, create tools, or deploy agents.</p>
+
+    <div class="product-entry" role="note" aria-label="Actual product access">
+      <strong>Looking for the actual product?</strong>
+      <p>The web preview is not public yet. This page is a scripted walkthrough. The separate local product prototype uses Ollama with <code>qwen3.5:9b</code> on a Mac mini; local AI replies can take longer. This website does not contact that Mac mini.</p>
+      <button type="button" disabled aria-label="Open actual product web preview, not available yet">Open actual product web preview · coming soon</button>
+      <a href="https://github.com/Bobu-is-now-afk/EZAgent">View the product source on GitHub</a>
+    </div>
 
     <div class="disclosures" aria-label="Demo disclosures">
       <span class="disclosure"><strong>All demo data is synthetic</strong></span>
       <span class="disclosure">Assumed device profile: <strong>Mac mini M6</strong> · not detected</span>
       <span class="disclosure"><strong>Qwen 3.5 · 9B</strong> download animation is simulated</span>
-      <span class="disclosure">Gemini replies are labelled live only after a successful response</span>
+      <span class="disclosure">All replies and suggestions on this site are pre-scripted</span>
     </div>
 
     <div class="stats">
@@ -168,7 +180,7 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
   <section class="how" aria-label="How it works">
     <div><h3>1. Preview setup</h3><p>See a concept animation; nothing is installed.</p></div>
     <div><h3>2. Choose a model</h3><p>The Qwen 3.5 · 9B download animation is illustrative only.</p></div>
-    <div><h3>3. Explore the interface</h3><p>Try labelled samples; each Gemini reply is labelled live only after a successful response.</p></div>
+    <div><h3>3. Explore the interface</h3><p>Try pre-scripted samples; no AI request is sent.</p></div>
   </section>
 </div>
 
@@ -206,47 +218,25 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
 
 <dialog id="cfg">
   <h3>Connection status</h3>
-  <p>Live replies use the protected Gemini backend configured for this demo. Provider credentials stay server-side.</p>
-  <p id="cfgStatus" role="status">Checking connection…</p>
-  <menu><button class="btn" id="cCancel" type="button">Close</button><button class="btn pri" id="cCheck" type="button">Check again</button></menu>
+  <p>This website is a scripted demo. It does not contact Gemini or the Mac mini. The separate local product prototype uses Ollama with qwen3.5:9b.</p>
+  <p id="cfgStatus" role="status">Scripted demo · no AI connection</p>
+  <menu><button class="btn" id="cCancel" type="button">Close</button></menu>
 </dialog>
 
 <script>
-/* ============ EDIT THESE ============ */
-const CONFIG = {
-  API_BASE: "",   // same-origin protected server-side proxy; never put provider keys here
-  MODEL: "gemini-2.5-flash"
-};
-/* ===================================== */
-
 const $ = s => document.querySelector(s);
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = ms => new Promise(r => setTimeout(r, reduceMotion ? 0 : ms));
-let API = CONFIG.API_BASE, MODEL = CONFIG.MODEL;
-let backendConfigured = false, lastResponseLive = false, mode = 'chat', busy = false, history = [], selectedFixtureId = null;
-
-/* server status */
-async function ping(){
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
-  try {
-    const r = await fetch(API + '/api/status', {signal: ctl.signal});
-    const status = r.ok ? await r.json() : {};
-    backendConfigured = r.ok && status.configured === true;
-    if(!backendConfigured) lastResponseLive = false;
-    if(backendConfigured && typeof status.model === 'string') MODEL = status.model;
-  } catch(e){ backendConfigured = false; lastResponseLive = false; }
-  clearTimeout(t); paint();
-}
+let mode = 'chat', busy = false, history = [], selectedFixtureId = null;
 function paint(){
-  const txt = lastResponseLive ? 'Gemini reply confirmed' : backendConfigured ? 'Backend configured · connectivity not checked' : 'Sample mode · no Gemini backend';
-  ['l','a'].forEach(p => { $('#'+p+'Dot').className = 'dot' + (lastResponseLive ? ' on' : ''); $('#'+p+'Status').textContent = txt; });
-  $('#tServer').textContent = lastResponseLive ? 'Gemini reply confirmed' : backendConfigured ? 'Backend configured · unverified' : 'Sample replies';
-  $('#tModel').textContent = lastResponseLive || backendConfigured ? MODEL : 'Qwen 3.5 · 9B (illustrative)';
-  $('#tModelLabel').textContent = lastResponseLive ? 'Model used for live reply' : backendConfigured ? 'Configured model · not yet verified' : 'Illustrative model';
+  ['l','a'].forEach(p => { $('#'+p+'Dot').className = 'dot'; $('#'+p+'Status').textContent = 'Scripted demo · no AI connection'; });
+  $('#tServer').textContent = 'Pre-scripted replies';
+  $('#tModel').textContent = 'Qwen 3.5 · 9B (product prototype)';
+  $('#tModelLabel').textContent = 'Separate local product model';
   $('#inp').disabled = true;
   $('#inp').placeholder = 'Choose a synthetic prompt above';
 }
-ping(); setInterval(ping, 30000);
+paint();
 
 /* setup walkthrough */
 const term = $('#term');
@@ -280,7 +270,7 @@ function renderEmpty(){
   const agent = mode === 'agent';
   const e = document.createElement('div'); e.className = 'empty'; e.id = 'empty';
   if(!agent){
-    e.innerHTML = '<h3>How can I help?</h3><p>Use synthetic prompts only. A configured backend does not prove a reply ran; each Gemini reply is labelled live only after a successful response.</p><div class="chips"></div>';
+    e.innerHTML = '<h3>How can I help?</h3><p>Choose a fictional prompt to see its pre-scripted answer. No AI request is sent.</p><div class="chips"></div>';
   } else {
     e.innerHTML = '<h3>Choose how to shape the work</h3><p>Example future request: “Many synthetic receipts to organize into a statement?” A reusable tool could keep repeated runs consistent, but it is optional. This walkthrough uses a synthetic workshop order to draft a quotation; both choices below remain concept previews.</p><div class="choice-list"></div><div class="chips"></div>';
     const choices = [
@@ -328,60 +318,38 @@ function renderBuilder(){
   const specLink = document.createElement('a'); specLink.href = 'agent-team-spec.md'; specLink.className = 'quiet-btn'; specLink.textContent = 'Read role Markdown spec';
   panel.append(team, path, preview, specLink, back); col.appendChild(panel);
   const documentLink = document.createElement('a'); documentLink.href = 'documents.html'; documentLink.className = 'quiet-btn'; documentLink.textContent = 'Open document concept';
-  fetch('documents.html', {method:'HEAD'}).then(r => { if(r.ok) panel.appendChild(documentLink); }).catch(() => {});
+  panel.appendChild(documentLink);
 }
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if(busy) return;
-  mode = b.dataset.mode; history = []; selectedFixtureId = null; lastResponseLive = false; paint();
+  mode = b.dataset.mode; history = []; selectedFixtureId = null; paint();
   document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
   $('#inp').placeholder = 'Choose a synthetic prompt above';
   renderEmpty();
 });
-$('#newChat').onclick = () => { if(!busy){ history = []; lastResponseLive = false; paint(); renderEmpty(); } };
+$('#newChat').onclick = () => { if(!busy){ history = []; paint(); renderEmpty(); } };
 
 function bubble(cls, text){ const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text || ''; col.appendChild(d); scroll(); return d; }
-const clean = t => t.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trimStart();
 const mark = (el, label) => { const g = document.createElement('div'); g.className = 'tag'; g.textContent = label; el.prepend(g); };
 
-/* Live replies require a server-side Gemini proxy that passes /api/status. Otherwise this returns a labelled sample. */
+/* Fixed fictional responses; this page never contacts an AI backend. */
 async function ask(fixtureId, onText, kind){
-  if(backendConfigured){
-    try {
-      const endpoint = kind === 'chat' ? '/api/chat' : '/api/agent-suggest';
-      const r = await fetch(API + endpoint, {method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({fixtureId})});
-      let result = {};
-      try { result = await r.json(); } catch(e){}
-      if(!r.ok || result.status !== 'live' || result.source !== 'gemini' || typeof result.model !== 'string' || !result.model) {
-        throw new Error((result.error || 'Gemini backend request failed.') + ' No sample was substituted. Check the connection and try again.');
-      }
-      let reply;
-      if(kind === 'chat') {
-        if(typeof result.answer !== 'string' || !result.answer.trim()) throw new Error('Gemini backend returned no answer. No sample was substituted.');
-        reply = result.answer;
-      } else {
-        if(!Array.isArray(result.roles) || result.roles.length !== 5 || !Array.isArray(result.proposedSteps) || !Array.isArray(result.missing)) throw new Error('Gemini backend returned an invalid plan. No sample was substituted.');
-        reply = 'Proposed steps (no agents or tools ran):\n' + result.proposedSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') + '\n\nNeeds human input: ' + (result.missing.join('; ') || 'none listed');
-      }
-      MODEL = String(result.model); lastResponseLive = true; paint();
-      const full = clean(reply); onText(full);
-      return {text: full, sample: false};
-    } catch(e){ lastResponseLive = false; paint(); throw e; }
-  }
   const canned = {
-    agent: 'Sample draft: organize the stated workshop request, flag missing document details, and prepare an outline for human review. No agent or tool ran.',
-    chat: 'This is a labelled sample reply. Choose one of the synthetic prompts for a live Gemini suggestion.'
-  }[kind || 'chat'];
+    study_schedule: 'Sample 3-day study plan:\nDay 1: Review the topic list for 45 minutes, then take a 10-minute break. Practice the first half of the questions.\nDay 2: Review mistakes, take a short break, then practice the remaining questions.\nDay 3: Do a timed practice round and review weak areas. Adjust the plan to your actual exam.',
+    cache_comparison: 'Sample comparison:\nIn-memory cache: simple and fast, but each server instance has its own data and loses it on restart.\nShared cache: consistent across instances, but adds network latency and operations work.\nChoose based on consistency needs, traffic, and failure tolerance.',
+    launch_checklist: 'Sample launch checklist:\n1. Confirm the intended audience and demo scope.\n2. Test the primary path on desktop and mobile.\n3. Check links, error messages, and accessibility basics.\n4. Prepare a rollback and contact owner.\n5. Watch the first release for failures.',
+    synthetic_document_task: 'Sample draft plan (no agents or tools ran):\n1. Select synthetic order W-01 for the quotation.\n2. Keep W-02 and R-01 as context only.\n3. Flag buyer, exact date, unit price, currency, and tax for a person to supply.\n4. Review the SAMPLE quotation before printing. Do not issue a receipt without payment proof.'
+  }[fixtureId];
   if(typeof canned !== 'string') throw new Error('No sample is available for this request.');
   let out = ''; for(const ch of canned){ out += ch; onText(out); await sleep(10); }
-  return {text: canned, sample: true};
+  return {text: canned};
 }
 
 async function runChat(q, fixtureId){
   history.push({role:'user', content:q});
   const el = bubble('a', '…');
   const res = await ask(fixtureId, t => { el.textContent = t; scroll(); }, 'chat');
-  mark(el, res.sample ? 'Sample reply · synthetic example' : 'Live reply · Gemini backend');
+  mark(el, 'Pre-scripted reply · fictional example');
   history.push({role:'assistant', content: res.text});
 }
 
@@ -392,7 +360,7 @@ async function runAgent(task, fixtureId){
   const el = bubble('a', '…');
   const fin = await ask(fixtureId, t => { el.textContent = t; scroll(); }, 'agent');
   fc.querySelector('p').textContent = 'Draft response only; no agents or external tools were executed.';
-  mark(el, fin.sample ? 'Sample draft · synthetic example' : 'Live draft · Gemini backend');
+  mark(el, 'Pre-scripted plan · fictional example');
   const documentLink = document.createElement('a'); documentLink.href = 'documents.html'; documentLink.className = 'quiet-btn'; documentLink.textContent = 'Continue to synthetic document draft';
   wrap.appendChild(documentLink);
 }
@@ -400,7 +368,7 @@ async function runAgent(task, fixtureId){
 $('#form').onsubmit = async e => {
   e.preventDefault();
   const q = $('#inp').value.trim(); if(!q || busy) return;
-  if(!selectedFixtureId){ bubble('a', 'This demo only accepts server-owned synthetic prompts. Choose a suggestion above; your text was not sent.'); return; }
+  if(!selectedFixtureId){ bubble('a', 'This demo only accepts the fictional prompts above. Your text was not sent.'); return; }
   const fixtureId = selectedFixtureId; selectedFixtureId = null;
   $('#inp').value = ''; busy = true; $('#send').disabled = true;
   const em = $('#empty'); if(em) em.remove();
@@ -408,17 +376,16 @@ $('#form').onsubmit = async e => {
   try { mode === 'agent' ? await runAgent(q, fixtureId) : await runChat(q, fixtureId); }
   catch(err){
     col.querySelectorAll('.msg.a').forEach(el => { if(el.textContent === '…') el.textContent = 'Request stopped. No reply was received.'; });
-    col.querySelectorAll('.step p').forEach(p => { if(p.textContent === 'Waiting for response…') p.textContent = 'Stopped: backend request failed. No sample was substituted.'; });
-    bubble('a', err.message || 'Backend request failed. No sample was substituted. Check the connection and try again.');
+    col.querySelectorAll('.step p').forEach(p => { if(p.textContent === 'Waiting for response…') p.textContent = 'The scripted response could not be displayed.'; });
+    bubble('a', err.message || 'The scripted response could not be displayed.');
   }
   busy = false; $('#send').disabled = false; $('#inp').focus();
 };
 
 /* settings */
 const dlg = $('#cfg');
-$('#cfgBtn').onclick = async () => { dlg.showModal(); $('#cfgStatus').textContent = 'Checking backend configuration…'; await ping(); $('#cfgStatus').textContent = backendConfigured ? 'Backend configured · connectivity is not checked by this status endpoint. Replies are verified per request.' : 'Backend not configured · sample mode'; };
+$('#cfgBtn').onclick = () => dlg.showModal();
 $('#cCancel').onclick = () => dlg.close();
-$('#cCheck').onclick = async () => { $('#cfgStatus').textContent = 'Checking backend configuration…'; await ping(); $('#cfgStatus').textContent = backendConfigured ? 'Backend configured · connectivity is not checked by this status endpoint. Replies are verified per request.' : 'Backend not configured · sample mode'; };
 </script>
 </body>
 </html>
