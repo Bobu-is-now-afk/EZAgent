@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  ArrowDownRight, ArrowRight, Bot, Check, ChevronRight, CircleHelp, ClipboardCheck,
-  Copy, FileText, Layers3, Library, MessageSquareText, Plus, RotateCcw, Send,
-  ShieldCheck, Sparkles, Trash2, WandSparkles, X,
+  ArrowDownRight, ArrowRight, Bot, Check, CircleHelp, ClipboardCheck,
+  FileText, Layers3, Library, MessageSquareText, Plus, RotateCcw, Send,
+  ShieldCheck, Sparkles, Trash2, WandSparkles,
 } from 'lucide-react'
 import InkVoiceExample from './inkvoice-example'
+import AccountingExample from './accounting-example'
 
-type View = 'overview' | 'chat' | 'builder' | 'documents' | 'library' | 'inkvoice'
+type View = 'overview' | 'chat' | 'builder' | 'library' | 'inkvoice' | 'accounting'
 type ChatMessage = { id: number; role: 'user' | 'assistant'; text: string; scripted?: boolean }
 type SavedTool = { id: number; name: string; goal: string; pills: string[] }
 
@@ -30,31 +31,13 @@ const examples = [
   },
 ] as const
 
-const sourceRecords = [
-  { id: 'W-01', kind: 'Order', title: 'Two workshop days', detail: 'Create a quote for two workshop days next month. Buyer, exact date, unit price, currency, and tax are missing.', tag: 'Selected quote source' },
-  { id: 'W-02', kind: 'Order', title: 'Workshop materials pack', detail: 'Request one workshop materials pack. Buyer and price are missing.', tag: 'Context only' },
-  { id: 'R-01', kind: 'Receipt', title: 'Payment record', detail: 'Sample payment record has no payment proof. Do not issue a receipt.', tag: 'Context only · no payment evidence' },
-] as const
-
 const pillOptions = ['Select source', 'Flag missing fields', 'Calculate totals', 'Require human review']
 const navItems: { id: View; label: string; icon: typeof Bot }[] = [
   { id: 'overview', label: 'Overview', icon: Layers3 },
   { id: 'chat', label: 'Chat', icon: MessageSquareText },
   { id: 'builder', label: 'Agent Builder', icon: WandSparkles },
-  { id: 'documents', label: 'Documents', icon: FileText },
   { id: 'library', label: 'Tool Library', icon: Library },
 ]
-
-function parseMoneyToCents(value: string): number | null {
-  if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return null
-  const [whole, fraction = ''] = value.trim().split('.')
-  const result = Number(whole) * 100 + Number(fraction.padEnd(2, '0'))
-  return Number.isSafeInteger(result) ? result : null
-}
-
-function formatMoney(cents: number, currency: string): string {
-  return `${currency || '—'} ${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
 
 export default function Page() {
   const [view, setView] = useState<View>('overview')
@@ -70,29 +53,6 @@ export default function Page() {
   const [runVisible, setRunVisible] = useState(false)
   const [savedTools, setSavedTools] = useState<SavedTool[]>([])
   const [editingToolId, setEditingToolId] = useState<number | null>(null)
-  const [seller, setSeller] = useState('')
-  const [buyer, setBuyer] = useState('')
-  const [serviceDate, setServiceDate] = useState('')
-  const [unitPrice, setUnitPrice] = useState('')
-  const [quantity, setQuantity] = useState('2')
-  const [currency, setCurrency] = useState('')
-  const [taxRate, setTaxRate] = useState('')
-  const [confirmed, setConfirmed] = useState(false)
-  const [copied, setCopied] = useState(false)
-
-  const qty = Number(quantity)
-  const priceCents = parseMoneyToCents(unitPrice)
-  const tax = Number(taxRate)
-  const validAmount = Number.isSafeInteger(qty) && qty > 0 && qty <= 100 && priceCents !== null && priceCents > 0 && priceCents <= 100000000
-  const validTax = taxRate !== '' && Number.isFinite(tax) && tax >= 0 && tax <= 100
-  const subtotalCents = validAmount ? qty * priceCents! : 0
-  const taxCents = validAmount && validTax ? Math.round(subtotalCents * tax / 100) : 0
-  const totalCents = subtotalCents + taxCents
-  const missing = [!seller.trim() && 'Seller', !buyer.trim() && 'Buyer', !serviceDate && 'Service date', !currency && 'Currency', !validAmount && 'Valid quantity and unit price', !validTax && 'Tax rate'].filter(Boolean)
-  const canConfirm = missing.length === 0
-  const previewText = useMemo(() => `SAMPLE · DRAFT — NOT ISSUED\nQuotation source: Order W-01\nSeller: ${seller || '[missing]'}\nBuyer: ${buyer || '[missing]'}\nService date: ${serviceDate || '[missing]'}\nWorkshop days: ${quantity}\nUnit price: ${currency || '[currency]'} ${unitPrice || '[missing]'}\nSubtotal: ${formatMoney(subtotalCents, currency)}\nTax (${taxRate || '—'}%): ${formatMoney(taxCents, currency)}\nTotal: ${formatMoney(totalCents, currency)}\nNo payment requested.`, [seller, buyer, serviceDate, quantity, currency, unitPrice, subtotalCents, taxRate, taxCents, totalCents])
-
-  useEffect(() => { setConfirmed(false) }, [seller, buyer, serviceDate, unitPrice, quantity, currency, taxRate])
   useEffect(() => () => { if (chatTimer.current) clearTimeout(chatTimer.current) }, [])
 
   function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }) }
@@ -138,11 +98,6 @@ export default function Page() {
   }
   function openTool(tool: SavedTool) { setEditingToolId(tool.id); setToolName(tool.name); setGoal(tool.goal); setPills(tool.pills); setPlanVisible(true); setRunVisible(false); navigate('builder') }
   function createTool() { setEditingToolId(null); setToolName('Workshop quotation assistant'); setGoal('Prepare a reviewable quotation from sample Order W-01'); setPills(['Select source', 'Flag missing fields', 'Require human review']); setPlanVisible(false); setRunVisible(false); navigate('builder') }
-  async function copyPreview() {
-    if (!confirmed) return
-    try { await navigator.clipboard.writeText(previewText); setCopied(true); window.setTimeout(() => setCopied(false), 1800) } catch { setCopied(false) }
-  }
-
   return <div className="product-shell">
     <header className="top-header">
       <div className="header-left">
@@ -151,7 +106,7 @@ export default function Page() {
       </div>
       <div className="header-right"><span className="preview-pill"><span className="status-dot" /> Hackathon preview · fictional data</span></div>
     </header>
-    {view !== 'overview' && <nav className="module-nav" aria-label="Workspace modules">{navItems.filter((item) => item.id !== 'overview').map(({ id, label }) => <button key={id} className={view === id || (view === 'inkvoice' && id === 'library') ? 'active' : ''} onClick={() => navigate(id)} aria-current={view === id || (view === 'inkvoice' && id === 'library') ? 'page' : undefined}>{label}</button>)}</nav>}
+    {view !== 'overview' && <nav className="module-nav" aria-label="Workspace modules">{navItems.filter((item) => item.id !== 'overview').map(({ id, label }) => <button key={id} className={view === id || ((view === 'inkvoice' || view === 'accounting') && id === 'library') ? 'active' : ''} onClick={() => navigate(id)} aria-current={view === id || ((view === 'inkvoice' || view === 'accounting') && id === 'library') ? 'page' : undefined}>{label}</button>)}</nav>}
     <main className="main-panel">
       <div className={`content ${view === 'overview' ? 'home-wrap' : ''} ${view === 'inkvoice' ? 'iv-content' : ''}`}>
         {view === 'overview' && <section className="home-content">
@@ -159,9 +114,8 @@ export default function Page() {
           <div className="feature-grid">{[
             { step: '01', title: 'Chat', description: 'Explore scripted answers for a fictional workshop request.', icon: MessageSquareText, target: 'chat' as View },
             { step: '02', title: 'Agent Builder', description: 'Shape a repeatable workflow with logic steps and a reviewable plan.', icon: Sparkles, target: 'builder' as View, featured: true },
-            { step: '03', title: 'Tool Library', description: 'Reopen and refine tools saved in this browser session.', icon: Library, target: 'library' as View },
-            { step: '04', title: 'Documents', description: 'Review a sample quotation from one fictional order.', icon: FileText, target: 'documents' as View },
-          ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Your session tools appear here after you save one.</span>}</button>)}</div>
+            { step: '03', title: 'Tool Library', description: 'Open InkVoice and the Accounting Statement Generator, or refine your saved tools.', icon: Library, target: 'library' as View },
+          ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Example tools are ready to explore. Your session tools appear here after you save one.</span>}</button>)}</div>
           <div className="home-footer"><p>Fictional records and scripted replies are labeled. This preview does not run a live model, issue documents, or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open guided demo <ArrowDownRight size={15} /></a></div>
         </section>}
 
@@ -173,30 +127,23 @@ export default function Page() {
 
         {view === 'builder' && <>
           <PageHead number="02" label="AGENT BUILDER" title="Make the work repeatable" description="Describe the goal, select the rules, and inspect a deterministic plan. Saved tools live only in this browser session." />
-          <div className="work-grid builder-grid"><section className="panel form-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon lilac"><WandSparkles size={18} /></span><div><strong>Tool definition</strong><small>Editable preview</small></div></div></div><div className="field"><label htmlFor="tool-name">Tool name</label><input id="tool-name" value={toolName} onChange={(event) => setToolName(event.target.value)} maxLength={70} /></div><div className="field"><label htmlFor="goal">What should this tool do?</label><textarea id="goal" rows={5} value={goal} onChange={(event) => { setGoal(event.target.value); setPlanVisible(false); setRunVisible(false) }} maxLength={500} /><small>For this preview, the sample run is limited to Order W-01.</small></div><div className="field"><label>Logic steps <span className="field-hint">Choose at least one</span></label><div className="pill-list">{pillOptions.map((pill) => <button key={pill} type="button" className={`logic-pill ${pills.includes(pill) ? 'selected' : ''}`} aria-pressed={pills.includes(pill)} onClick={() => { togglePill(pill); setPlanVisible(false); setRunVisible(false) }}>{pills.includes(pill) ? <Check size={14} /> : <Plus size={14} />}{pill}</button>)}</div></div><div className="form-actions"><button className="button button-dark" disabled={!goal.trim() || !toolName.trim() || pills.length === 0} onClick={() => { setPlanVisible(true); setRunVisible(false) }}>Preview plan <ArrowRight size={15} /></button><button className="button button-light" disabled={!planVisible} onClick={saveTool}>{editingToolId === null ? 'Save tool for this session' : 'Update this session tool'}</button></div></section><section className="panel plan-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon mint"><ClipboardCheck size={18} /></span><div><strong>Review plan</strong><small>Deterministic preview, no agents started</small></div></div></div>{!planVisible ? <div className="plan-empty"><Layers3 size={31} /><h3>Your plan appears here</h3><p>Adjust the goal and rules, then select Preview plan.</p></div> : <div className="plan-content"><div className="plan-summary"><span className="tiny-label">GOAL</span><strong>{goal}</strong></div><div className="plan-steps">{pills.map((pill, index) => <div key={`${pill}-${index}`} className="plan-step"><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{pill}</strong><small>{pill === 'Select source' ? 'Use W-01 only; W-02 and R-01 stay context.' : pill === 'Flag missing fields' ? 'Identify buyer, date, price, currency and tax as missing.' : pill === 'Calculate totals' ? 'Use entered values; do not infer a price.' : 'Keep the draft behind a human confirmation gate.'}</small></div></div>)}</div><div className="plan-run"><button className="button button-dark" onClick={() => setRunVisible(true)}>Preview fixed sample <ArrowRight size={15} /></button><small>Uses the on-page W-01 fixture only.</small></div>{runVisible && <div className="run-result"><span className="result-badge"><Check size={14} /> Fixed sample evaluated</span><p>{pills.map((pill) => pill === 'Select source' ? 'Selected source: W-01. W-02 and R-01 remain context only.' : pill === 'Flag missing fields' ? 'The sample is missing buyer, exact date, unit price, currency, tax, and seller identity.' : pill === 'Calculate totals' ? 'A total cannot be calculated until a person enters the unit price, currency, and tax in Documents.' : 'A person must inspect and confirm the draft before copying it.').join(' ')} No file, agent, or model was run.</p><button className="text-button" onClick={() => navigate('documents')}>Open document review <ArrowRight size={14} /></button></div>}</div>}</section></div>
-          <NextStep onClick={() => navigate('documents')} label="Next: review the quotation" />
-        </>}
-
-        {view === 'documents' && <>
-          <PageHead number="03" label="DOCUMENTS" title="Review before anything leaves" description="Use Order W-01 to prepare one fictional quotation. Enter missing information yourself; no document is issued or sent." />
-          <div className="record-row">{sourceRecords.map((record) => <article key={record.id} className={`record-card ${record.id === 'W-01' ? 'record-selected' : ''}`}><div className="record-heading"><span className="record-id">{record.id}</span><span className="record-kind">{record.kind}</span></div><h3>{record.title}</h3><p>{record.detail}</p><span className="record-tag">{record.tag}</span></article>)}</div>
-          <div className="work-grid document-grid"><section className="panel form-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon mint"><FileText size={18} /></span><div><strong>Quotation details</strong><small>Source: sample Order W-01 only</small></div></div></div><div className="field-row"><div className="field"><label htmlFor="seller">Seller <Required /></label><input id="seller" value={seller} onChange={(event) => setSeller(event.target.value)} placeholder="Enter fictional seller" maxLength={90} /></div><div className="field"><label htmlFor="buyer">Buyer <Required /></label><input id="buyer" value={buyer} onChange={(event) => setBuyer(event.target.value)} placeholder="Enter fictional buyer" maxLength={90} /></div></div><div className="field-row"><div className="field"><label htmlFor="service-date">Service date <Required /></label><input id="service-date" type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} /></div><div className="field"><label htmlFor="currency">Currency <Required /></label><select id="currency" value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="">Select currency</option><option value="HKD">HKD</option><option value="USD">USD</option></select></div></div><div className="field-row three"><div className="field"><label htmlFor="quantity">Workshop days <Required /></label><input id="quantity" type="number" min="1" max="100" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></div><div className="field"><label htmlFor="unit-price">Unit price <Required /></label><input id="unit-price" inputMode="decimal" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} placeholder="e.g. 1500.00" /></div><div className="field"><label htmlFor="tax-rate">Tax rate % <Required /></label><input id="tax-rate" type="number" min="0" max="100" step="0.01" value={taxRate} onChange={(event) => setTaxRate(event.target.value)} placeholder="e.g. 0" /></div></div><div className="source-note"><ShieldCheck size={17} /><p>The source only provides the workshop description and two days. Seller, buyer, exact date, new price, currency and tax are not inferred.</p></div></section><section className="panel quote-panel"><div className="quote-top"><span className="quote-mark">EZ<span>Agent</span></span><span className="draft-stamp">SAMPLE / DRAFT</span></div><div className="quote-title"><span>QUOTATION PREVIEW</span><h2>Workshop services</h2><p>Prepared from Order W-01 · not issued</p></div><div className="quote-parties"><div><small>FROM</small><strong>{seller || 'Seller not entered'}</strong></div><div><small>FOR</small><strong>{buyer || 'Buyer not entered'}</strong></div></div><div className="quote-line"><span>{quantity || '—'} workshop {quantity === '1' ? 'day' : 'days'} <small>Service date: {serviceDate || 'to be confirmed'}</small></span><strong>{validAmount ? formatMoney(subtotalCents, currency) : '—'}</strong></div><div className="totals"><div><span>Subtotal</span><strong>{validAmount ? formatMoney(subtotalCents, currency) : '—'}</strong></div><div><span>Tax {validTax ? `(${tax}%)` : ''}</span><strong>{validAmount && validTax ? formatMoney(taxCents, currency) : '—'}</strong></div><div className="total-final"><span>Draft total</span><strong>{canConfirm ? formatMoney(totalCents, currency) : '—'}</strong></div></div><div className="quote-gate">{confirmed ? <p className="gate-success"><Check size={16} /> Reviewed for this browser session. Still a sample draft.</p> : <p><ShieldCheck size={16} /> {missing.length ? `Needs review: ${missing.join(', ')}.` : 'All required fields entered. Check the preview, then confirm.'}</p>}</div><div className="quote-actions"><button className="button button-dark" disabled={!canConfirm} onClick={() => setConfirmed(true)}><Check size={15} /> Confirm sample draft</button><button className="button button-light" disabled={!confirmed} onClick={copyPreview}><Copy size={15} /> {copied ? 'Copied' : 'Copy draft text'}</button></div><p className="quote-disclaimer">NOT FOR PAYMENT · No receipt, invoice or customer document is sent.</p></section></div>
-          <NextStep onClick={() => navigate('library')} label="Next: explore reusable tools" />
+          <div className="work-grid builder-grid"><section className="panel form-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon lilac"><WandSparkles size={18} /></span><div><strong>Tool definition</strong><small>Editable preview</small></div></div></div><div className="field"><label htmlFor="tool-name">Tool name</label><input id="tool-name" value={toolName} onChange={(event) => setToolName(event.target.value)} maxLength={70} /></div><div className="field"><label htmlFor="goal">What should this tool do?</label><textarea id="goal" rows={5} value={goal} onChange={(event) => { setGoal(event.target.value); setPlanVisible(false); setRunVisible(false) }} maxLength={500} /><small>For this preview, the sample run is limited to Order W-01.</small></div><div className="field"><label>Logic steps <span className="field-hint">Choose at least one</span></label><div className="pill-list">{pillOptions.map((pill) => <button key={pill} type="button" className={`logic-pill ${pills.includes(pill) ? 'selected' : ''}`} aria-pressed={pills.includes(pill)} onClick={() => { togglePill(pill); setPlanVisible(false); setRunVisible(false) }}>{pills.includes(pill) ? <Check size={14} /> : <Plus size={14} />}{pill}</button>)}</div></div><div className="form-actions"><button className="button button-dark" disabled={!goal.trim() || !toolName.trim() || pills.length === 0} onClick={() => { setPlanVisible(true); setRunVisible(false) }}>Preview plan <ArrowRight size={15} /></button><button className="button button-light" disabled={!planVisible} onClick={saveTool}>{editingToolId === null ? 'Save tool for this session' : 'Update this session tool'}</button></div></section><section className="panel plan-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon mint"><ClipboardCheck size={18} /></span><div><strong>Review plan</strong><small>Deterministic preview, no agents started</small></div></div></div>{!planVisible ? <div className="plan-empty"><Layers3 size={31} /><h3>Your plan appears here</h3><p>Adjust the goal and rules, then select Preview plan.</p></div> : <div className="plan-content"><div className="plan-summary"><span className="tiny-label">GOAL</span><strong>{goal}</strong></div><div className="plan-steps">{pills.map((pill, index) => <div key={`${pill}-${index}`} className="plan-step"><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{pill}</strong><small>{pill === 'Select source' ? 'Use W-01 only; W-02 and R-01 stay context.' : pill === 'Flag missing fields' ? 'Identify buyer, date, price, currency and tax as missing.' : pill === 'Calculate totals' ? 'Use entered values; do not infer a price.' : 'Keep the draft behind a human confirmation gate.'}</small></div></div>)}</div><div className="plan-run"><button className="button button-dark" onClick={() => setRunVisible(true)}>Preview fixed sample <ArrowRight size={15} /></button><small>Uses the on-page W-01 fixture only.</small></div>{runVisible && <div className="run-result"><span className="result-badge"><Check size={14} /> Fixed sample evaluated</span><p>{pills.map((pill) => pill === 'Select source' ? 'Selected source: W-01. W-02 and R-01 remain context only.' : pill === 'Flag missing fields' ? 'The sample is missing buyer, exact date, unit price, currency, tax, and seller identity.' : pill === 'Calculate totals' ? 'A total needs an entered price, currency, and tax rate in a document tool.' : 'A person must inspect and confirm the draft before copying it.').join(' ')} No file, agent, or model was run.</p><button className="text-button" onClick={() => navigate('library')}>Browse example tools <ArrowRight size={14} /></button></div>}</div>}</section></div>
+          <NextStep onClick={() => navigate('library')} label="Next: explore example tools" />
         </>}
 
         {view === 'library' && <>
-          <PageHead number="04" label="TOOL LIBRARY" title="Keep useful patterns close" description="Browse fixed example workflows and reopen tools you designed in this session. This preview resets when the page reloads." />
+          <PageHead number="03" label="TOOL LIBRARY" title="Keep useful patterns close" description="Explore ready-to-use examples and reopen tools you designed in this session. This preview resets when the page reloads." />
           <div className="section-heading compact"><div><span className="eyebrow">YOUR SESSION</span><h2>Saved tools</h2></div><button className="button button-light" onClick={createTool}><Plus size={15} /> Create a tool</button></div>
           {savedTools.length ? <div className="library-grid">{savedTools.map((tool) => <article key={tool.id} className="library-card"><span className="feature-icon lilac"><WandSparkles size={20} /></span><span className="tiny-label">SESSION TOOL</span><h3>{tool.name}</h3><p>{tool.goal}</p><div className="library-pills">{tool.pills.map((pill) => <span key={pill}>{pill}</span>)}</div><div className="library-actions"><button onClick={() => openTool(tool)}>Open & edit <ArrowRight size={14} /></button><button aria-label={`Delete ${tool.name}`} onClick={() => setSavedTools((current) => current.filter((item) => item.id !== tool.id))}><Trash2 size={16} /></button></div></article>)}</div> : <div className="library-empty"><Library size={27} /><strong>No tools saved yet</strong><p>Design a workflow in Agent Builder and save it for this session.</p><button className="button button-dark" onClick={createTool}>Open Agent Builder <ArrowRight size={15} /></button></div>}
-          <div className="section-heading"><div><span className="eyebrow">STARTING POINTS</span><h2>Example tools</h2></div></div><div className="library-grid"><article className="library-card"><span className="feature-icon mint"><FileText size={20} /></span><span className="tiny-label">FIXED EXAMPLE</span><h3>Workshop quotation review</h3><p>Select W-01, identify missing fields, and prepare a sample quotation for human review.</p><div className="library-actions"><button onClick={() => navigate('documents')}>Explore documents <ArrowRight size={14} /></button></div></article><article className="library-card"><span className="feature-icon peach"><WandSparkles size={20} /></span><span className="tiny-label">TEXT INPUT EXAMPLE</span><h3>InkVoice</h3><p>Prepare a fictional quotation or invoice with editable fields and a live document preview.</p><div className="library-actions"><button onClick={() => navigate('inkvoice')}>Open InkVoice <ArrowRight size={14} /></button></div></article></div>
+          <div className="section-heading"><div><span className="eyebrow">STARTING POINTS</span><h2>Example tools</h2></div></div><div className="library-grid"><article className="library-card"><span className="feature-icon mint"><FileText size={20} /></span><span className="tiny-label">INTERACTIVE EXAMPLE</span><h3>Accounting Statement Generator</h3><p>Edit fictional income and expenses to generate a simple statement with a live total.</p><div className="library-actions"><button onClick={() => navigate('accounting')}>Open accounting tool <ArrowRight size={14} /></button></div></article><article className="library-card"><span className="feature-icon peach"><WandSparkles size={20} /></span><span className="tiny-label">TEXT INPUT EXAMPLE</span><h3>InkVoice</h3><p>Prepare a fictional quotation or invoice with editable fields and a live document preview.</p><div className="library-actions"><button onClick={() => navigate('inkvoice')}>Open InkVoice <ArrowRight size={14} /></button></div></article></div>
           <div className="overview-foot"><ShieldCheck size={20} /><p><strong>Nothing is deployed from this page.</strong> Session tools are temporary UI state; they do not create background agents, access local files, or persist after reload.</p></div>
         </>}
         {view === 'inkvoice' && <InkVoiceExample onBack={() => navigate('library')} />}
+        {view === 'accounting' && <AccountingExample onBack={() => navigate('library')} />}
       </div>
     </main>
   </div>
 }
 
-function Required() { return <span className="required" aria-label="required">*</span> }
 function PageHead({ number, label, title, description }: { number: string; label: string; title: string; description: string }) { return <div className="page-head"><div className="eyebrow">{number} / {label}</div><h1>{title}</h1><p>{description}</p></div> }
 function NextStep({ onClick, label }: { onClick: () => void; label: string }) { return <button className="next-step" onClick={onClick}><span><small>CONTINUE THE WALKTHROUGH</small><strong>{label}</strong></span><ArrowRight size={19} /></button> }
