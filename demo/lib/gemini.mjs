@@ -7,7 +7,7 @@ const CHAT_FIXTURES = Object.freeze({
   cache_comparison: 'Compare two ways to cache API responses for a synthetic software design example. Keep the trade-offs concise.',
   launch_checklist: 'Draft a short launch checklist for a synthetic small-app example. Keep it practical and concise.',
 })
-const DOCUMENT_FIXTURE = 'Synthetic workshop quote: Buyer: Harbor Workshop. Description: custom oak shelves. Quantity: 4.'
+const DOCUMENT_FIXTURE = 'Create a quote for two workshop days next month.'
 const AGENT_FIXTURE = 'Plan a synthetic document workflow for a small workshop quote. Propose roles, steps, and missing information for human review.'
 
 export class DemoError extends Error {
@@ -125,9 +125,9 @@ export async function documentSuggest(value, options = {}) {
   }, ['buyer', 'description', 'quantity', 'missing'])
   const result = await callGemini(makePrompt('document', fixture), resultSchema, options)
   if (Object.keys(result).some((key) => !['buyer', 'description', 'quantity', 'missing'].includes(key))) throw new DemoError('invalid_provider_response', 502)
-  const fixtureFields = { buyer: 'Harbor Workshop', description: 'custom oak shelves', quantity: 4 }
+  const fixtureFields = { buyer: null, description: 'workshop days', quantity: 2 }
   const normalizeString = (value, field, maxChars) => {
-    if (value === null) return null
+    if (value === null || fixtureFields[field] === null) return null
     if (typeof value !== 'string') throw new DemoError('invalid_provider_response', 502)
     const normalized = value.trim().toLocaleLowerCase('en-US')
     return normalized === fixtureFields[field].toLocaleLowerCase('en-US') && value.length <= maxChars ? fixtureFields[field] : null
