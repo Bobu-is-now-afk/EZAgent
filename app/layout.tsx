@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'EZAgent | Hackathon Web Preview',
-  description: 'Explore a fictional workshop workflow in the EZAgent hackathon web preview.',
+  title: 'EZAgent Product Web Preview',
+  description: 'Explore the interactive EZAgent product web preview with fictional records and clearly labelled scripted AI examples.',
   icons: {
     icon: [
       {
