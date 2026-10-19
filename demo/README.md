@@ -12,7 +12,8 @@ multi-agent system or a reusable-tool creator.
 ## Live Gemini backend seam
 
 Chat and Agent use labelled sample drafts when the backend is not configured.
-The page has no provider key and does not save backend credentials. A
+The text field and Send control stay disabled; people choose a fixed synthetic
+prompt instead. The page has no provider key and does not save backend credentials. A
 same-origin server-side proxy is expected at the Vercel project root:
 
 - `GET /api/status` reports configuration only:
@@ -40,8 +41,8 @@ No raw Ollama URL or model override is exposed in the public Settings dialog.
 The Gemini route implementation is maintained separately from this static page.
 
 The agent team shape and role names are recorded in [agent-team-spec.md](./agent-team-spec.md).
-Run `node --test tests/demo/live-response.test.mjs` to check the Chat and Agent
-success-response contracts and their live-state validation.
+Run `node --test tests/demo/*.test.mjs` to check the response contracts and the
+fixed synthetic-input boundary.
 
 Deploy this folder as a separate Vercel project with Root Directory `demo` and
 Production Branch `main`. Do not put API keys in `index.html` or expose a raw

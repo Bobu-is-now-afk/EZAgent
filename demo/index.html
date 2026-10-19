@@ -198,8 +198,8 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
   <div id="log"><div class="col" id="col"></div></div>
   <form id="form" autocomplete="off">
     <div class="box">
-      <input id="inp" type="text" placeholder="Ask anything" aria-label="Message">
-      <button id="send" type="submit">Send</button>
+      <input id="inp" type="text" placeholder="Choose a synthetic prompt above" aria-label="Synthetic prompt preview" disabled>
+      <button id="send" type="submit" disabled>Send</button>
     </div>
   </form>
 </div>
@@ -244,8 +244,9 @@ function paint(){
   $('#tServer').textContent = lastResponseLive ? 'Last reply confirmed · Gemini' : backendConfigured ? 'Backend configured · unverified' : 'Sample replies';
   $('#tModel').textContent = lastResponseLive || backendConfigured ? MODEL : 'Qwen 3.5 · 9B (illustrative)';
   $('#tModelLabel').textContent = lastResponseLive ? 'Model used for live reply' : backendConfigured ? 'Configured model · not yet verified' : 'Illustrative model';
-  $('#inp').disabled = backendConfigured;
-  $('#inp').placeholder = backendConfigured ? 'Choose a synthetic prompt above' : (mode === 'agent' ? 'Sample mode: describe a task' : 'Sample mode: ask anything');
+  $('#inp').disabled = true;
+  $('#inp').placeholder = 'Choose a synthetic prompt above';
+  $('#send').disabled = true;
 }
 ping(); setInterval(ping, 30000);
 
@@ -268,12 +269,17 @@ $('#installBtn').onclick = async () => {
   line('Preview sequence ended. No setup or model download occurred.', 'ok');
   $('#launchBtn').hidden = false; $('#launchBtn').focus();
 };
-$('#launchBtn').onclick = () => { $('#installer').hidden = true; $('#app').hidden = false; renderEmpty(); $('#inp').focus(); };
+$('#launchBtn').onclick = () => { $('#installer').hidden = true; $('#app').hidden = false; renderEmpty(); };
 
 /* app */
 const log = $('#log'), col = $('#col');
 const scroll = () => { log.scrollTop = log.scrollHeight; };
-$('#inp').addEventListener('input', () => { selectedFixtureId = null; });
+function submitFixture(fixtureId, label){
+  if(busy) return;
+  selectedFixtureId = fixtureId;
+  $('#inp').value = label;
+  $('#form').requestSubmit();
+}
 function renderEmpty(){
   col.innerHTML = '';
   const agent = mode === 'agent';
@@ -283,27 +289,27 @@ function renderEmpty(){
   } else {
     e.innerHTML = '<h3>Choose how to shape the work</h3><p>Use synthetic text only. One-off drafts and reusable tools are different paths. Both are previews; no tools or agents are created here.</p><div class="choice-list"></div><div class="chips"></div>';
     const choices = [
-      ['One-off task', 'Draft a response for this request only.'],
+      ['One-off task', 'Send the fixed synthetic workshop-order prompt.'],
       ['Reusable tool concept', 'Preview a proposed team and reusable workflow.']
     ];
     choices.forEach(([title, description], i) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'choice';
       b.innerHTML = '<strong></strong><span></span>';
       b.querySelector('strong').textContent = title; b.querySelector('span').textContent = description;
-      b.onclick = () => i === 0 ? ($('#inp').focus()) : renderBuilder();
+      b.onclick = () => i === 0
+        ? submitFixture('synthetic_document_task', 'Review this synthetic workshop order. Outline the requested document and flag missing details for human review.')
+        : renderBuilder();
       e.querySelector('.choice-list').appendChild(b);
     });
   }
-  const prompts = agent
-    ? [{id:'synthetic_document_task', label:'Review this synthetic workshop order. Outline the requested document and flag missing details for human review.'}]
-    : [
+  const prompts = agent ? [] : [
         {id:'study_schedule', label:'Make a 3-day study schedule for a synthetic exam.'},
         {id:'cache_comparison', label:'Compare two ways to cache API responses.'},
         {id:'launch_checklist', label:'Draft a launch checklist for a small app.'}
       ];
   prompts.forEach(({id, label}) => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
-    b.onclick = () => { selectedFixtureId = id; $('#inp').value = label; $('#form').requestSubmit(); };
+    b.onclick = () => submitFixture(id, label);
     e.querySelector('.chips').appendChild(b);
   });
   col.appendChild(e);
@@ -327,7 +333,7 @@ document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if(busy) return;
   mode = b.dataset.mode; history = []; selectedFixtureId = null; lastResponseLive = false; paint();
   document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
-  $('#inp').placeholder = backendConfigured ? 'Choose a synthetic prompt above' : (mode === 'agent' ? 'Sample mode: describe a task' : 'Sample mode: ask anything');
+  $('#inp').placeholder = 'Choose a synthetic prompt above';
   renderEmpty();
 });
 $('#newChat').onclick = () => { if(!busy){ history = []; selectedFixtureId = null; lastResponseLive = false; paint(); renderEmpty(); } };
@@ -382,7 +388,7 @@ async function runAgent(task, fixtureId){
 $('#form').onsubmit = async e => {
   e.preventDefault();
   const q = $('#inp').value.trim(); if(!q || busy) return;
-  if(backendConfigured && !selectedFixtureId){ bubble('a', 'Configured Gemini requests only accept server-owned synthetic prompts. Choose a suggestion above; your text was not sent.'); return; }
+  if(!selectedFixtureId){ bubble('a', 'Only preset synthetic prompts can be sent. Your text was not sent.'); return; }
   const fixtureId = selectedFixtureId; selectedFixtureId = null;
   lastResponseLive = false; paint();
   $('#inp').value = ''; busy = true; $('#send').disabled = true;
@@ -394,7 +400,7 @@ $('#form').onsubmit = async e => {
     col.querySelectorAll('.step p').forEach(p => { if(p.textContent === 'Waiting for response…') p.textContent = 'Stopped: backend request failed. No sample was substituted.'; });
     bubble('a', err.message || 'Backend request failed. No sample was substituted. Check the connection and try again.');
   }
-  busy = false; $('#send').disabled = false; $('#inp').focus();
+  busy = false; $('#send').disabled = true;
 };
 
 /* settings */
