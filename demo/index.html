@@ -318,18 +318,19 @@ function renderBuilder(){
   const back = document.createElement('button'); back.className = 'quiet-btn'; back.textContent = 'Back to Agent choices'; back.onclick = renderEmpty;
   const preview = document.createElement('button'); preview.className = 'quiet-btn'; preview.textContent = 'Preview sample workflow';
   preview.onclick = () => { path.textContent = 'Simulated sample flow: proposed analysis → proposed document draft → human review. This preview does not execute or save a tool.'; };
-  panel.append(team, path, preview, back); col.appendChild(panel);
+  const specLink = document.createElement('a'); specLink.href = 'agent-team-spec.md'; specLink.className = 'quiet-btn'; specLink.textContent = 'Read role Markdown spec';
+  panel.append(team, path, preview, specLink, back); col.appendChild(panel);
   const documentLink = document.createElement('a'); documentLink.href = 'documents.html'; documentLink.className = 'quiet-btn'; documentLink.textContent = 'Open document concept';
   fetch('documents.html', {method:'HEAD'}).then(r => { if(r.ok) panel.appendChild(documentLink); }).catch(() => {});
 }
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if(busy) return;
-  mode = b.dataset.mode; history = []; selectedFixtureId = null;
+  mode = b.dataset.mode; history = []; selectedFixtureId = null; lastResponseLive = false; paint();
   document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
   $('#inp').placeholder = backendConfigured ? 'Choose a synthetic prompt above' : (mode === 'agent' ? 'Sample mode: describe a task' : 'Sample mode: ask anything');
   renderEmpty();
 });
-$('#newChat').onclick = () => { if(!busy){ history = []; renderEmpty(); } };
+$('#newChat').onclick = () => { if(!busy){ history = []; lastResponseLive = false; paint(); renderEmpty(); } };
 
 function bubble(cls, text){ const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text || ''; col.appendChild(d); scroll(); return d; }
 const clean = t => t.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trimStart();
@@ -347,9 +348,16 @@ async function ask(fixtureId, onText, kind){
       if(!r.ok || result.status !== 'live' || result.source !== 'gemini' || typeof result.model !== 'string' || !result.model) {
         throw new Error((result.error || 'Gemini backend request failed.') + ' No sample was substituted. Check the connection and try again.');
       }
+      let reply;
+      if(kind === 'chat') {
+        if(typeof result.answer !== 'string' || !result.answer.trim()) throw new Error('Gemini backend returned no answer. No sample was substituted.');
+        reply = result.answer;
+      } else {
+        if(!Array.isArray(result.roles) || result.roles.length !== 5 || !Array.isArray(result.proposedSteps) || !Array.isArray(result.missing)) throw new Error('Gemini backend returned an invalid plan. No sample was substituted.');
+        reply = 'Proposed steps (no agents or tools ran):\n' + result.proposedSteps.map((step, i) => `${i + 1}. ${step}`).join('\n') + '\n\nNeeds human input: ' + (result.missing.join('; ') || 'none listed');
+      }
       MODEL = String(result.model); lastResponseLive = true; paint();
-      if(typeof result.reply !== 'string' || !result.reply.trim()) throw new Error('Gemini backend returned no reply. No sample was substituted. Check the connection and try again.');
-      const full = clean(result.reply); onText(full);
+      const full = clean(reply); onText(full);
       return {text: full, sample: false};
     } catch(e){ lastResponseLive = false; paint(); throw e; }
   }
@@ -378,6 +386,8 @@ async function runAgent(task, fixtureId){
   const fin = await ask(fixtureId, t => { el.textContent = t; scroll(); }, 'agent');
   fc.querySelector('p').textContent = 'Draft response only; no agents or external tools were executed.';
   mark(el, fin.sample ? 'Sample draft · synthetic example' : 'Live draft · Gemini backend');
+  const documentLink = document.createElement('a'); documentLink.href = 'documents.html'; documentLink.className = 'quiet-btn'; documentLink.textContent = 'Continue to synthetic document draft';
+  wrap.appendChild(documentLink);
 }
 
 $('#form').onsubmit = async e => {
