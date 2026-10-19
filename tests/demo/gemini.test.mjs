@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-import { agentSuggest, chat, DemoError, documentSuggest, FIXTURES, LIMITS, parseRequest } from '../../demo/lib/gemini.mjs'
+import { agentSuggest, chat, DemoError, DOCUMENT_FIXTURE, documentSuggest, FIXTURES, LIMITS, parseRequest } from '../../demo/lib/gemini.mjs'
 import { readJson } from '../../demo/lib/http.mjs'
 
 const provider = (value, status = 200) => async (_url, init) => {
@@ -48,11 +49,19 @@ test('document response returns only explicit allowed fields, never amount', asy
       return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ buyer: 'Invented Buyer Ltd', description: 'Workshop Days', quantity: 2, missing: [] }) }] } }] })
     },
   })
-  assert.match(prompt, /Synthetic source: Create a quote for two workshop days next month\./)
+  assert.ok(prompt.includes(`Synthetic source: ${DOCUMENT_FIXTURE}`))
   assert.deepEqual(result.suggestion, { buyer: null, description: 'workshop days', quantity: 2, missing: ['buyer'] })
   assert.equal('amount' in result.suggestion, false)
   await assert.rejects(documentSuggest({ fixtureId: 'workshop_quote', text: 'arbitrary content' }, { apiKey: 'test-only-key', fetcher: provider({}) }), (error) => error instanceof DemoError && error.code === 'invalid_input')
   await assert.rejects(documentSuggest({ fixtureId: 'workshop_quote' }, { apiKey: 'test-only-key', fetcher: provider({ buyer: 'x', description: 'y', quantity: 1, missing: [], amount: 20 }) }), (error) => error instanceof DemoError && error.code === 'invalid_provider_response')
+})
+
+test('the browser displays exactly the server-owned synthetic batch', async () => {
+  const html = await readFile(new URL('../../demo/documents.html', import.meta.url), 'utf8')
+  const visibleSource = html.match(/<textarea id="request-text"[^>]*>([\s\S]*?)<\/textarea>/)?.[1]
+  assert.equal(visibleSource, DOCUMENT_FIXTURE)
+  assert.match(DOCUMENT_FIXTURE, /Order W-02:.*Context only/)
+  assert.match(DOCUMENT_FIXTURE, /Receipt R-01:.*no payment proof/)
 })
 
 test('document response drops invented fixture values and non-integer quantities', async () => {

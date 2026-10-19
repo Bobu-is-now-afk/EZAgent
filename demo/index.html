@@ -256,7 +256,9 @@ $('#installBtn').onclick = async () => {
   $('#landing').hidden = true; $('#installer').hidden = false; term.innerHTML = '';
   line('CONCEPT SIMULATION — nothing is installed or downloaded', 'dim'); await sleep(700);
   line('Previewing a possible guided start…'); await sleep(700);
-  line('Illustrative device profile: Mac mini M6 (assumed, not detected)', 'dim'); await sleep(600);
+  line('Simulated device check — no hardware was inspected', 'dim'); await sleep(600);
+  line('Assumed device profile: Mac mini M6 (not detected)', 'dim'); await sleep(600);
+  line('Illustrative model selection: qwen3.5:9b for this walkthrough (no compatibility test)', 'dim'); await sleep(600);
   await progress(line('Setup animation <span class="bar"><i></i></span> <span class="pc">0%</span>'), 4, 45);
   line('Setup animation shown — no files were installed', 'ok'); await sleep(500);
   line('Qwen 3.5 · 9B model download animation'); await sleep(600);
@@ -292,14 +294,14 @@ function renderEmpty(){
       b.onclick = () => {
         if(i !== 0) return renderBuilder();
         selectedFixtureId = 'synthetic_document_task';
-        $('#inp').value = 'Review this synthetic workshop order. Outline the requested document and flag missing details for human review.';
+        $('#inp').value = 'Review synthetic workshop orders W-01/W-02 and receipt R-01. Select W-01 for a quote and flag missing details.';
         $('#form').requestSubmit();
       };
       e.querySelector('.choice-list').appendChild(b);
     });
   }
   const prompts = agent
-    ? [{id:'synthetic_document_task', label:'Review this synthetic workshop order. Outline the requested document and flag missing details for human review.'}]
+    ? [{id:'synthetic_document_task', label:'Review synthetic workshop orders W-01/W-02 and receipt R-01. Select W-01 for a quote and flag missing details.'}]
     : [
         {id:'study_schedule', label:'Make a 3-day study schedule for a synthetic exam.'},
         {id:'cache_comparison', label:'Compare two ways to cache API responses.'},
@@ -315,7 +317,7 @@ function renderEmpty(){
 function renderBuilder(){
   col.innerHTML = '';
   const panel = document.createElement('section'); panel.className = 'empty';
-  panel.innerHTML = '<span class="tag">Concept simulation · proposed structure</span><h3>Reusable workshop document tool</h3><p>This screen proposes a team shape for the synthetic workshop quote. It does not create, save, deploy, or run agents or tools.</p>';
+  panel.innerHTML = '<span class="tag">Concept simulation · proposed structure</span><h3>Reusable workshop document tool</h3><p>This screen proposes a team shape for synthetic orders W-01/W-02 and receipt R-01. Only W-01 is selected for the quotation draft. It does not create, save, deploy, or run agents or tools.</p>';
   const team = document.createElement('div'); team.className = 'team';
   team.innerHTML = '<div class="team-node lead"><h4>General manager · proposed</h4><p>Coordinates the proposed workflow and sends drafts for human review.</p></div><div class="team-branches"><div class="team-node"><h4>Mini-manager · Research · proposed</h4><p>Organizes the synthetic source and research questions.</p><div class="team-workers">Worker 1 · Analysis · proposed field extraction and checks</div></div><div class="team-node"><h4>Mini-manager · Delivery · proposed</h4><p>Organizes the draft deliverable and review handoff.</p><div class="team-workers">Worker 2 · Document · proposed draft structure</div></div></div>';
   const path = document.createElement('p'); path.className = 'screen-note';

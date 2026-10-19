@@ -7,8 +7,12 @@ const CHAT_FIXTURES = Object.freeze({
   cache_comparison: 'Compare two ways to cache API responses for a synthetic software design example. Keep the trade-offs concise.',
   launch_checklist: 'Draft a short launch checklist for a synthetic small-app example. Keep it practical and concise.',
 })
-const DOCUMENT_FIXTURE = 'Create a quote for two workshop days next month.'
-const AGENT_FIXTURE = 'Plan a synthetic document workflow for a small workshop quote. Propose roles, steps, and missing information for human review.'
+export const DOCUMENT_FIXTURE = `Synthetic batch (fixed examples):
+Order W-01: Create a quote for two workshop days next month. Buyer, exact date, unit price, currency, and tax are missing.
+Order W-02: Request one workshop materials pack. Buyer and price are missing. Context only; not included in this draft.
+Receipt R-01: Sample payment record has no payment proof. Context only; do not issue a receipt.
+Selected for this draft: Order W-01 only.`
+const AGENT_FIXTURE = 'Review a synthetic batch with workshop orders W-01 and W-02 plus receipt R-01. Select W-01 for a quotation draft, flag missing fields, and leave the receipt unissued without payment proof. Propose roles and steps for human review only.'
 
 export class DemoError extends Error {
   constructor(code, status) { super(code); this.name = 'DemoError'; this.code = code; this.status = status }

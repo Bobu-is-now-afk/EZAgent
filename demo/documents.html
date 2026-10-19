@@ -37,10 +37,14 @@
     <div class="workspace">
       <div class="editor-column">
         <section class="panel request-panel" aria-labelledby="request-title">
-          <div class="section-heading"><div><span class="step-kicker">STEP 01 <span>·</span> UNDERSTAND</span><h2 id="request-title">The request</h2></div><span class="local-tag">Fixed sample</span></div>
-          <label class="sr-only" for="request-text">Synthetic request text</label>
-          <textarea id="request-text" rows="2" readonly>Create a quote for two workshop days next month.</textarea>
-          <div class="request-foot"><span class="tiny-mark" aria-hidden="true">✳</span><span>Vague on purpose. Price, exact date and identity are not inferred.</span></div>
+          <div class="section-heading"><div><span class="step-kicker">STEP 01 <span>·</span> UNDERSTAND</span><h2 id="request-title">The synthetic batch</h2></div><span class="local-tag">Fixed sample</span></div>
+          <label class="sr-only" for="request-text">Synthetic batch source text</label>
+          <textarea id="request-text" rows="7" readonly>Synthetic batch (fixed examples):
+Order W-01: Create a quote for two workshop days next month. Buyer, exact date, unit price, currency, and tax are missing.
+Order W-02: Request one workshop materials pack. Buyer and price are missing. Context only; not included in this draft.
+Receipt R-01: Sample payment record has no payment proof. Context only; do not issue a receipt.
+Selected for this draft: Order W-01 only.</textarea>
+          <div class="request-foot"><span class="tiny-mark" aria-hidden="true">✳</span><span>Only W-01 enters this quotation. W-02 and R-01 remain context; no batch processing is claimed. Missing price, date and identity require a person.</span></div>
         </section>
 
         <section class="panel suggestion-panel" aria-labelledby="suggestion-title">

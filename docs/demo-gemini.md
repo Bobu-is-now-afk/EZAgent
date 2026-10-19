@@ -1,6 +1,6 @@
 # Judge demo Gemini adapter
 
-The static judge site stays in `demo/`. The API accepts only allowlisted fixture IDs; each prompt and synthetic sentence lives on the server. The separate page integration should send only those IDs and disable free-form input. Chat and Agent are text/suggestion only. The document endpoint uses the page's fixed synthetic request, `Create a quote for two workshop days next month.` The grounded suggestion is buyer `null` (not provided), description `workshop days`, quantity `2`; it does not determine price, amount, tax, payment status, or approval. Values outside those fixture facts are normalized to `null`.
+The static judge site stays in `demo/`. The API accepts only allowlisted fixture IDs; each prompt and synthetic sentence lives on the server. The browser sends only those IDs and disables free-form input. Chat and Agent are text/suggestion only. The document endpoint uses the exact synthetic batch visible on the page: orders W-01 and W-02 plus receipt R-01. Only W-01 enters the quotation; W-02 and R-01 are context, not processed into the total. The grounded suggestion is buyer `null` (not provided), description `workshop days`, quantity `2`; it does not determine price, amount, tax, payment status, or approval. Values outside W-01's stated facts are normalized to `null`.
 
 ## Routes
 
