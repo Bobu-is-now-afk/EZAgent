@@ -55,6 +55,16 @@ test('document response returns only explicit allowed fields, never amount', asy
   await assert.rejects(documentSuggest({ fixtureId: 'workshop_quote' }, { apiKey: 'test-only-key', fetcher: provider({ buyer: 'x', description: 'y', quantity: 1, missing: [], amount: 20 }) }), (error) => error instanceof DemoError && error.code === 'invalid_provider_response')
 })
 
+test('document response drops invented fixture values and non-integer quantities', async () => {
+  for (const quantity of [5, 4.5]) {
+    const result = await documentSuggest({ fixtureId: 'workshop_quote' }, {
+      apiKey: 'test-only-key',
+      fetcher: provider({ buyer: 'Invented Buyer Ltd', description: 'custom oak shelves', quantity, missing: [] }),
+    })
+    assert.deepEqual(result.suggestion, { buyer: null, description: 'custom oak shelves', quantity: null, missing: ['buyer', 'quantity'] })
+  }
+})
+
 test('missing key and Gemini failures return explicit sanitized errors', async () => {
   await assert.rejects(chat({ fixtureId: 'launch_checklist' }, { fetcher: provider({ answer: 'no' }) }), (error) => error instanceof DemoError && error.code === 'not_configured' && error.status === 503)
   await assert.rejects(chat({ fixtureId: 'launch_checklist' }, { apiKey: 'test-only-key', fetcher: provider({}, 500) }), (error) => error instanceof DemoError && error.code === 'provider_unavailable')

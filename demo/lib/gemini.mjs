@@ -125,15 +125,18 @@ export async function documentSuggest(value, options = {}) {
   }, ['buyer', 'description', 'quantity', 'missing'])
   const result = await callGemini(makePrompt('document', fixture), resultSchema, options)
   if (Object.keys(result).some((key) => !['buyer', 'description', 'quantity', 'missing'].includes(key))) throw new DemoError('invalid_provider_response', 502)
-  const buyer = result.buyer === null ? null : typeof result.buyer === 'string' ? result.buyer.slice(0, 120) : (() => { throw new DemoError('invalid_provider_response', 502) })()
-  const description = result.description === null ? null : typeof result.description === 'string' ? result.description.slice(0, 160) : (() => { throw new DemoError('invalid_provider_response', 502) })()
-  const quantity = result.quantity === null ? null : Number.isFinite(result.quantity) && result.quantity >= 0 && result.quantity <= 1_000_000 ? result.quantity : (() => { throw new DemoError('invalid_provider_response', 502) })()
-  const allowedMissing = new Set(['buyer', 'description', 'quantity'])
-  if (!Array.isArray(result.missing) || result.missing.some((field) => !allowedMissing.has(field))) throw new DemoError('invalid_provider_response', 502)
-  for (const [field, value] of [['buyer', buyer], ['description', description], ['quantity', quantity]]) {
-    if (value === null) result.missing.push(field)
+  const fixtureFields = { buyer: 'Harbor Workshop', description: 'custom oak shelves', quantity: 4 }
+  const normalizeString = (value, field, maxChars) => {
+    if (value === null) return null
+    if (typeof value !== 'string') throw new DemoError('invalid_provider_response', 502)
+    const normalized = value.trim().toLocaleLowerCase('en-US')
+    return normalized === fixtureFields[field].toLocaleLowerCase('en-US') && value.length <= maxChars ? fixtureFields[field] : null
   }
-  const missing = [...new Set(result.missing)]
+  const buyer = normalizeString(result.buyer, 'buyer', 120)
+  const description = normalizeString(result.description, 'description', 160)
+  const quantity = result.quantity === null ? null : Number.isInteger(result.quantity) && result.quantity === fixtureFields.quantity ? fixtureFields.quantity : null
+  if (!Array.isArray(result.missing) || result.missing.some((field) => !['buyer', 'description', 'quantity'].includes(field))) throw new DemoError('invalid_provider_response', 502)
+  const missing = Object.entries({ buyer, description, quantity }).filter(([, fieldValue]) => fieldValue === null).map(([field]) => field)
   return { status: 'live', source: 'gemini', model: GEMINI_MODEL, suggestion: { buyer, description, quantity, missing } }
 }
 
