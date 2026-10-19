@@ -3,29 +3,25 @@
 This standalone page is adapted from the teammate's public repository at
 https://github.com/saya-zhandev/ezagent (commit `abee346`, 2026-10-18).
 
-All demo data is synthetic. The Mac mini M6 is an assumed profile, not detected
+All demo data and replies are pre-scripted. The Mac mini M6 is an assumed profile, not detected
 hardware. Setup and the `qwen3.5:9b` download are animations. Agent Builder
 previews the roles in [agent-team-spec.md](./agent-team-spec.md); it does not
 run five agents or save a reusable tool. The separate
 [document studio](./documents.html) makes a SAMPLE draft, never issues or sends
 one.
 
-## Gemini boundary
+## Public demo boundary
 
-With Vercel Root Directory `demo`, the same-origin functions in `api/` accept
-only server-owned synthetic fixture IDs. `GET /api/status` reports whether the
-server has a key; `connectivity: "not_checked"` does not prove a model request
-ran. `POST /api/chat` returns `answer`; `POST /api/agent-suggest` returns fixed
-roles with proposed steps; `POST /api/document-suggest` returns bounded field
-suggestions. A successful response is labelled `status: "live"`,
-`source: "gemini"`, and includes the model. Non-2xx responses are errors, not
-sample replies. The browser never receives the key or a raw Ollama URL.
+With Vercel Root Directory `demo`, the browser uses fixed fictional scripts and
+does not call a model API. The former `/api/chat`, `/api/agent-suggest`, and
+`/api/document-suggest` routes return HTTP 410 `scripted_demo_only` even if a
+key remains configured. `/api/status` reports `scripted_demo`. The separate
+local product prototype uses Ollama `qwen3.5:9b` on a Mac mini, but has no
+public web URL yet. This website does not contact the Mac mini.
 
-The endpoints and local tests are documented in
-[demo-gemini.md](../docs/demo-gemini.md). Keep `GEMINI_API_KEY` unset on the
-public site until access control, distributed rate limits, and provider-side
-usage controls are approved and verified. The in-memory limiter in this demo
-does not cap spending across Vercel instances.
+The prior Gemini adapter is retained as historical implementation material.
+Remove `GEMINI_API_KEY` from the public Vercel project after this scripted
+version is deployed; the active routes do not use it.
 
 Deploy this folder with Root Directory `demo` and Production Branch `main` only
 after the separate deployment approval. This branch has not changed the public

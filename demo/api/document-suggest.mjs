@@ -1,10 +1,3 @@
-import { documentSuggest } from '../lib/gemini.mjs'
-import { fail, json, methodNotAllowed, rateLimit, readJson } from '../lib/http.mjs'
-
-export async function POST(request) {
-  const limited = rateLimit()
-  if (limited) return limited
-  try { return json(await documentSuggest(await readJson(request))) } catch (error) { return fail(error) }
-}
-
-export function GET() { return methodNotAllowed() }
+const disabled = () => Response.json({ status: 'error', error: 'scripted_demo_only' }, { status: 410, headers: { 'Cache-Control': 'no-store' } })
+export function POST() { return disabled() }
+export function GET() { return disabled() }
