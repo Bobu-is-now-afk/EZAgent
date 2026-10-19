@@ -243,8 +243,8 @@ function paint(){
   $('#tServer').textContent = lastResponseLive ? 'Gemini reply confirmed' : backendConfigured ? 'Backend configured · unverified' : 'Sample replies';
   $('#tModel').textContent = lastResponseLive || backendConfigured ? MODEL : 'Qwen 3.5 · 9B (illustrative)';
   $('#tModelLabel').textContent = lastResponseLive ? 'Model used for live reply' : backendConfigured ? 'Configured model · not yet verified' : 'Illustrative model';
-  $('#inp').disabled = backendConfigured;
-  $('#inp').placeholder = backendConfigured ? 'Choose a synthetic prompt above' : (mode === 'agent' ? 'Sample mode: describe a task' : 'Sample mode: ask anything');
+  $('#inp').disabled = true;
+  $('#inp').placeholder = 'Choose a synthetic prompt above';
 }
 ping(); setInterval(ping, 30000);
 
@@ -289,7 +289,12 @@ function renderEmpty(){
       const b = document.createElement('button'); b.type = 'button'; b.className = 'choice';
       b.innerHTML = '<strong></strong><span></span>';
       b.querySelector('strong').textContent = title; b.querySelector('span').textContent = description;
-      b.onclick = () => i === 0 ? ($('#inp').focus()) : renderBuilder();
+      b.onclick = () => {
+        if(i !== 0) return renderBuilder();
+        selectedFixtureId = 'synthetic_document_task';
+        $('#inp').value = 'Review this synthetic workshop order. Outline the requested document and flag missing details for human review.';
+        $('#form').requestSubmit();
+      };
       e.querySelector('.choice-list').appendChild(b);
     });
   }
@@ -327,7 +332,7 @@ document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if(busy) return;
   mode = b.dataset.mode; history = []; selectedFixtureId = null; lastResponseLive = false; paint();
   document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
-  $('#inp').placeholder = backendConfigured ? 'Choose a synthetic prompt above' : (mode === 'agent' ? 'Sample mode: describe a task' : 'Sample mode: ask anything');
+  $('#inp').placeholder = 'Choose a synthetic prompt above';
   renderEmpty();
 });
 $('#newChat').onclick = () => { if(!busy){ history = []; lastResponseLive = false; paint(); renderEmpty(); } };
@@ -393,7 +398,7 @@ async function runAgent(task, fixtureId){
 $('#form').onsubmit = async e => {
   e.preventDefault();
   const q = $('#inp').value.trim(); if(!q || busy) return;
-  if(backendConfigured && !selectedFixtureId){ bubble('a', 'Configured Gemini requests only accept server-owned synthetic prompts. Choose a suggestion above; your text was not sent.'); return; }
+  if(!selectedFixtureId){ bubble('a', 'This demo only accepts server-owned synthetic prompts. Choose a suggestion above; your text was not sent.'); return; }
   const fixtureId = selectedFixtureId; selectedFixtureId = null;
   $('#inp').value = ''; busy = true; $('#send').disabled = true;
   const em = $('#empty'); if(em) em.remove();
