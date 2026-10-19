@@ -1,6 +1,6 @@
 # Judge demo Gemini adapter
 
-The static judge site stays in `demo/`. The API accepts only allowlisted fixture IDs; each prompt and synthetic sentence lives on the server. The separate page integration should send only those IDs and disable free-form input. Chat and Agent are text/suggestion only. The document endpoint suggests buyer, description, quantity, and missing fields from one fixed synthetic quote. It does not determine price, amount, tax, payment status, or approval.
+The static judge site stays in `demo/`. The API accepts only allowlisted fixture IDs; each prompt and synthetic sentence lives on the server. The separate page integration should send only those IDs and disable free-form input. Chat and Agent are text/suggestion only. The document endpoint uses the page's fixed synthetic request, `Create a quote for two workshop days next month.` The grounded suggestion is buyer `null` (not provided), description `workshop days`, quantity `2`; it does not determine price, amount, tax, payment status, or approval. Values outside those fixture facts are normalized to `null`.
 
 ## Routes
 
@@ -8,7 +8,7 @@ The static judge site stays in `demo/`. The API accepts only allowlisted fixture
 | --- | --- | --- |
 | `POST /api/chat` | `{ "fixtureId": "study_schedule" | "cache_comparison" | "launch_checklist" }` | `{ "status": "live", "source": "gemini", "model": "gemini-2.5-flash", "answer": "..." }` |
 | `POST /api/agent-suggest` | `{ "fixtureId": "synthetic_document_task", "template"?: "documents" | "review" | "other" }` | `{ "status": "live", "source": "gemini", "model": "gemini-2.5-flash", "roles": [...], "proposedSteps": [...], "missing": [...] }` |
-| `POST /api/document-suggest` | `{ "fixtureId": "workshop_quote" }` | `{ "status": "live", "source": "gemini", "model": "gemini-2.5-flash", "suggestion": { "buyer": "...", "description": "...", "quantity": 4, "missing": [] } }` |
+| `POST /api/document-suggest` | `{ "fixtureId": "workshop_quote" }` | `{ "status": "live", "source": "gemini", "model": "gemini-2.5-flash", "suggestion": { "buyer": null, "description": "workshop days", "quantity": 2, "missing": ["buyer"] } }` |
 | `GET /api/status` | none | `{ "configured": true, "connectivity": "not_checked", "source": "gemini", "model": "gemini-2.5-flash" }` when a key is configured; otherwise `configured: false` |
 
 Requests reject unknown keys, free-form text, unsupported fixtures, invalid JSON/UTF-8, and bodies over 4 KiB. Fixture prompts are at most 1,200 characters. Gemini output is limited to 512 tokens, one request per invocation, and a 30-second timeout. Failures return a non-2xx response with `{ "status": "error", "error": "..." }`; there is no automatic sample fallback. The browser must leave the result in an error state on failure.

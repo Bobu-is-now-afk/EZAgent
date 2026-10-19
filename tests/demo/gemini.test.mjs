@@ -45,11 +45,11 @@ test('document response returns only explicit allowed fields, never amount', asy
     apiKey: 'test-only-key', fetcher: async (_url, init) => {
       const body = JSON.parse(init.body)
       prompt = body.contents[0].parts[0].text
-      return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ buyer: 'Harbor Workshop', description: 'custom oak shelves', quantity: 4, missing: [] }) }] } }] })
+      return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ buyer: 'Invented Buyer Ltd', description: 'Workshop Days', quantity: 2, missing: [] }) }] } }] })
     },
   })
-  assert.match(prompt, /Synthetic source: Synthetic workshop quote/)
-  assert.deepEqual(result.suggestion, { buyer: 'Harbor Workshop', description: 'custom oak shelves', quantity: 4, missing: [] })
+  assert.match(prompt, /Synthetic source: Create a quote for two workshop days next month\./)
+  assert.deepEqual(result.suggestion, { buyer: null, description: 'workshop days', quantity: 2, missing: ['buyer'] })
   assert.equal('amount' in result.suggestion, false)
   await assert.rejects(documentSuggest({ fixtureId: 'workshop_quote', text: 'arbitrary content' }, { apiKey: 'test-only-key', fetcher: provider({}) }), (error) => error instanceof DemoError && error.code === 'invalid_input')
   await assert.rejects(documentSuggest({ fixtureId: 'workshop_quote' }, { apiKey: 'test-only-key', fetcher: provider({ buyer: 'x', description: 'y', quantity: 1, missing: [], amount: 20 }) }), (error) => error instanceof DemoError && error.code === 'invalid_provider_response')
@@ -59,9 +59,9 @@ test('document response drops invented fixture values and non-integer quantities
   for (const quantity of [5, 4.5]) {
     const result = await documentSuggest({ fixtureId: 'workshop_quote' }, {
       apiKey: 'test-only-key',
-      fetcher: provider({ buyer: 'Invented Buyer Ltd', description: 'custom oak shelves', quantity, missing: [] }),
+      fetcher: provider({ buyer: 'Invented Buyer Ltd', description: 'Invented service', quantity, missing: [] }),
     })
-    assert.deepEqual(result.suggestion, { buyer: null, description: 'custom oak shelves', quantity: null, missing: ['buyer', 'quantity'] })
+    assert.deepEqual(result.suggestion, { buyer: null, description: null, quantity: null, missing: ['buyer', 'description', 'quantity'] })
   }
 })
 
