@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
+import { syntheticRequest, syntheticResult } from './synthetic_contract.mjs'
 
 const MODEL = 'qwen3.5:9b'
 const MAX_BODY_BYTES = 32 * 1024
@@ -106,12 +107,12 @@ function validRequest(body) {
   return true
 }
 
-async function readLimited(request) {
+async function readLimited(request, limit = MAX_BODY_BYTES) {
   const chunks = []
   let size = 0
   for await (const chunk of request) {
     size += chunk.length
-    if (size > MAX_BODY_BYTES) return null
+    if (size > limit) return null
     chunks.push(chunk)
   }
   return Buffer.concat(chunks).toString('utf8')
@@ -165,7 +166,7 @@ export async function checkOllamaModel({ ollamaUrl = 'http://127.0.0.1:11434', f
 }
 
 export function createGateway({ apiKey, ollamaUrl = 'http://127.0.0.1:11434', fetchImpl = fetch,
-  now = Date.now } = {}) {
+  now = Date.now, syntheticOnly = false } = {}) {
   if (typeof apiKey !== 'string' || Buffer.byteLength(apiKey) < 32 || Buffer.byteLength(apiKey) > 256) {
     throw new Error('MODEL_GATEWAY_API_KEY must be a 32–256 byte secret from the runtime environment')
   }
@@ -186,7 +187,7 @@ export function createGateway({ apiKey, ollamaUrl = 'http://127.0.0.1:11434', fe
       json(response, 200, { status: 'ok' })
       return
     }
-    if (request.url !== '/v1/chat/completions' || request.method !== 'POST') {
+    if (request.url !== (syntheticOnly ? '/v1/synthetic' : '/v1/chat/completions') || request.method !== 'POST') {
       json(response, 404, { error: { code: 'not_found' } })
       return
     }
@@ -198,13 +199,13 @@ export function createGateway({ apiKey, ollamaUrl = 'http://127.0.0.1:11434', fe
       json(response, 429, { error: { code: 'model_busy' } }, { 'retry-after': '5' })
       return
     }
-    if (Number(request.headers['content-length']) > MAX_BODY_BYTES) {
+    if (Number(request.headers['content-length']) > (syntheticOnly ? 128 : MAX_BODY_BYTES)) {
       json(response, 413, { error: { code: 'request_too_large' } })
       return
     }
     let body
     try {
-      const raw = await readLimited(request)
+      const raw = await readLimited(request, syntheticOnly ? 128 : MAX_BODY_BYTES)
       if (raw === null) {
         json(response, 413, { error: { code: 'request_too_large' } })
         return
@@ -214,6 +215,8 @@ export function createGateway({ apiKey, ollamaUrl = 'http://127.0.0.1:11434', fe
       json(response, 400, { error: { code: 'invalid_json' } })
       return
     }
+    const scenario = syntheticOnly ? body?.scenario : undefined
+    if (syntheticOnly) body = syntheticRequest(body)
     if (!validRequest(body)) {
       json(response, 400, { error: { code: 'invalid_request' } })
       return
@@ -230,6 +233,7 @@ export function createGateway({ apiKey, ollamaUrl = 'http://127.0.0.1:11434', fe
     try {
       const upstream = await fetchImpl(`${ollamaOrigin}/v1/chat/completions`, {
         method: 'POST',
+        redirect: 'error',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: MODEL,
@@ -258,13 +262,21 @@ export function createGateway({ apiKey, ollamaUrl = 'http://127.0.0.1:11434', fe
         return
       }
       const result = JSON.parse(raw)
-      json(response, 200, result)
-    } catch {
-      json(response, 502, { error: { code: 'model_unreachable' } })
+      const output = syntheticOnly ? syntheticResult(scenario, result) : result
+      if (!output) {
+        json(response, 502, { error: { code: 'invalid_model_response' } })
+        return
+      }
+      json(response, 200, output)
+    } catch (error) {
+      const timeout = ['TimeoutError', 'AbortError'].includes(error?.name)
+      json(response, timeout ? 504 : 503, { error: { code: timeout ? 'model_timeout' : 'model_unreachable' } })
     } finally {
       active = false
     }
   })
+  server.maxConnections = 32
+  server.setTimeout(55_000, (socket) => socket.destroy())
   server.headersTimeout = 5_000
   server.requestTimeout = 10_000
   return server

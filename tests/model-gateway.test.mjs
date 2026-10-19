@@ -142,3 +142,48 @@ test('preflight checks the installed model on loopback Ollama', async () => {
   await assert.rejects(checkOllamaModel({ fetchImpl: async () => { throw new Error('offline') } }), /unreachable/)
   await assert.rejects(checkOllamaModel({ ollamaUrl: 'http://example.com' }), /loopback/)
 })
+
+test('synthetic mode rejects arbitrary text and general chat, projects validated results', async () => {
+  let calls = 0
+  await withGateway({ syntheticOnly: true, fetchImpl: async (_url, options) => {
+    calls++
+    assert.equal(options.redirect, 'error')
+    assert.equal(JSON.parse(options.body).tools, undefined)
+    return Response.json({ choices: [{ message: { content: '{"item":"design"}' } }], internal: 'omit' })
+  } }, async (base) => {
+    const send = (body) => fetch(base + '/v1/synthetic', { method: 'POST',
+      headers: { authorization: `Bearer ${KEY}` }, body: JSON.stringify(body) })
+    assert.equal((await chat(base)).status, 404)
+    for (const body of [{ scenario: ['design'] }, { scenario: 'unknown' }, { scenario: 'design', prompt: 'private' }, null])
+      assert.equal((await send(body)).status, 400)
+    const response = await send({ scenario: 'design' })
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { demoOnly: true, status: 'draft_only',
+      source: 'live_model', scenario: 'design', item: 'design', currency: 'HKD', amount: 800 })
+    assert.equal(calls, 1)
+  })
+})
+
+test('synthetic mode fails closed on malformed or unexpected model output', async () => {
+  for (const content of ['not JSON', '{"item":"print"}', '{"item":"design","extra":"text"}']) {
+    await withGateway({ syntheticOnly: true, fetchImpl: async () =>
+      Response.json({ choices: [{ message: { content } }] }) }, async (base) => {
+      const response = await fetch(base + '/v1/synthetic', { method: 'POST',
+        headers: { authorization: `Bearer ${KEY}` }, body: '{"scenario":"design"}' })
+      assert.equal(response.status, 502)
+    })
+  }
+})
+
+test('offline and timeout errors are sanitized and release the active slot', async () => {
+  for (const [name, status] of [['Error', 503], ['TimeoutError', 504]]) {
+    await withGateway({ fetchImpl: async () => { const error = new Error('private'); error.name = name; throw error } },
+      async (base) => {
+        for (let i = 0; i < 2; i++) {
+          const response = await chat(base)
+          assert.equal(response.status, status)
+          assert.ok(!(await response.text()).includes('private'))
+        }
+      })
+  }
+})
