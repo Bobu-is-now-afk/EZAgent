@@ -13,6 +13,12 @@ type View = 'overview' | 'chat' | 'builder' | 'library' | 'inkvoice' | 'accounti
 type ChatMessage = { id: number; role: 'user' | 'assistant'; text: string; source: 'live' | 'sample' | 'status' }
 type SavedTool = { id: number; name: string; goal: string; pills: string[]; plan: string }
 const savedToolsKey = 'ezagent-built-agents-v1'
+const workshopSource = 'Fictional Order W-01: request for a quotation for two workshop days next month. Seller, buyer, exact service date, unit price, currency, and tax rate are not provided. Order W-02 and Receipt R-01 are context only; R-01 is not payment proof.'
+const defaultRunInput = `${workshopSource} Prepare a text-only quotation draft with placeholders for unknown fields and list what a person must confirm.`
+const safePlan = '1. Read only the text supplied in the input and identify the requested work.\n2. Extract stated facts and mark every missing field as unknown.\n3. Prepare a text-only draft with placeholders for missing details.\n4. Ask a person to review and confirm the draft.\nRequired input: source text pasted into the input box.\nHuman review: required before any document is issued or sent.'
+function previewSafePlan(answer: string) {
+  return /\b(?:document|file|send|email|deliver|export|issue|customer|client|upload|handoff)\b|hand over/i.test(answer) ? safePlan : answer
+}
 
 const examples = [
   {
@@ -53,7 +59,7 @@ export default function Page() {
   const [pills, setPills] = useState<string[]>(['Select source', 'Flag missing fields', 'Require human review'])
   const [planVisible, setPlanVisible] = useState(false)
   const [planText, setPlanText] = useState('')
-  const [runInput, setRunInput] = useState('Review fictional Order W-01 and explain the next safe step.')
+  const [runInput, setRunInput] = useState(defaultRunInput)
   const [runOutput, setRunOutput] = useState('')
   const [builderBusy, setBuilderBusy] = useState<'plan' | 'run' | null>(null)
   const [builderError, setBuilderError] = useState('')
@@ -134,9 +140,9 @@ export default function Page() {
     if (!toolName.trim() || !goal.trim() || !pills.length || builderBusy) return
     setBuilderBusy('plan'); setBuilderError(''); setRunOutput(''); setPlanVisible(false)
     try {
-      const prompt = `You are designing a reusable EZAgent browser agent. Name: ${toolName.trim()}. Goal: ${goal.trim()}. Required logic: ${pills.join(', ')}. Return at most four numbered steps, one sentence each, then one line for required inputs and one for human review. This is planning only; do not claim tools or files were run.`
+      const prompt = `You are designing a reusable EZAgent browser agent. Name: ${toolName.trim()}. Goal: ${goal.trim()}. Required logic: ${pills.join(', ')}. Return at most four numbered steps, one sentence each, then one line for required inputs and one for human review. This browser agent can only process user-provided text. Describe a text-only draft with placeholders and human review; never describe creating files or documents, sending messages, or taking external actions. For the default example, this is the source: ${workshopSource}`
       const answer = await requestBuilder([prompt])
-      setPlanText(answer); setPlanVisible(true)
+      setPlanText(previewSafePlan(answer)); setPlanVisible(true)
     } catch (error) { setBuilderError(error instanceof Error ? error.message : 'Planning failed.') }
     finally { setBuilderBusy(null) }
   }
@@ -144,7 +150,7 @@ export default function Page() {
     if (!planText || !runInput.trim() || builderBusy) return
     setBuilderBusy('run'); setBuilderError(''); setRunOutput('')
     try {
-      const prompt = `Run this reusable EZAgent browser agent as a text-only workflow. Goal: ${goal.trim()}. Rules: ${pills.join(', ')}. User input: ${runInput.trim()}. Follow the plan and rules. In under 180 words, give a concrete result and missing information. Do not claim to have used files, tools, sent messages, or completed external actions.`
+      const prompt = `Run this reusable EZAgent browser agent as a text-only workflow. Goal: ${goal.trim()}. Rules: ${pills.join(', ')}. User input: ${runInput.trim()}. Follow the plan and rules. If asked for a quotation, provide a clearly labelled text-only draft with placeholders for unknown details, then list missing information for human review. In under 180 words, give a concrete result. Do not invent facts or claim to have used files, tools, sent messages, or completed external actions.`
       setRunOutput(await requestBuilder([`Previously approved plan: ${planText.slice(0, 900)}`, prompt]))
     } catch (error) { setBuilderError(error instanceof Error ? error.message : 'The run failed.') }
     finally { setBuilderBusy(null) }
@@ -161,7 +167,7 @@ export default function Page() {
     navigate('library')
   }
   function openTool(tool: SavedTool) { setEditingToolId(tool.id); setToolName(tool.name); setGoal(tool.goal); setPills(tool.pills); setPlanText(tool.plan); setPlanVisible(true); setRunOutput(''); setBuilderError(''); navigate('builder') }
-  function createTool() { setEditingToolId(null); setToolName('Workshop quotation assistant'); setGoal('Prepare a reviewable quotation from sample Order W-01'); setPills(['Select source', 'Flag missing fields', 'Require human review']); resetPlan(); navigate('builder') }
+  function createTool() { setEditingToolId(null); setToolName('Workshop quotation assistant'); setGoal('Prepare a reviewable quotation from sample Order W-01'); setPills(['Select source', 'Flag missing fields', 'Require human review']); setRunInput(defaultRunInput); resetPlan(); navigate('builder') }
   return <div className="product-shell">
     <header className="top-header">
       <div className="header-left">
@@ -191,6 +197,7 @@ export default function Page() {
 
         {view === 'builder' && <>
           <PageHead number="02" label="AGENT BUILDER" title="Build a reusable agent" description="Describe a goal, get a live plan from qwen3.5:9b, build the agent in this browser, then run it on your own text. Use fictional data only." />
+          <div className="as-note"><ShieldCheck size={17} /><p><strong>Fictional source for the default task:</strong> {workshopSource} The source text is prefilled in “Input to process” and sent to the live model when you run the agent.</p></div>
           <div className="work-grid builder-grid">
             <section className="panel form-panel">
               <div className="panel-top"><div className="panel-title"><span className="mini-icon lilac"><WandSparkles size={18} /></span><div><strong>Agent definition</strong><small>Editable browser workflow</small></div></div></div>
@@ -202,7 +209,7 @@ export default function Page() {
             </section>
             <section className="panel plan-panel">
               <div className="panel-top"><div className="panel-title"><span className="mini-icon mint"><ClipboardCheck size={18} /></span><div><strong>Plan and process</strong><small>{planVisible ? 'Live qwen3.5:9b plan' : 'Waiting for model plan'}</small></div></div></div>
-              {!planVisible ? <div className="plan-empty"><Layers3 size={31} /><h3>Your model plan appears here</h3><p>Adjust the goal and rules, then select Preview live plan.</p></div> : <div className="plan-content" aria-live="polite"><div className="plan-summary"><span className="tiny-label">GOAL</span><strong>{goal}</strong></div><div className="model-plan"><span className="tiny-label">LIVE MODEL PLAN · QWEN3.5:9B</span><p>{planText}</p></div><div className="plan-steps">{pills.map((pill, index) => <div key={`${pill}-${index}`} className="plan-step"><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{pill}</strong></div></div>)}</div><div className="field builder-run-field"><label htmlFor="agent-run-input">Input to process</label><textarea id="agent-run-input" rows={3} value={runInput} maxLength={300} onChange={(event) => setRunInput(event.target.value)} /><small>The model will process this text using the goal and selected rules.</small></div><div className="plan-run"><button className="button button-dark" onClick={runAgent} disabled={!runInput.trim() || !!builderBusy}>{builderBusy === 'run' ? 'Processing…' : 'Run agent on input'} <ArrowRight size={15} /></button><button className="button button-light" onClick={saveTool} disabled={!!builderBusy}>{editingToolId === null ? 'Build agent' : 'Update built agent'}</button></div>{runOutput && <div className="run-result"><span className="result-badge"><Check size={14} /> Live qwen3.5:9b result</span><p>{runOutput}</p></div>}</div>}
+              {!planVisible ? <div className="plan-empty"><Layers3 size={31} /><h3>Your model plan appears here</h3><p>Adjust the goal and rules, then select Preview live plan.</p></div> : <div className="plan-content" aria-live="polite"><div className="plan-summary"><span className="tiny-label">GOAL</span><strong>{goal}</strong></div><div className="model-plan"><span className="tiny-label">MODEL-ASSISTED PLAN · TEXT ONLY</span><p>{planText}</p></div><div className="plan-steps">{pills.map((pill, index) => <div key={`${pill}-${index}`} className="plan-step"><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{pill}</strong></div></div>)}</div><div className="field builder-run-field"><label htmlFor="agent-run-input">Input to process</label><textarea id="agent-run-input" rows={4} value={runInput} maxLength={600} onChange={(event) => setRunInput(event.target.value)} /><small>Only this text is sent as source material when you run the agent. Replace it with your own fictional input if needed.</small></div><div className="plan-run"><button className="button button-dark" onClick={runAgent} disabled={!runInput.trim() || !!builderBusy}>{builderBusy === 'run' ? 'Processing…' : 'Run agent on input'} <ArrowRight size={15} /></button><button className="button button-light" onClick={saveTool} disabled={!!builderBusy}>{editingToolId === null ? 'Build agent' : 'Update built agent'}</button></div>{runOutput && <div className="run-result"><span className="result-badge"><Check size={14} /> Live qwen3.5:9b result</span><p>{runOutput}</p></div>}</div>}
             </section>
           </div>
           <NextStep onClick={() => navigate('library')} label="Next: explore built and example tools" />

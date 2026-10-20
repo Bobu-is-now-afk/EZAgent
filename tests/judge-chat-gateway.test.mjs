@@ -40,6 +40,7 @@ test('accepts only chat messages and pins the model', async () => {
   assert.equal(calls.at(-1).stream, false)
   assert.equal(calls.at(-1).think, false)
   assert.equal(calls.at(-1).messages[0].role, 'system')
+  assert.match(calls.at(-1).messages[0].content, /Do not invent additional record fields, budget approvals/)
 })
 
 test('rejects oversized input before model request', async () => {

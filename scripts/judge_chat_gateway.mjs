@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
 
 const MODEL = 'qwen3.5:9b'
-const SYSTEM = 'You are EZAgent in a university Hackathon product preview. Answer clearly and briefly. Do not claim to have opened files, run tools, sent messages, created documents, or verified facts outside this chat. When information is missing, say so.'
+const SYSTEM = 'You are EZAgent in a university Hackathon product preview. Answer clearly and briefly. The only sample facts supplied to you are: fictional Order W-01 requests a quotation for two workshop days next month; seller, buyer, exact service date, unit price, currency, and tax rate are unknown. Fictional Order W-02 and Receipt R-01 are context only; R-01 does not prove payment. These are fictional examples, not documents you opened. Do not invent additional record fields, budget approvals, prices, dates, or payment evidence. For any missing field, say it is unknown and needs human confirmation. Do not claim to have opened files, run tools, sent messages, created documents, or verified facts outside this chat.'
 const MAX_BODY = 12_000
 const MAX_RESPONSE = 128_000
 const MAX_PER_MINUTE = 8

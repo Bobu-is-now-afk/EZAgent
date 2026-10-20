@@ -36,6 +36,7 @@ test('visible demo scripts use fixed responses and never request model endpoints
   const studio = await readFile(new URL('../../demo/documents.js', import.meta.url), 'utf8')
   assert.match(home, /This demo website simulates the process/)
   assert.match(home, /href="https:\/\/ezagent-product-web-preview\.vercel\.app\/"/)
+  assert.match(home, /<div id="app" hidden>[\s\S]*class="app-product-link" href="https:\/\/ezagent-product-web-preview\.vercel\.app\/"/)
   assert.match(home, /This simulated walkthrough itself never contacts the model/)
   assert.match(home, /Pre-scripted reply · fictional example/)
   assert.match(studio, /description: 'workshop days', quantity: 2/)
