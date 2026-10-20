@@ -2,7 +2,7 @@
 
 ## Scope and plan
 
-The Product Web Preview sends **free-text Chat only** through its Vercel `/api/live-chat` route to an authenticated Cloudflare tunnel and the Mac mini gateway. The gateway calls Ollama `/api/chat` on loopback with the fixed `qwen3.5:9b` model. Suggested Chat answers, Agent Builder, and the separate simulated judge demo remain labelled scripted examples. The gateway cannot run tools, choose models, manage Ollama, or read local files.
+The Product Web Preview sends **free-text Chat and Agent Builder text planning/runs** through its Vercel `/api/live-chat` route to an authenticated Cloudflare tunnel and the Mac mini gateway. The gateway calls Ollama `/api/chat` on loopback with the fixed `qwen3.5:9b` model. Suggested Chat answers and the separate simulated judge demo remain labelled scripted examples. Built agent definitions are stored in the visitor's browser and can be run again through the model; they are not background workers. The gateway cannot run tools, choose models, manage Ollama, or read local files.
 
 The public Vercel site needs two server-only environment variables:
 
