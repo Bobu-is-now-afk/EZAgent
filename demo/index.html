@@ -80,6 +80,8 @@ h1{font-size:clamp(36px,6.4vw,64px);line-height:1.05;letter-spacing:-.04em;margi
 .seg button{border:0;background:transparent;padding:7px 18px;border-radius:8px;font-weight:500;font-size:14px;color:var(--mute)}
 .seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .right{display:flex;align-items:center;gap:10px}
+.app-product-link{display:block;padding:10px 18px;background:#f1f7f3;border-bottom:1px solid #c5dfcf;color:#174a31;text-align:center;font-size:14px;font-weight:600;text-decoration:none}
+.app-product-link:hover{text-decoration:underline}
 #log{flex:1;overflow:auto;padding:28px 18px;display:flex;flex-direction:column;gap:14px;align-items:center}
 .col{width:100%;max-width:720px;display:flex;flex-direction:column;gap:14px}
 .msg{padding:12px 16px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere;max-width:92%}
@@ -207,6 +209,7 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
       <button class="btn" id="cfgBtn" aria-label="Settings">Settings</button>
     </div>
   </header>
+  <a class="app-product-link" href="https://ezagent-product-web-preview.vercel.app/">Try the live Product Web Preview → Chat and Agent Builder use the Mac mini model while online</a>
   <div id="log"><div class="col" id="col"></div></div>
   <form id="form" autocomplete="off">
     <div class="box">
@@ -218,7 +221,7 @@ dialog .pri{background:var(--ink);color:#fff;border-color:var(--ink)}
 
 <dialog id="cfg">
   <h3>Connection status</h3>
-  <p>This website is a scripted demo. It does not contact Gemini or the Mac mini. The separate local product prototype uses Ollama with qwen3.5:9b.</p>
+  <p>This website is a scripted demo and does not contact the Mac mini. The Product Web Preview connects Chat and Agent Builder to qwen3.5:9b while the Mac mini is online.</p>
   <p id="cfgStatus" role="status">Scripted demo · no AI connection</p>
   <menu><button class="btn" id="cCancel" type="button">Close</button></menu>
 </dialog>
