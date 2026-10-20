@@ -11,7 +11,8 @@ import AccountingExample from './accounting-example'
 
 type View = 'overview' | 'chat' | 'builder' | 'library' | 'inkvoice' | 'accounting'
 type ChatMessage = { id: number; role: 'user' | 'assistant'; text: string; source: 'live' | 'sample' | 'status' }
-type SavedTool = { id: number; name: string; goal: string; pills: string[] }
+type SavedTool = { id: number; name: string; goal: string; pills: string[]; plan: string }
+const savedToolsKey = 'ezagent-built-agents-v1'
 
 const examples = [
   {
@@ -51,10 +52,27 @@ export default function Page() {
   const [toolName, setToolName] = useState('Workshop quotation assistant')
   const [pills, setPills] = useState<string[]>(['Select source', 'Flag missing fields', 'Require human review'])
   const [planVisible, setPlanVisible] = useState(false)
-  const [runVisible, setRunVisible] = useState(false)
+  const [planText, setPlanText] = useState('')
+  const [runInput, setRunInput] = useState('Review fictional Order W-01 and explain the next safe step.')
+  const [runOutput, setRunOutput] = useState('')
+  const [builderBusy, setBuilderBusy] = useState<'plan' | 'run' | null>(null)
+  const [builderError, setBuilderError] = useState('')
   const [savedTools, setSavedTools] = useState<SavedTool[]>([])
+  const [toolsLoaded, setToolsLoaded] = useState(false)
   const [editingToolId, setEditingToolId] = useState<number | null>(null)
   useEffect(() => () => { if (chatTimer.current) clearTimeout(chatTimer.current); chatAbort.current?.abort() }, [])
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(savedToolsKey) || '[]') as unknown
+      if (Array.isArray(stored)) setSavedTools(stored.filter((tool): tool is SavedTool =>
+        tool && typeof tool === 'object' && typeof tool.id === 'number' && typeof tool.name === 'string' && tool.name.length <= 70 &&
+        typeof tool.goal === 'string' && tool.goal.length <= 500 && Array.isArray(tool.pills) &&
+        tool.pills.every((pill: unknown) => typeof pill === 'string' && pillOptions.includes(pill)) &&
+        typeof tool.plan === 'string' && tool.plan.length <= 4000).slice(0, 20))
+    } catch { /* Browser storage may be disabled. Session state still works. */ }
+    setToolsLoaded(true)
+  }, [])
+  useEffect(() => { if (toolsLoaded) try { localStorage.setItem(savedToolsKey, JSON.stringify(savedTools)) } catch { /* Session state still works. */ } }, [savedTools, toolsLoaded])
 
   function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
@@ -105,19 +123,45 @@ export default function Page() {
     setChatBusy(false)
   }
   function togglePill(pill: string) { setPills((current) => current.includes(pill) ? current.filter((item) => item !== pill) : [...current, pill]) }
+  function resetPlan() { setPlanVisible(false); setPlanText(''); setRunOutput(''); setBuilderError('') }
+  async function requestBuilder(prompts: string[]) {
+    const response = await fetch('/api/live-chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: prompts.map((content) => ({ role: 'user', content })) }) })
+    const result = await response.json() as { answer?: string }
+    if (!response.ok || !result.answer) throw new Error(response.status === 429 ? 'The Mac mini model is busy. Try again shortly.' : 'The Mac mini model is unavailable. Try again later.')
+    return result.answer
+  }
+  async function previewPlan() {
+    if (!toolName.trim() || !goal.trim() || !pills.length || builderBusy) return
+    setBuilderBusy('plan'); setBuilderError(''); setRunOutput(''); setPlanVisible(false)
+    try {
+      const prompt = `You are designing a reusable EZAgent browser agent. Name: ${toolName.trim()}. Goal: ${goal.trim()}. Required logic: ${pills.join(', ')}. Return at most four numbered steps, one sentence each, then one line for required inputs and one for human review. This is planning only; do not claim tools or files were run.`
+      const answer = await requestBuilder([prompt])
+      setPlanText(answer); setPlanVisible(true)
+    } catch (error) { setBuilderError(error instanceof Error ? error.message : 'Planning failed.') }
+    finally { setBuilderBusy(null) }
+  }
+  async function runAgent() {
+    if (!planText || !runInput.trim() || builderBusy) return
+    setBuilderBusy('run'); setBuilderError(''); setRunOutput('')
+    try {
+      const prompt = `Run this reusable EZAgent browser agent as a text-only workflow. Goal: ${goal.trim()}. Rules: ${pills.join(', ')}. User input: ${runInput.trim()}. Follow the plan and rules. In under 180 words, give a concrete result and missing information. Do not claim to have used files, tools, sent messages, or completed external actions.`
+      setRunOutput(await requestBuilder([`Previously approved plan: ${planText.slice(0, 900)}`, prompt]))
+    } catch (error) { setBuilderError(error instanceof Error ? error.message : 'The run failed.') }
+    finally { setBuilderBusy(null) }
+  }
   function saveTool() {
     const name = toolName.trim()
-    if (!name || !goal.trim() || pills.length === 0) return
+    if (!name || !goal.trim() || pills.length === 0 || !planText) return
     if (editingToolId !== null) {
-      setSavedTools((current) => current.map((tool) => tool.id === editingToolId ? { ...tool, name, goal: goal.trim(), pills: [...pills] } : tool))
+      setSavedTools((current) => current.map((tool) => tool.id === editingToolId ? { ...tool, name, goal: goal.trim(), pills: [...pills], plan: planText } : tool))
     } else {
-      setSavedTools((current) => [...current, { id: Date.now(), name, goal: goal.trim(), pills: [...pills] }])
+      setSavedTools((current) => [...current, { id: Date.now(), name, goal: goal.trim(), pills: [...pills], plan: planText }].slice(-20))
     }
     setEditingToolId(null)
     navigate('library')
   }
-  function openTool(tool: SavedTool) { setEditingToolId(tool.id); setToolName(tool.name); setGoal(tool.goal); setPills(tool.pills); setPlanVisible(true); setRunVisible(false); navigate('builder') }
-  function createTool() { setEditingToolId(null); setToolName('Workshop quotation assistant'); setGoal('Prepare a reviewable quotation from sample Order W-01'); setPills(['Select source', 'Flag missing fields', 'Require human review']); setPlanVisible(false); setRunVisible(false); navigate('builder') }
+  function openTool(tool: SavedTool) { setEditingToolId(tool.id); setToolName(tool.name); setGoal(tool.goal); setPills(tool.pills); setPlanText(tool.plan); setPlanVisible(true); setRunOutput(''); setBuilderError(''); navigate('builder') }
+  function createTool() { setEditingToolId(null); setToolName('Workshop quotation assistant'); setGoal('Prepare a reviewable quotation from sample Order W-01'); setPills(['Select source', 'Flag missing fields', 'Require human review']); resetPlan(); navigate('builder') }
   return <div className="product-shell">
     <header className="top-header">
       <div className="header-left">
@@ -130,13 +174,13 @@ export default function Page() {
     <main className="main-panel">
       <div className={`content ${view === 'overview' ? 'home-wrap' : ''} ${view === 'inkvoice' ? 'iv-content' : ''}`}>
         {view === 'overview' && <section className="home-content">
-          <div className="home-heading"><div className="eyebrow">EZAGENT PRODUCT WEB PREVIEW</div><h1>What would you like to do today?</h1><p>Explore the interactive web version of EZAgent. This Hackathon preview uses fictional records. Free-text Chat uses a live Mac mini model when the connection is online; suggested answers and agent plans are scripted examples.</p></div>
+          <div className="home-heading"><div className="eyebrow">EZAGENT PRODUCT WEB PREVIEW</div><h1>What would you like to do today?</h1><p>Explore the interactive web version of EZAgent with fictional records. Free-text Chat and Agent Builder can use the live Mac mini model while the connection is online. Suggested Chat answers remain scripted examples.</p></div>
           <div className="feature-grid">{[
             { step: '01', title: 'Chat', description: 'Ask the live model or explore scripted sample answers.', icon: MessageSquareText, target: 'chat' as View },
-            { step: '02', title: 'Agent Builder', description: 'Shape a repeatable workflow with logic steps and a reviewable plan.', icon: Sparkles, target: 'builder' as View, featured: true },
+            { step: '02', title: 'Agent Builder', description: 'Plan, build, and run a reusable text agent with the live model.', icon: Sparkles, target: 'builder' as View, featured: true },
             { step: '03', title: 'Tool Library', description: 'Open InkVoice and the Accounting Statement Generator, or refine your saved tools.', icon: Library, target: 'library' as View },
-          ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Example tools are ready to explore. Your session tools appear here after you save one.</span>}</button>)}</div>
-          <div className="home-footer"><p><strong>Product Web Preview:</strong> browser tools are interactive. Free-text Chat connects to the Mac mini only while the temporary gateway is online. Suggested answers and agent plans are examples. This site does not issue documents or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open simulated judge demo <ArrowDownRight size={15} /></a></div>
+          ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Example tools are ready to explore. Agents you build in this browser appear here.</span>}</button>)}</div>
+          <div className="home-footer"><p><strong>Product Web Preview:</strong> Chat and Agent Builder use the Mac mini while its temporary gateway is online. Built agent definitions stay in this browser; text runs use the Mac mini model. They cannot access local files, issue documents, or send payment requests. Suggested Chat answers are examples.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open simulated judge demo <ArrowDownRight size={15} /></a></div>
         </section>}
 
         {view === 'chat' && <>
@@ -146,17 +190,30 @@ export default function Page() {
         </>}
 
         {view === 'builder' && <>
-          <PageHead number="02" label="AGENT BUILDER" title="Make the work repeatable" description="Describe the goal, select the rules, and inspect a deterministic plan. Saved tools live only in this browser session." />
-          <div className="work-grid builder-grid"><section className="panel form-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon lilac"><WandSparkles size={18} /></span><div><strong>Tool definition</strong><small>Editable preview</small></div></div></div><div className="field"><label htmlFor="tool-name">Tool name</label><input id="tool-name" value={toolName} onChange={(event) => setToolName(event.target.value)} maxLength={70} /></div><div className="field"><label htmlFor="goal">What should this tool do?</label><textarea id="goal" rows={5} value={goal} onChange={(event) => { setGoal(event.target.value); setPlanVisible(false); setRunVisible(false) }} maxLength={500} /><small>For this preview, the sample run is limited to Order W-01.</small></div><div className="field"><label>Logic steps <span className="field-hint">Choose at least one</span></label><div className="pill-list">{pillOptions.map((pill) => <button key={pill} type="button" className={`logic-pill ${pills.includes(pill) ? 'selected' : ''}`} aria-pressed={pills.includes(pill)} onClick={() => { togglePill(pill); setPlanVisible(false); setRunVisible(false) }}>{pills.includes(pill) ? <Check size={14} /> : <Plus size={14} />}{pill}</button>)}</div></div><div className="form-actions"><button className="button button-dark" disabled={!goal.trim() || !toolName.trim() || pills.length === 0} onClick={() => { setPlanVisible(true); setRunVisible(false) }}>Preview plan <ArrowRight size={15} /></button><button className="button button-light" disabled={!planVisible} onClick={saveTool}>{editingToolId === null ? 'Save tool for this session' : 'Update this session tool'}</button></div></section><section className="panel plan-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon mint"><ClipboardCheck size={18} /></span><div><strong>Review plan</strong><small>Deterministic preview, no agents started</small></div></div></div>{!planVisible ? <div className="plan-empty"><Layers3 size={31} /><h3>Your plan appears here</h3><p>Adjust the goal and rules, then select Preview plan.</p></div> : <div className="plan-content"><div className="plan-summary"><span className="tiny-label">GOAL</span><strong>{goal}</strong></div><div className="plan-steps">{pills.map((pill, index) => <div key={`${pill}-${index}`} className="plan-step"><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{pill}</strong><small>{pill === 'Select source' ? 'Use W-01 only; W-02 and R-01 stay context.' : pill === 'Flag missing fields' ? 'Identify buyer, date, price, currency and tax as missing.' : pill === 'Calculate totals' ? 'Use entered values; do not infer a price.' : 'Keep the draft behind a human confirmation gate.'}</small></div></div>)}</div><div className="plan-run"><button className="button button-dark" onClick={() => setRunVisible(true)}>Preview fixed sample <ArrowRight size={15} /></button><small>Uses the on-page W-01 fixture only.</small></div>{runVisible && <div className="run-result"><span className="result-badge"><Check size={14} /> Fixed sample evaluated</span><p>{pills.map((pill) => pill === 'Select source' ? 'Selected source: W-01. W-02 and R-01 remain context only.' : pill === 'Flag missing fields' ? 'The sample is missing buyer, exact date, unit price, currency, tax, and seller identity.' : pill === 'Calculate totals' ? 'A total needs an entered price, currency, and tax rate in a document tool.' : 'A person must inspect and confirm the draft before copying it.').join(' ')} No file, agent, or model was run.</p><button className="text-button" onClick={() => navigate('library')}>Browse example tools <ArrowRight size={14} /></button></div>}</div>}</section></div>
-          <NextStep onClick={() => navigate('library')} label="Next: explore example tools" />
+          <PageHead number="02" label="AGENT BUILDER" title="Build a reusable agent" description="Describe a goal, get a live plan from qwen3.5:9b, build the agent in this browser, then run it on your own text. Use fictional data only." />
+          <div className="work-grid builder-grid">
+            <section className="panel form-panel">
+              <div className="panel-top"><div className="panel-title"><span className="mini-icon lilac"><WandSparkles size={18} /></span><div><strong>Agent definition</strong><small>Editable browser workflow</small></div></div></div>
+              <div className="field"><label htmlFor="tool-name">Agent name</label><input id="tool-name" value={toolName} onChange={(event) => { setToolName(event.target.value); resetPlan() }} maxLength={70} /></div>
+              <div className="field"><label htmlFor="goal">What should this agent do?</label><textarea id="goal" rows={5} value={goal} onChange={(event) => { setGoal(event.target.value); resetPlan() }} maxLength={500} /><small>Describe a text task. This preview does not grant file or external service access.</small></div>
+              <div className="field"><label>Logic steps <span className="field-hint">Choose at least one</span></label><div className="pill-list">{pillOptions.map((pill) => <button key={pill} type="button" className={`logic-pill ${pills.includes(pill) ? 'selected' : ''}`} aria-pressed={pills.includes(pill)} onClick={() => { togglePill(pill); resetPlan() }}>{pills.includes(pill) ? <Check size={14} /> : <Plus size={14} />}{pill}</button>)}</div></div>
+              <div className="form-actions builder-actions"><button className="button button-dark" disabled={!goal.trim() || !toolName.trim() || pills.length === 0 || !!builderBusy} onClick={previewPlan}>{builderBusy === 'plan' ? 'Planning with Mac mini…' : 'Preview live plan'} <ArrowRight size={15} /></button><button className="button button-light" disabled={!planVisible || !!builderBusy} onClick={saveTool}>{editingToolId === null ? 'Build agent' : 'Update built agent'}</button><button className="button button-light" disabled={!planVisible || !runInput.trim() || !!builderBusy} onClick={runAgent}>{builderBusy === 'run' ? 'Processing…' : 'Run agent on input'}</button></div>
+              {builderError && <p className="builder-error" role="alert">{builderError}</p>}
+            </section>
+            <section className="panel plan-panel">
+              <div className="panel-top"><div className="panel-title"><span className="mini-icon mint"><ClipboardCheck size={18} /></span><div><strong>Plan and process</strong><small>{planVisible ? 'Live qwen3.5:9b plan' : 'Waiting for model plan'}</small></div></div></div>
+              {!planVisible ? <div className="plan-empty"><Layers3 size={31} /><h3>Your model plan appears here</h3><p>Adjust the goal and rules, then select Preview live plan.</p></div> : <div className="plan-content" aria-live="polite"><div className="plan-summary"><span className="tiny-label">GOAL</span><strong>{goal}</strong></div><div className="model-plan"><span className="tiny-label">LIVE MODEL PLAN · QWEN3.5:9B</span><p>{planText}</p></div><div className="plan-steps">{pills.map((pill, index) => <div key={`${pill}-${index}`} className="plan-step"><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{pill}</strong></div></div>)}</div><div className="field builder-run-field"><label htmlFor="agent-run-input">Input to process</label><textarea id="agent-run-input" rows={3} value={runInput} maxLength={300} onChange={(event) => setRunInput(event.target.value)} /><small>The model will process this text using the goal and selected rules.</small></div><div className="plan-run"><button className="button button-dark" onClick={runAgent} disabled={!runInput.trim() || !!builderBusy}>{builderBusy === 'run' ? 'Processing…' : 'Run agent on input'} <ArrowRight size={15} /></button><button className="button button-light" onClick={saveTool} disabled={!!builderBusy}>{editingToolId === null ? 'Build agent' : 'Update built agent'}</button></div>{runOutput && <div className="run-result"><span className="result-badge"><Check size={14} /> Live qwen3.5:9b result</span><p>{runOutput}</p></div>}</div>}
+            </section>
+          </div>
+          <NextStep onClick={() => navigate('library')} label="Next: explore built and example tools" />
         </>}
 
         {view === 'library' && <>
-          <PageHead number="03" label="TOOL LIBRARY" title="Keep useful patterns close" description="Explore ready-to-use examples and reopen tools you designed in this session. This preview resets when the page reloads." />
+          <PageHead number="03" label="TOOL LIBRARY" title="Keep useful patterns close" description="Explore ready-to-use examples and run agents you built in this browser. Built agents stay on this device until you delete them." />
           <div className="section-heading compact"><div><span className="eyebrow">YOUR SESSION</span><h2>Saved tools</h2></div><button className="button button-light" onClick={createTool}><Plus size={15} /> Create a tool</button></div>
-          {savedTools.length ? <div className="library-grid">{savedTools.map((tool) => <article key={tool.id} className="library-card"><span className="feature-icon lilac"><WandSparkles size={20} /></span><span className="tiny-label">SESSION TOOL</span><h3>{tool.name}</h3><p>{tool.goal}</p><div className="library-pills">{tool.pills.map((pill) => <span key={pill}>{pill}</span>)}</div><div className="library-actions"><button onClick={() => openTool(tool)}>Open & edit <ArrowRight size={14} /></button><button aria-label={`Delete ${tool.name}`} onClick={() => setSavedTools((current) => current.filter((item) => item.id !== tool.id))}><Trash2 size={16} /></button></div></article>)}</div> : <div className="library-empty"><Library size={27} /><strong>No tools saved yet</strong><p>Design a workflow in Agent Builder and save it for this session.</p><button className="button button-dark" onClick={createTool}>Open Agent Builder <ArrowRight size={15} /></button></div>}
+          {savedTools.length ? <div className="library-grid">{savedTools.map((tool) => <article key={tool.id} className="library-card"><span className="feature-icon lilac"><WandSparkles size={20} /></span><span className="tiny-label">BUILT AGENT · THIS BROWSER</span><h3>{tool.name}</h3><p>{tool.goal}</p><div className="library-pills">{tool.pills.map((pill) => <span key={pill}>{pill}</span>)}</div><div className="library-actions"><button onClick={() => openTool(tool)}>Run or edit agent <ArrowRight size={14} /></button><button aria-label={`Delete ${tool.name}`} onClick={() => setSavedTools((current) => current.filter((item) => item.id !== tool.id))}><Trash2 size={16} /></button></div></article>)}</div> : <div className="library-empty"><Library size={27} /><strong>No agents built yet</strong><p>Create a live model plan and build an agent to run it on your text.</p><button className="button button-dark" onClick={createTool}>Open Agent Builder <ArrowRight size={15} /></button></div>}
           <div className="section-heading"><div><span className="eyebrow">STARTING POINTS</span><h2>Example tools</h2></div></div><div className="library-grid"><article className="library-card"><span className="feature-icon mint"><FileText size={20} /></span><span className="tiny-label">INTERACTIVE EXAMPLE</span><h3>Accounting Statement Generator</h3><p>Edit fictional income and expenses to generate a simple statement with a live total.</p><div className="library-actions"><button onClick={() => navigate('accounting')}>Open accounting tool <ArrowRight size={14} /></button></div></article><article className="library-card"><span className="feature-icon peach"><WandSparkles size={20} /></span><span className="tiny-label">TEXT INPUT EXAMPLE</span><h3>InkVoice</h3><p>Prepare a fictional quotation or invoice with editable fields and a live document preview.</p><div className="library-actions"><button onClick={() => navigate('inkvoice')}>Open InkVoice <ArrowRight size={14} /></button></div></article></div>
-          <div className="overview-foot"><ShieldCheck size={20} /><p><strong>Nothing is deployed from this page.</strong> Session tools are temporary UI state; they do not create background agents, access local files, or persist after reload.</p></div>
+          <div className="overview-foot"><ShieldCheck size={20} /><p><strong>Built agents stay in this browser.</strong> They use qwen3.5:9b for text processing when online. They do not start background jobs, access local files, or connect to external services.</p></div>
         </>}
         {view === 'inkvoice' && <InkVoiceExample onBack={() => navigate('library')} />}
         {view === 'accounting' && <AccountingExample onBack={() => navigate('library')} />}
