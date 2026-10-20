@@ -10,7 +10,7 @@ import InkVoiceExample from './inkvoice-example'
 import AccountingExample from './accounting-example'
 
 type View = 'overview' | 'chat' | 'builder' | 'library' | 'inkvoice' | 'accounting'
-type ChatMessage = { id: number; role: 'user' | 'assistant'; text: string; scripted?: boolean }
+type ChatMessage = { id: number; role: 'user' | 'assistant'; text: string; source: 'live' | 'sample' | 'status' }
 type SavedTool = { id: number; name: string; goal: string; pills: string[] }
 
 const examples = [
@@ -45,6 +45,7 @@ export default function Page() {
   const [chatText, setChatText] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const chatTimer = useRef<number | null>(null)
+  const chatAbort = useRef<AbortController | null>(null)
   const chatRequest = useRef(0)
   const [goal, setGoal] = useState('Prepare a reviewable quotation from sample Order W-01')
   const [toolName, setToolName] = useState('Workshop quotation assistant')
@@ -53,33 +54,52 @@ export default function Page() {
   const [runVisible, setRunVisible] = useState(false)
   const [savedTools, setSavedTools] = useState<SavedTool[]>([])
   const [editingToolId, setEditingToolId] = useState<number | null>(null)
-  useEffect(() => () => { if (chatTimer.current) clearTimeout(chatTimer.current) }, [])
+  useEffect(() => () => { if (chatTimer.current) clearTimeout(chatTimer.current); chatAbort.current?.abort() }, [])
 
   function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
-  function sendChat(prompt = chatText) {
+  async function sendChat(prompt = chatText, sample = false) {
     const trimmed = prompt.trim()
-    if (!trimmed || chatBusy) return
+    if (!trimmed || trimmed.length > 1200 || chatBusy) return
     setChatText('')
-    const match = examples.find((item) => item.prompt.toLowerCase() === trimmed.toLowerCase())
+    const match = sample ? examples.find((item) => item.prompt === trimmed) : null
     const id = Date.now()
-    setMessages((current) => [...current, { id, role: 'user', text: trimmed }])
+    setMessages((current) => [...current, { id, role: 'user', text: trimmed, source: sample ? 'sample' : 'live' }])
     setChatBusy(true)
     const request = ++chatRequest.current
-    chatTimer.current = window.setTimeout(() => {
+    if (match) {
+      chatTimer.current = window.setTimeout(() => {
+        if (request !== chatRequest.current) return
+        chatTimer.current = null
+        setMessages((current) => [...current, { id: id + 1, role: 'assistant', text: match.answer, source: 'sample' }])
+        setChatBusy(false)
+      }, 450)
+      return
+    }
+    const controller = new AbortController()
+    chatAbort.current = controller
+    try {
+      const history = messages.filter((message) => message.source === 'live').slice(-7).map((message) => ({ role: message.role, content: message.text }))
+      const response = await fetch('/api/live-chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: [...history, { role: 'user', content: trimmed }] }), signal: controller.signal })
       if (request !== chatRequest.current) return
-      chatTimer.current = null
-      setMessages((current) => [...current, {
-        id: id + 1, role: 'assistant', scripted: true,
-        text: match ? match.answer : 'This public preview has scripted answers for the three sample prompts above. Your text was not sent to a model. Choose a sample prompt to explore the workflow.',
-      }])
-      setChatBusy(false)
-    }, 600)
+      const result = await response.json() as { answer?: string }
+      if (!response.ok || typeof result.answer !== 'string') {
+        setMessages((current) => [...current, { id: id + 1, role: 'assistant', source: 'status', text: response.status === 429 ? 'The live model is busy. Please try again in a moment.' : 'The live Mac mini connection is unavailable right now. The sample prompts remain available below.' }])
+      } else {
+        setMessages((current) => [...current, { id: id + 1, role: 'assistant', source: 'live', text: result.answer! }])
+      }
+    } catch {
+      if (request === chatRequest.current) setMessages((current) => [...current, { id: id + 1, role: 'assistant', source: 'status', text: 'The live Mac mini connection is unavailable right now. Please try later or open a scripted sample below.' }])
+    } finally {
+      if (request === chatRequest.current) { setChatBusy(false); chatAbort.current = null }
+    }
   }
 
   function clearChat() {
     chatRequest.current += 1
     if (chatTimer.current) clearTimeout(chatTimer.current)
+    chatAbort.current?.abort()
+    chatAbort.current = null
     chatTimer.current = null
     setMessages([])
     setChatBusy(false)
@@ -110,18 +130,18 @@ export default function Page() {
     <main className="main-panel">
       <div className={`content ${view === 'overview' ? 'home-wrap' : ''} ${view === 'inkvoice' ? 'iv-content' : ''}`}>
         {view === 'overview' && <section className="home-content">
-          <div className="home-heading"><div className="eyebrow">EZAGENT PRODUCT WEB PREVIEW</div><h1>What would you like to do today?</h1><p>Explore the interactive web version of EZAgent. This Hackathon preview uses fictional records; AI chat replies and agent plans are scripted examples.</p></div>
+          <div className="home-heading"><div className="eyebrow">EZAGENT PRODUCT WEB PREVIEW</div><h1>What would you like to do today?</h1><p>Explore the interactive web version of EZAgent. This Hackathon preview uses fictional records. Free-text Chat uses a live Mac mini model when the connection is online; suggested answers and agent plans are scripted examples.</p></div>
           <div className="feature-grid">{[
-            { step: '01', title: 'Chat', description: 'Explore scripted answers for a fictional workshop request.', icon: MessageSquareText, target: 'chat' as View },
+            { step: '01', title: 'Chat', description: 'Ask the live model or explore scripted sample answers.', icon: MessageSquareText, target: 'chat' as View },
             { step: '02', title: 'Agent Builder', description: 'Shape a repeatable workflow with logic steps and a reviewable plan.', icon: Sparkles, target: 'builder' as View, featured: true },
             { step: '03', title: 'Tool Library', description: 'Open InkVoice and the Accounting Statement Generator, or refine your saved tools.', icon: Library, target: 'library' as View },
           ].map((card) => <button key={card.step} className={`feature-card ${card.featured ? 'featured' : ''}`} onClick={() => navigate(card.target)}><div className="card-top"><span className="feature-icon"><card.icon size={20} strokeWidth={1.9} /></span>{card.featured && <span className="featured-badge">Featured</span>}</div><strong>{card.title}</strong><p>{card.description}</p>{card.target === 'library' && <span className="card-helper">Example tools are ready to explore. Your session tools appear here after you save one.</span>}</button>)}</div>
-          <div className="home-footer"><p><strong>Product Web Preview:</strong> the workspace and browser tools are interactive. AI replies are examples; this website does not connect to the Mac mini model, issue documents, or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open simulated judge demo <ArrowDownRight size={15} /></a></div>
+          <div className="home-footer"><p><strong>Product Web Preview:</strong> browser tools are interactive. Free-text Chat connects to the Mac mini only while the temporary gateway is online. Suggested answers and agent plans are examples. This site does not issue documents or send payment requests.</p><a href="https://ezagent-judge-demo.vercel.app/" target="_blank" rel="noreferrer">Open simulated judge demo <ArrowDownRight size={15} /></a></div>
         </section>}
 
         {view === 'chat' && <>
-          <PageHead number="01" label="CHAT" title="Understand the request" description="Ask about the fixed workshop records. Select a sample prompt to see a scripted answer, or enter your own text to see the preview boundary." />
-          <div className="work-grid chat-grid"><section className="panel chat-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon peach"><MessageSquareText size={18} /></span><div><strong>Workspace chat</strong><small>Scripted sample responses</small></div></div><button className="text-button" onClick={clearChat}><RotateCcw size={14} /> Clear</button></div><div className="messages" aria-live="polite">{messages.length === 0 ? <div className="empty-chat"><div className="empty-symbol"><Sparkles size={26} /></div><h3>Start with a sample question</h3><p>These answers are prewritten for the fictional workshop scenario. No model request is sent.</p></div> : messages.map((message) => <div key={message.id} className={`message ${message.role}`}><span className="message-role">{message.role === 'user' ? 'You' : 'EZAgent preview'} {message.scripted && <em>Scripted sample</em>}</span><p>{message.text}</p></div>)}{chatBusy && <div className="message assistant"><span className="message-role">EZAgent preview</span><p>Displaying sample response<span className="typing-dots">…</span></p></div>}</div><div className="chat-compose"><label htmlFor="chat-input" className="sr-only">Your message</label><input id="chat-input" value={chatText} onChange={(event) => setChatText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') sendChat() }} placeholder="Ask about the workshop records…" /><button aria-label="Send message" onClick={() => sendChat()} disabled={!chatText.trim() || chatBusy}><Send size={17} /></button></div></section><aside className="side-stack"><section className="panel side-panel"><span className="eyebrow">TRY A SAMPLE</span><h3>Suggested questions</h3><div className="sample-list">{examples.map((item) => <button key={item.prompt} onClick={() => sendChat(item.prompt)} disabled={chatBusy}><span><strong>{item.title}</strong><small>{item.prompt}</small></span><ArrowRight size={16} /></button>)}</div></section><section className="note-card"><CircleHelp size={19} /><div><strong>About this preview</strong><p>Live model replies are not available here yet. The sample prompts demonstrate intended behavior without claiming that an AI processed your input.</p></div></section></aside></div>
+          <PageHead number="01" label="CHAT" title="Understand the request" description="Enter your own text for a live qwen3.5:9b reply, or select a suggested question for a scripted sample. Use fictional information only." />
+          <div className="work-grid chat-grid"><section className="panel chat-panel"><div className="panel-top"><div className="panel-title"><span className="mini-icon peach"><MessageSquareText size={18} /></span><div><strong>Workspace chat</strong><small>Live Chat + scripted samples</small></div></div><button className="text-button" onClick={clearChat}><RotateCcw size={14} /> Clear</button></div><div className="messages" aria-live="polite">{messages.length === 0 ? <div className="empty-chat"><div className="empty-symbol"><Sparkles size={26} /></div><h3>Ask the live model</h3><p>Type your own question to contact qwen3.5:9b on the Mac mini. Suggested questions display prewritten samples.</p></div> : messages.map((message) => <div key={message.id} className={`message ${message.role}`}><span className="message-role">{message.role === 'user' ? 'You' : 'EZAgent preview'} {message.source === 'sample' && <em>Scripted sample</em>}{message.source === 'live' && <em>Live model</em>}{message.source === 'status' && <em>Connection status</em>}</span><p>{message.text}</p></div>)}{chatBusy && <div className="message assistant"><span className="message-role">EZAgent preview</span><p>Waiting for response<span className="typing-dots">…</span></p></div>}</div><div className="chat-compose"><label htmlFor="chat-input" className="sr-only">Your message</label><input id="chat-input" value={chatText} maxLength={1200} onChange={(event) => setChatText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') sendChat() }} placeholder="Ask about the workshop records…" /><button aria-label="Send message" onClick={() => sendChat()} disabled={!chatText.trim() || chatBusy}><Send size={17} /></button></div></section><aside className="side-stack"><section className="panel side-panel"><span className="eyebrow">TRY A SAMPLE</span><h3>Suggested questions</h3><div className="sample-list">{examples.map((item) => <button key={item.prompt} onClick={() => sendChat(item.prompt, true)} disabled={chatBusy}><span><strong>{item.title}</strong><small>{item.prompt}</small></span><ArrowRight size={16} /></button>)}</div></section><section className="note-card"><CircleHelp size={19} /><div><strong>About this preview</strong><p>Your own text is sent through Vercel and a temporary secured tunnel to qwen3.5:9b on a Mac mini. Replies can be slow or unavailable. Suggested questions always show labelled scripted samples. Do not enter personal or confidential data.</p></div></section></aside></div>
           <NextStep onClick={() => navigate('builder')} label="Next: turn the request into a tool" />
         </>}
 
